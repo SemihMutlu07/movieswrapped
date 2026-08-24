@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import time
 from collections import deque
@@ -23,6 +24,12 @@ CACHE_DIR = Path("tmdb_cache")
 CACHE_DIR.mkdir(exist_ok=True)
 _tmdb_request_times: deque[float] = deque()
 _tmdb_rate_lock = asyncio.Lock()
+
+# Cache freshness window. TMDB's terms ask local caches to be refreshed at
+# most every ~6 months (175 days is safely inside that); older files are
+# treated as misses and lazily re-fetched on next use. No startup sweep —
+# expiry is evaluated per read.
+CACHE_MAX_AGE_SECONDS = 175 * 24 * 60 * 60
 
 
 async def _wait_for_tmdb_slot() -> None:
@@ -49,6 +56,114 @@ async def _wait_for_tmdb_slot() -> None:
         await asyncio.sleep(sleep_for)
 
 
+def _cache_read_is_fresh(path: Path) -> bool:
+    """True when the file's mtime is inside the freshness window.
+
+    mtime is the write time of the cached response — exactly what a lazy TTL
+    needs. Missing files are not fresh by definition.
+    """
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        return False
+    return age <= CACHE_MAX_AGE_SECONDS
+
+
+async def _read_cache_payload(path: Path) -> Optional[Dict[str, Any]]:
+    """Parse one cache file, or None when missing/corrupt/empty-result.
+
+    Legacy empty-result files ({"results": []}) are treated as unusable and
+    removed so they cannot serve as hits; malformed JSON likewise falls back
+    to a refetch.
+    """
+    if not path.exists():
+        return None
+    try:
+        async with aiofiles.open(path, "r", encoding="utf-8") as f:
+            data = json.loads(await f.read())
+    except (OSError, ValueError):
+        # Malformed or unreadable — controlled refetch path.
+        logger.warning("Discarding unreadable TMDB cache file %s", path.name)
+        _safe_unlink(path)
+        return None
+    if isinstance(data, dict):
+        results = data.get("results")
+        if isinstance(results, list) and not results:
+            # Legacy poisoned entry: an empty result set must never be a hit.
+            logger.info("Removing legacy empty-result TMDB cache file %s", path.name)
+            _safe_unlink(path)
+            return None
+    return data
+
+
+def _safe_unlink(path: Path) -> None:
+    """Best-effort removal that never masks the caller's flow."""
+    try:
+        path.unlink()
+    except OSError as exc:
+        logger.debug("Could not remove cache file %s: %s", path, exc)
+
+
+def _unlink_with_retry_blocking(path: Path, attempts: int = 10, delay: float = 0.02) -> None:
+    """Blocking best-effort unlink with retries; runs on an executor thread.
+
+    Survives task cancellation (it is detached from the event loop) so a
+    cancelled or failed write never leaves *.tmp litter behind.
+    """
+    for attempt in range(attempts):
+        try:
+            path.unlink()
+            return
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            if attempt == attempts - 1:
+                logger.debug("Could not remove temp cache file %s: %s", path, exc)
+                return
+            time.sleep(delay)
+
+
+_tmp_write_counter = 0
+
+async def _write_cache_atomic(path: Path, payload: Dict[str, Any]) -> bool:
+    """Write payload via unique sibling temp file + os.replace.
+
+    Readers can only ever observe either the previous file or the fully
+    written new one — never partial JSON. On Windows, os.replace is atomic
+    and overwrites existing destinations, but it fails with a transient
+    ERROR_SHARING_VIOLATION while another handle (e.g. a concurrent reader)
+    still holds the destination open; we retry briefly before giving up.
+    Any exception or cancellation removes the temp file and re-raises; the
+    destination is untouched on failure, so a failed refresh never corrupts
+    stale content or marks it fresh.
+    """
+    global _tmp_write_counter
+    _tmp_write_counter += 1
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.{_tmp_write_counter}.tmp")
+    try:
+        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(payload, ensure_ascii=False, indent=2))
+            await f.flush()
+        last_exc: BaseException | None = None
+        for attempt in range(5):
+            try:
+                os.replace(tmp_path, path)
+                return True
+            except PermissionError as exc:  # WinError 32/33 — handle still open elsewhere
+                last_exc = exc
+                await asyncio.sleep(0.01 * (attempt + 1))
+        raise last_exc if last_exc else OSError(f"os.replace failed for {path}")
+    except BaseException:  # noqa: BLE001 — includes asyncio.CancelledError
+        # The aiofiles close may itself have been cancelled mid-flight, leaving the
+        # OS handle alive for a few more ms. Awaiting inside an already-cancelling
+        # task just re-raises CancelledError, so the retry runs detached on the
+        # default executor with blocking sleeps — it survives cancellation and
+        # guarantees no temp litter outlives the failed write.
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _unlink_with_retry_blocking, tmp_path)
+        raise
+
+
 async def tmdb_get(
     session: aiohttp.ClientSession,
     endpoint: str,
@@ -67,15 +182,17 @@ async def tmdb_get(
     collector = current()
     family = endpoint_family(endpoint)
 
-    if cache and cache_file.exists():
-        try:
-            async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
-                data = json.loads(await f.read())
+    if cache:
+        cached = await _read_cache_payload(cache_file)
+        if cached is not None and _cache_read_is_fresh(cache_file):
             if collector is not None:
                 collector.record_cache_hit(family)
-            return data
-        except Exception:
-            pass  # corrupt cache file — fall through and refetch
+            return cached
+        # Missing, expired, malformed or legacy-empty: treat as a miss and
+        # lazily refresh below (no bulk startup sweep anywhere).
+
+    else:
+        cached = None
 
     if collector is not None:
         collector.record_cache_miss(family)
@@ -100,6 +217,8 @@ async def tmdb_get(
                         await asyncio.sleep(delay)
                         continue
                     # Retries exhausted on 429 — still a rate-limit outcome.
+                    # The stale file (if any) stays untouched: it was never
+                    # marked fresh, so the next call simply retries again.
                     if collector is not None:
                         collector.record_429(family)
                     return None
@@ -110,9 +229,10 @@ async def tmdb_get(
                 # poison the cache forever. Only persist payloads that returned content.
                 results = data.get("results") if isinstance(data, dict) else None
                 should_cache = (results is None) or bool(results)
-                if should_cache:
-                    async with aiofiles.open(cache_file, "w", encoding="utf-8") as f:
-                        await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+                if cache and should_cache:
+                    # A failed write raises through: the caller sees the error
+                    # but the old file (if any) is intact — never half-written.
+                    await _write_cache_atomic(cache_file, data)
                 if results is not None and not results and collector is not None:
                     # An empty search result set counts as an empty outcome.
                     collector.record_empty_result(family)
