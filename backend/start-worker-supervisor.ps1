@@ -220,8 +220,13 @@ function Stop-OrphanWorkers {
     Start-Sleep -Seconds 3
 }
 
+# Pull target branch. `desktop_server` was deleted upstream after merge, which made
+# every supervisor start log "git pull failed exit 128"; the worker still started from
+# the local checkout but never fast-forwarded. `main` is the live branch now.
+$PullBranch = "main"
+
 function Update-RepoFastForward {
-    Write-SupervisorLog "verifying desktop_server checkout before worker start"
+    Write-SupervisorLog "verifying $PullBranch checkout before worker start"
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         # git writes routine progress info (e.g. "From https://...") to stderr; with
@@ -230,15 +235,23 @@ function Update-RepoFastForward {
         # native git calls only.
         $ErrorActionPreference = "Continue"
         $RepoDir = Split-Path $BackendDir -Parent
-        $output = git -C $RepoDir fetch origin desktop_server 2>&1
+        $output = git -C $RepoDir fetch origin $PullBranch 2>&1
         foreach ($line in $output) { Write-SupervisorLog ("git: {0}" -f $line) }
         if ($LASTEXITCODE -ne 0) { throw "git fetch failed with exit code $LASTEXITCODE" }
 
-        $output = git -C $RepoDir checkout desktop_server 2>&1
-        foreach ($line in $output) { Write-SupervisorLog ("git: {0}" -f $line) }
-        if ($LASTEXITCODE -ne 0) { throw "git checkout failed with exit code $LASTEXITCODE" }
+        $currentBranch = git -C $RepoDir rev-parse --abbrev-ref HEAD
+        if ($currentBranch -ne $PullBranch) {
+            $stayedClean = -not (git -C $RepoDir status --porcelain)
+            if (-not $stayedClean) {
+                Write-SupervisorLog ("working tree dirty; staying on '{0}' instead of switching to '{1}'" -f $currentBranch, $PullBranch)
+                return
+            }
+            $output = git -C $RepoDir checkout $PullBranch 2>&1
+            foreach ($line in $output) { Write-SupervisorLog ("git: {0}" -f $line) }
+            if ($LASTEXITCODE -ne 0) { throw "git checkout failed with exit code $LASTEXITCODE" }
+        }
 
-        $output = git -C $RepoDir pull --ff-only origin desktop_server 2>&1
+        $output = git -C $RepoDir pull --ff-only origin $PullBranch 2>&1
         foreach ($line in $output) { Write-SupervisorLog ("git: {0}" -f $line) }
         if ($LASTEXITCODE -ne 0) {
             throw "git pull --ff-only failed with exit code $LASTEXITCODE"
