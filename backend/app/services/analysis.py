@@ -127,9 +127,15 @@ async def process_comprehensive_letterboxd_data(
         fetch_comprehensive_film_details,
         resolve_tmdb_id,
     )
+    from app.services.tmdb_telemetry import current as _tmdb_current
+
+    _collector = _tmdb_current()
 
     resolve_tasks = [resolve_tmdb_id(session, row["title"], row["year"]) for _, row in unique_films.iterrows()]
+    tmdb_match_started = time.perf_counter()
     tmdb_ids = await asyncio.gather(*resolve_tasks)
+    if _collector is not None:
+        _collector.set_tmdb_match_seconds(time.perf_counter() - tmdb_match_started)
     unique_films["tmdb_id"] = tmdb_ids
     match_rate = unique_films["tmdb_id"].notna().mean() * 100
     matched_count = int(unique_films["tmdb_id"].notna().sum())
@@ -141,8 +147,11 @@ async def process_comprehensive_letterboxd_data(
 
     unique_tmdb_ids = unique_films["tmdb_id"].dropna().unique()
     _progress("tmdb_metadata", "Gathering film metadata (fast)...", 0, len(unique_tmdb_ids))
+    metadata_started = time.perf_counter()
     fetch_tasks = [fetch_comprehensive_film_details(session, tmdb_id) for tmdb_id in unique_tmdb_ids]
     metadata_results = await asyncio.gather(*fetch_tasks)
+    if _collector is not None:
+        _collector.set_tmdb_metadata_seconds(time.perf_counter() - metadata_started)
     metadata_df = pd.DataFrame([m for m in metadata_results if m])
     _progress("tmdb_metadata", "Metadata collection complete", len(unique_tmdb_ids), len(unique_tmdb_ids))
 

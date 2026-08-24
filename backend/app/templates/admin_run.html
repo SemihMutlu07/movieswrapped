@@ -99,6 +99,80 @@
     </div>
     {% endif %}
 
+    {% if run.tmdb or run.cache_hits is not none and run.cache_hits is defined %}
+    <!-- TMDB telemetry grid -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between px-1">
+        <h3 class="text-xs font-bold text-white">TMDB Telemetry</h3>
+        <span class="text-[10px] text-slate-600">per-job aggregate · no request content</span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Match</p>
+          <p class="text-xl font-black text-white">{{ run.tmdb_match_seconds if run.tmdb_match_seconds is not none else "—" }}{% if run.tmdb_match_seconds is not none %}s{% endif %}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Metadata</p>
+          <p class="text-xl font-black text-white">{{ run.tmdb_metadata_seconds if run.tmdb_metadata_seconds is not none else "—" }}{% if run.tmdb_metadata_seconds is not none %}s{% endif %}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Local Stats</p>
+          <p class="text-xl font-black text-white">{{ run.local_statistics_seconds if run.local_statistics_seconds is not none else "—" }}{% if run.local_statistics_seconds is not none %}s{% endif %}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-emerald-500 font-medium mb-1">Cache Hits</p>
+          <p class="text-xl font-black text-emerald-400">{{ run.cache_hits if run.cache_hits is not none else "—" }}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-orange-500 font-medium mb-1">Cache Misses</p>
+          <p class="text-xl font-black text-orange-400">{{ run.cache_misses if run.cache_misses is not none else "—" }}</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Outbound</p>
+          <p class="text-xl font-black text-white">{{ run.outbound_requests if run.outbound_requests is not none else "—" }}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Empty</p>
+          <p class="text-xl font-black text-white">{{ run.empty_results if run.empty_results is not none else "—" }}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-red-500 font-medium mb-1">Net Errors</p>
+          <p class="text-xl font-black text-red-400">{{ run.network_errors if run.network_errors is not none else "—" }}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-yellow-500 font-medium mb-1">Retries</p>
+          <p class="text-xl font-black text-yellow-400">{{ run.retries if run.retries is not none else "—" }}</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-[10px] uppercase tracking-wider text-red-500 font-medium mb-1">429s</p>
+          <p class="text-xl font-black text-red-400">{{ run.tmdb_429s if run.tmdb_429s is not none else "—" }}</p>
+        </div>
+      </div>
+      {% if run.tmdb and run.tmdb.by_endpoint_family %}
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-800">
+          <h4 class="text-xs font-bold text-white">By Endpoint Family</h4>
+        </div>
+        <div class="divide-y divide-slate-800/70">
+          {% for family, bucket in run.tmdb.by_endpoint_family.items() %}
+          <div class="px-4 py-2 grid grid-cols-7 gap-2 text-xs tabular-nums items-center">
+            <div class="col-span-1 font-medium text-orange-300">{{ family }}</div>
+            <div class="text-slate-400">hit {{ bucket.get("cache_hits", 0) }}</div>
+            <div class="text-slate-400">miss {{ bucket.get("cache_misses", 0) }}</div>
+            <div class="text-slate-400">out {{ bucket.get("outbound_requests", 0) }}</div>
+            <div class="text-slate-500">empty {{ bucket.get("empty_results", 0) }}</div>
+            <div class="text-slate-500">retry {{ bucket.get("retries", 0) }}</div>
+            <div class="text-slate-500">429 {{ bucket.get("tmdb_429s", 0) }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Timeline -->
     <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
       <div class="px-4 py-3 border-b border-slate-800">

@@ -42,6 +42,7 @@ from app.services.scrape_pipeline import (
     ScrapeAnalysisEmpty,
     scrape_and_analyze,
 )
+from app.services.tmdb_telemetry import TmdbCollector, collecting
 from app.services.recommender import compare_watchlist_sets, enrich_films_concurrent, film_key, public_film
 from app.services.scraper import scrape_films_grid, scrape_watchlist, scrape_profile_sources, scrape_avatar_only
 
@@ -67,6 +68,11 @@ WATCHLIST_ENRICH_TIMEOUT = 120
 MAX_CONCURRENCY = 1
 # Incremented while a job is being processed so heartbeats report load.
 _ACTIVE_JOBS = 0
+# TMDB telemetry collector for the in-flight job (None when idle). The worker
+# processes one job at a time, but the counters themselves live on a per-job
+# TmdbCollector bound via ContextVar — never module-global — so concurrent
+# jobs would each keep their own numbers even if that changes.
+_CURRENT_JOB_TMDB: TmdbCollector | None = None
 OUTBOX_DIR = Path(os.getenv("WORKER_OUTBOX_DIR", ".worker_outbox"))
 PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
@@ -133,7 +139,7 @@ def _git_value(*args: str) -> str | None:
 
 
 def _worker_meta(cfg: WorkerConfig) -> dict[str, Any]:
-    return {
+    meta: dict[str, Any] = {
         "worker_id": WORKER_ID,
         "version": WORKER_VERSION,
         "active_jobs": _ACTIVE_JOBS,
@@ -149,6 +155,17 @@ def _worker_meta(cfg: WorkerConfig) -> dict[str, Any]:
         "self_test_username": cfg.self_test_username,
         "scrape_transport": "direct_cloudscraper",
     }
+    # Live TMDB counters for the in-flight job (aggregate integers only — no
+    # usernames, titles, queries, keys). Absent when the worker is idle.
+    if _CURRENT_JOB_TMDB is not None:
+        meta["tmdb_live"] = {
+            key: getattr(_CURRENT_JOB_TMDB, key)
+            for key in (
+                "cache_hits", "cache_misses", "outbound_requests",
+                "empty_results", "network_errors", "retries", "tmdb_429s",
+            )
+        }
+    return meta
 
 
 class TraceBuffer:
@@ -159,6 +176,10 @@ class TraceBuffer:
         self._lock = Lock()
         self._stage_started: dict[str, float] = {}
         self._timings: dict[str, float] = {}
+        # Set by add() when a *_done stage lands; the flush loop wakes on it so
+        # diary_done/grid_done samples reach the browser immediately instead of
+        # waiting out TRACE_FLUSH_INTERVAL (the "5s lag feels like stutter" fix).
+        self._done_pending = False
 
     def add(
         self,
@@ -192,12 +213,25 @@ class TraceBuffer:
         with self._lock:
             self._events.append(event)
             self._pending.append(event)
+            if stage.endswith("_done"):
+                self._done_pending = True
 
     def drain(self) -> list[dict[str, Any]]:
         with self._lock:
             events = list(self._pending)
             self._pending.clear()
+            self._done_pending = False
             return events
+
+    def done_pending(self) -> bool:
+        """True when a *_done event is buffered but not yet flushed.
+
+        Cheap, lock-guarded, polled by the flush loop so a done stage (e.g.
+        diary_done with its sample) triggers an immediate POST instead of
+        waiting out TRACE_FLUSH_INTERVAL.
+        """
+        with self._lock:
+            return self._done_pending
 
     def snapshot(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -484,11 +518,20 @@ async def _trace_flush_loop(
     lease: dict | None = None,
 ) -> None:
     while True:
+        # Flush immediately when a *_done stage landed (diary_done, grid_done,
+        # reviews_done, scrape_done, analysis_*): the wait UI is gated on those
+        # samples, and letting them sit for TRACE_FLUSH_INTERVAL reads as
+        # stutter. Page events still batch on the interval so we do not POST
+        # on every diary_page/grid_page.
+        if trace.done_pending():
+            await _flush_trace(session, cfg, task_id, trace, lease)
+            continue
         await asyncio.sleep(TRACE_FLUSH_INTERVAL)
         await _flush_trace(session, cfg, task_id, trace, lease)
 
 
 async def _process_job(session: aiohttp.ClientSession, cfg: WorkerConfig, job: dict) -> None:
+    global _CURRENT_JOB_TMDB
     task_id = job["task_id"]
     username = job["username"]
     avatar_only = bool(job.get("avatar_only"))
@@ -497,6 +540,34 @@ async def _process_job(session: aiohttp.ClientSession, cfg: WorkerConfig, job: d
     lease = _lease_fields(job)
     started = monotonic()
     trace = TraceBuffer()
+    tmdb_collector = TmdbCollector()
+    _CURRENT_JOB_TMDB = tmdb_collector
+    try:
+        await _process_job_inner(
+            session, cfg, job,
+            task_id=task_id, username=username, avatar_only=avatar_only,
+            options=options, analysis_period=analysis_period, lease=lease,
+            started=started, trace=trace, tmdb_collector=tmdb_collector,
+        )
+    finally:
+        _CURRENT_JOB_TMDB = None
+
+
+async def _process_job_inner(
+    session: aiohttp.ClientSession,
+    cfg: WorkerConfig,
+    job: dict,
+    *,
+    task_id: str,
+    username: str,
+    avatar_only: bool,
+    options: dict,
+    analysis_period: str,
+    lease: dict,
+    started: float,
+    trace: TraceBuffer,
+    tmdb_collector: TmdbCollector,
+) -> None:
     trace.add(
         "worker_received",
         "Worker received scrape job",
@@ -510,21 +581,28 @@ async def _process_job(session: aiohttp.ClientSession, cfg: WorkerConfig, job: d
     trace_flush = asyncio.create_task(_trace_flush_loop(session, cfg, task_id, trace, lease))
     logger.info("Processing %s job %s for @%s", "avatar" if avatar_only else "scrape", task_id, username)
     try:
+        # Bind this job's collector for the pipeline: tmdb_get reports every
+        # cache hit/miss/request to THIS collector only (ContextVar-scoped).
         if avatar_only:
-            stats = {"profile_avatar_url": await scrape_avatar_only(username)}
+            stats: dict = {"profile_avatar_url": await scrape_avatar_only(username)}
         else:
-            stats = await scrape_and_analyze(
-                session,
-                username,
-                trace_callback=trace.add,
-                analysis_period=analysis_period,
-            )
+            with collecting(tmdb_collector):
+                stats = await scrape_and_analyze(
+                    session,
+                    username,
+                    trace_callback=trace.add,
+                    analysis_period=analysis_period,
+                )
+            # scrape_and_analyze embeds the same snapshot in stats; keep the
+            # postback-level telemetry authoritative even on partial failures.
+            stats.setdefault("tmdb_telemetry", tmdb_collector.snapshot())
     except Exception as exc:  # noqa: BLE001 — any failure must report back, not crash the loop
         message = _failure_message(username, exc)
         duration_seconds = round(monotonic() - started, 1)
         telemetry = _failure_telemetry(exc, duration_seconds)
         telemetry["postback_seconds"] = 0.0
         telemetry.update(trace.timings())
+        telemetry["tmdb"] = tmdb_collector.snapshot()
         trace.add(telemetry["error_stage"], message, {"error_type": telemetry["error_type"]}, level="error")
         trace.add("postback_started", "Posting failure to backend")
         logger.warning("Scrape job %s for @%s failed: %s", task_id, username, exc)
@@ -546,7 +624,12 @@ async def _process_job(session: aiohttp.ClientSession, cfg: WorkerConfig, job: d
 
     duration_seconds = round(monotonic() - started, 1)
     trace.add("postback_started", "Posting result to backend")
-    telemetry = {"duration_seconds": duration_seconds, "postback_seconds": 0.0, **trace.timings()}
+    telemetry = {
+        "duration_seconds": duration_seconds,
+        "postback_seconds": 0.0,
+        **trace.timings(),
+        "tmdb": tmdb_collector.snapshot(),
+    }
     await _flush_trace(session, cfg, task_id, trace, lease)
     trace_flush.cancel()
     with suppress(asyncio.CancelledError):

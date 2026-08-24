@@ -15,6 +15,7 @@ import aiohttp
 import pandas as pd
 
 from app.config import settings
+from app.services.tmdb_telemetry import current, endpoint_family
 
 logger = logging.getLogger("letterboxd_wrapped.tmdb")
 
@@ -62,17 +63,29 @@ async def tmdb_get(
     cache_key = hashlib.md5(f"{endpoint}{params_str}".encode()).hexdigest()
     cache_file = CACHE_DIR / f"{cache_key}.json"
 
+    # Per-job telemetry (no-op when no collector is active for this task).
+    collector = current()
+    family = endpoint_family(endpoint)
+
     if cache and cache_file.exists():
         try:
             async with aiofiles.open(cache_file, "r", encoding="utf-8") as f:
-                return json.loads(await f.read())
+                data = json.loads(await f.read())
+            if collector is not None:
+                collector.record_cache_hit(family)
+            return data
         except Exception:
-            pass
+            pass  # corrupt cache file — fall through and refetch
+
+    if collector is not None:
+        collector.record_cache_miss(family)
 
     url = f"https://api.themoviedb.org/3/{endpoint}"
     for attempt in range(settings.tmdb_429_retries + 1):
         try:
             await _wait_for_tmdb_slot()
+            if collector is not None:
+                collector.record_outbound_request(family)
             async with session.get(url, params=params) as response:
                 if response.status == 429:
                     retry_after = response.headers.get("Retry-After")
@@ -81,8 +94,15 @@ async def tmdb_get(
                     except ValueError:
                         delay = 1.5 * (attempt + 1)
                     if attempt < settings.tmdb_429_retries:
+                        if collector is not None:
+                            collector.record_429(family)
+                            collector.record_retry(family)
                         await asyncio.sleep(delay)
                         continue
+                    # Retries exhausted on 429 — still a rate-limit outcome.
+                    if collector is not None:
+                        collector.record_429(family)
+                    return None
 
                 response.raise_for_status()
                 data = await response.json()
@@ -93,9 +113,14 @@ async def tmdb_get(
                 if should_cache:
                     async with aiofiles.open(cache_file, "w", encoding="utf-8") as f:
                         await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+                if results is not None and not results and collector is not None:
+                    # An empty search result set counts as an empty outcome.
+                    collector.record_empty_result(family)
                 return data
         except aiohttp.ClientError as e:
             logger.warning("Error fetching %s: %s", url, e)
+            if collector is not None:
+                collector.record_network_error(family)
             return None
 
     return None

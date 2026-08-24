@@ -29,6 +29,7 @@ from app.services.scraper import (
     merge_scraped_films,
     scrape_profile_sources,
 )
+from app.services.tmdb_telemetry import TmdbCollector, collecting, current as tmdb_collector_current
 
 logger = logging.getLogger("letterboxd_wrapped.scrape_pipeline")
 
@@ -239,13 +240,44 @@ async def scrape_and_analyze(
             {"username": username, "max_pages": max_pages, "analysis_period": period},
         )
     scrape_started = monotonic()
+    # Reuse an ambient per-job collector when one is already bound (the desktop
+    # worker binds its own so heartbeats can read it mid-scrape); otherwise
+    # create one scoped to this pipeline run. Either way the TMDB counters in
+    # stats["tmdb_telemetry"] describe exactly this job.
+    collector = tmdb_collector_current() or TmdbCollector()
+    with collecting(collector):
+        return await _scrape_and_analyze_inner(
+            session, username,
+            collector=collector,
+            max_pages=max_pages,
+            trace_callback=trace_callback,
+            analysis_period=period,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+
+async def _scrape_and_analyze_inner(
+    session,
+    username: str,
+    *,
+    collector: TmdbCollector,
+    max_pages: int = 60,
+    trace_callback: Optional[TraceCallback] = None,
+    analysis_period: str = "lifetime",
+    start_date=None,
+    end_date=None,
+) -> dict:
+    # The outer wrapper already emitted scrape_started; this is the same run.
+    period = analysis_period
+    scrape_started = monotonic()
     sources = await scrape_profile_sources(
         username,
         max_pages=max_pages,
         include_reviews=True,
         trace_callback=trace_callback,
         diary_cutoff=start_date,
-        include_grid=period == "lifetime",
+        include_grid=analysis_period == "lifetime",
     )
     scrape_seconds = round(monotonic() - scrape_started, 1)
     if trace_callback:
@@ -337,6 +369,9 @@ async def scrape_and_analyze(
                     exc_info=True,
                 )
 
+        # Per-job TMDB observability: aggregate counters + stage timings for
+        # exactly this run. Integers only — no usernames, titles, queries or keys.
+        stats["tmdb_telemetry"] = collector.snapshot()
         return stats
     finally:
         if request_dir is not None:

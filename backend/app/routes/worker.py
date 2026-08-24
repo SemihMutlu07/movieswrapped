@@ -121,9 +121,31 @@ def _task_telemetry(task: task_manager.TaskState) -> dict:
         "error_type": task.error_type,
         "error_stage": task.error_stage,
         "error_code": task.error_code,
+        "tmdb": task.tmdb,
         "job_type": task.job_type,
         "worker_id": task.claimed_by or task_manager.get_last_worker_id(),
     }
+
+
+def _resolve_tmdb_telemetry(
+    telemetry: dict,
+    stats: dict | None,
+    body: dict | None = None,
+) -> dict | None:
+    """Pick the per-job TMDB aggregate from whichever carrier carried it.
+
+    Priority: postback telemetry.tmdb (authoritative worker snapshot), then
+    stats.tmdb_telemetry (embedded by the pipeline). Returns None when neither
+    is present so old-worker payloads stay byte-compatible in the run log.
+    """
+    candidate = telemetry.get("tmdb")
+    if isinstance(candidate, dict):
+        return candidate
+    if isinstance(stats, dict):
+        embedded = stats.get("tmdb_telemetry")
+        if isinstance(embedded, dict):
+            return embedded
+    return None
 
 
 def _require_lease(task: task_manager.TaskState, body: dict) -> None:
@@ -373,6 +395,7 @@ async def complete_scrape(task_id: str, request: Request, x_worker_token: str | 
             task_id=task_id,
             trace_events=_request_trace_events(body),
             telemetry=telemetry,
+            tmdb=_resolve_tmdb_telemetry(telemetry, stats, body),
         )
         logger.warning("Worker completed orphan scrape job %s; persisted run without task state", task_id)
         return {"ok": True, "orphan": True}
@@ -385,6 +408,13 @@ async def complete_scrape(task_id: str, request: Request, x_worker_token: str | 
         {"status": "success", "stats": stats},
         telemetry,
     )
+    # Carry the postback TMDB aggregate onto the task even when the worker's
+    # snapshot is missing but the pipeline embedded one in stats.
+    resolved_tmdb = _resolve_tmdb_telemetry(telemetry, stats, body)
+    if resolved_tmdb and task.tmdb is None:
+        task.tmdb = resolved_tmdb
+    elif not resolved_tmdb:
+        resolved_tmdb = task.tmdb
     task = task_manager.get_task_state(task_id)
     if task:
         task_manager.append_task_event(task_id, "persisted", "Run log persisted on backend", level="info")
@@ -396,6 +426,7 @@ async def complete_scrape(task_id: str, request: Request, x_worker_token: str | 
             task_id=task_id,
             trace_events=task.trace_events,
             telemetry=_task_telemetry(task),
+            tmdb=resolved_tmdb or task.tmdb,
         )
     logger.info("Worker completed scrape job %s", task_id)
     await log_worker_event("job_completed", {
@@ -425,6 +456,7 @@ async def fail_scrape(task_id: str, request: Request, x_worker_token: str | None
             task_id=task_id,
             trace_events=_request_trace_events(body),
             telemetry=telemetry,
+            tmdb=_resolve_tmdb_telemetry(telemetry, None, body),
         )
         logger.warning("Worker failed orphan scrape job %s; persisted run without task state: %s", task_id, message)
         return {"ok": True, "orphan": True}
@@ -446,6 +478,7 @@ async def fail_scrape(task_id: str, request: Request, x_worker_token: str | None
             task_id=task_id,
             trace_events=task.trace_events,
             telemetry=_task_telemetry(task),
+            tmdb=_resolve_tmdb_telemetry(_task_telemetry(task), None, body),
         )
     logger.warning("Worker reported scrape job %s failed: %s", task_id, message)
     await log_worker_event("job_failed", {

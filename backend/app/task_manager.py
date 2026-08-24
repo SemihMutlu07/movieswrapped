@@ -37,6 +37,9 @@ class TaskState:
     error_type: Optional[str] = None
     error_stage: Optional[str] = None
     error_code: Optional[str] = None
+    # Per-job TMDB telemetry aggregate (dict of ints + stage timings). None for
+    # jobs that never ran a TMDB-enriched pipeline (avatar-only, old workers).
+    tmdb: Optional[Dict[str, Any]] = None
     kind: str = "analyze"     # analyze | scrape | watchlist
     username: Optional[str] = None
     avatar_only: bool = False  # scrape jobs: fetch just the profile avatar, skip full pipeline
@@ -317,6 +320,7 @@ def _task_row(task: TaskState) -> Dict[str, Any]:
         "scrape_seconds": task.scrape_seconds,
         "analysis_seconds": task.analysis_seconds,
         "postback_seconds": task.postback_seconds,
+        "tmdb": task.tmdb,
         "trace_events": task.trace_events,
         "created_at": _iso(task.created_at),
         "claimed_at": _iso(task.claimed_at),
@@ -355,6 +359,11 @@ def _apply_telemetry(task: TaskState, telemetry: Optional[Dict[str, Any]]) -> No
     ):
         if field_name in telemetry:
             setattr(task, field_name, telemetry.get(field_name))
+    # Per-job TMDB telemetry arrives nested under telemetry["tmdb"] (worker
+    # postbacks) — optional and backward-compatible (absent = leave as None).
+    tmdb = telemetry.get("tmdb")
+    if isinstance(tmdb, dict):
+        task.tmdb = tmdb
 
 
 def _event_elapsed(task: TaskState) -> Optional[float]:
@@ -664,6 +673,7 @@ def get_worker_status(max_age_seconds: int, *, expected_protocol_version: int = 
                 "error_type": t.error_type,
                 "error_stage": t.error_stage,
                 "error_code": t.error_code,
+                "tmdb": t.tmdb,
                 "latest_event": t.trace_events[-1] if t.trace_events else None,
             }
             for t in sorted(queued + running, key=lambda task: task.created_at)

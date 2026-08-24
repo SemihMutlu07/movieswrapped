@@ -69,6 +69,37 @@ TIMING_FIELDS = (
     "postback_seconds",
 )
 
+# Per-job TMDB telemetry aggregate fields mirrored into the run record.
+TMDB_TELEMETRY_FIELDS = (
+    "tmdb_match_seconds",
+    "tmdb_metadata_seconds",
+    "local_statistics_seconds",
+    "cache_hits",
+    "cache_misses",
+    "outbound_requests",
+    "empty_results",
+    "network_errors",
+    "retries",
+    "tmdb_429s",
+)
+
+
+def _flatten_tmdb_telemetry(tmdb: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Flatten the nested TMDB snapshot into scalar run-record fields.
+
+    Only the whitelisted integer/timing keys are copied; endpoint-family
+    breakdown stays under the nested ``tmdb`` key. Unknown/None values are
+    omitted so old runs keep their exact shape.
+    """
+    if not isinstance(tmdb, dict):
+        return {}
+    flat: dict[str, Any] = {}
+    for field in TMDB_TELEMETRY_FIELDS:
+        value = tmdb.get(field)
+        if value is not None:
+            flat[field] = value
+    return flat
+
 
 def _safe_username(username: Optional[str]) -> str:
     return re.sub(r"[^a-z0-9_-]", "_", (username or "anon").lower()) or "anon"
@@ -123,6 +154,7 @@ def persist_run(
     task_id: Optional[str] = None,
     trace_events: Optional[list[dict[str, Any]]] = None,
     telemetry: Optional[dict[str, Any]] = None,
+    tmdb: Optional[dict[str, Any]] = None,
 ) -> Optional[Path]:
     """Best-effort run log under runs/{username}-{iso-ts}-{task}.json."""
     try:
@@ -163,6 +195,17 @@ def persist_run(
         for field in TIMING_FIELDS:
             value = explicit_timings.get(field)
             payload[field] = telemetry.get(field, value)
+
+        # Per-job TMDB telemetry: flattened scalar fields + the full nested
+        # snapshot (with endpoint-family breakdown) under "tmdb". Omitted
+        # entirely for old workers that never sent it (backward compatible).
+        tmdb_payload = tmdb if isinstance(tmdb, dict) else None
+        if tmdb_payload is None and isinstance(telemetry.get("tmdb"), dict):
+            tmdb_payload = telemetry["tmdb"]
+        if tmdb_payload is not None:
+            payload.update(_flatten_tmdb_telemetry(tmdb_payload))
+            if "by_endpoint_family" in tmdb_payload:
+                payload["tmdb"] = tmdb_payload
 
         # ms variant for the ops_runs.duration_ms column (nullable; NULL when unknown).
         duration_seconds_value = payload.get("duration_seconds")
