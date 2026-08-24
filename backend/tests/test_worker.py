@@ -151,9 +151,11 @@ def test_supervisor_verifies_branch_and_venv_interpreter():
 
     script = (Path(__file__).parents[1] / "start-worker-supervisor.ps1").read_text(encoding="utf-8")
     assert '.venv\\Scripts\\python.exe' in script
-    assert "fetch origin desktop_server" in script
-    assert "checkout desktop_server" in script
-    assert "pull --ff-only origin desktop_server" in script
+    # Pull target is `main` since desktop_server was deleted upstream (PR-D).
+    assert '$PullBranch = "main"' in script
+    assert "fetch origin $PullBranch" in script
+    assert "checkout $PullBranch" in script
+    assert "pull --ff-only origin $PullBranch" in script
     assert "branch --show-current" in script and "rev-parse HEAD" in script
 
 
