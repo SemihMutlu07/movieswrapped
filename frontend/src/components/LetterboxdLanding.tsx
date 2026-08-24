@@ -15,17 +15,19 @@ import {
 } from '@/lib/api';
 import { ERROR_CODE_HINTS } from '@/lib/api';
 import { persistStats } from '@/lib/stats-storage';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { startAnalysis, finishAnalysis, buildSummaryForPersistence } from '@/lib/supabase/analysis_runs';
 import { upsertUserSession } from '@/lib/supabase/sessions';
 import { ensureSessionId, getUsername, setUsername, getConsent } from '@/lib/session-id';
 import { storyPath } from '@/lib/routes';
 import { trackEvent, trackConsentedEvent, trackFilmStats } from '@/lib/analytics';
-import { normalizeError, type NormalizedError } from '@/lib/errors';
+import { normalizeError, needsZipFallback, type NormalizedError } from '@/lib/errors';
 import { useI18n } from '@/i18n/I18nProvider';
 import { localizePath } from '@/i18n/routing';
 import { FAQ_ITEMS } from '@/i18n/faq';
 import ErrorBanner from '@/components/ErrorBanner';
 import LoadingScreen from '@/components/landing/LoadingScreen';
+import ScrapeStoryWait from '@/components/landing/ScrapeStoryWait';
 import UploadZone from '@/components/landing/UploadZone';
 import ExportInstructions from '@/components/landing/ExportInstructions';
 import { POSTER_GAME_MOVIES, type PosterGameMovie } from '@/lib/posterGameData';
@@ -138,6 +140,8 @@ function localizeLandingError(error: NormalizedError, t: (key: import('@/i18n/ca
     scrape_failed: ['landing.error.scrapeFailed.title', 'landing.error.scrapeFailed.message', 'landing.error.scrapeFailed.action'],
     scrape_blocked: ['landing.error.scrapeBlocked.title', 'landing.error.scrapeBlocked.message', 'landing.error.scrapeBlocked.action'],
     scraper_unavailable: ['landing.error.scraperUnavailable.title', 'landing.error.scraperUnavailable.message', 'landing.error.scraperUnavailable.action'],
+    queue_full: ['landing.error.queueFull.title', 'landing.error.queueFull.message', 'landing.error.queueFull.action'],
+    desktop_worker_offline: ['landing.error.desktopOffline.title', 'landing.error.desktopOffline.message', 'landing.error.desktopOffline.action'],
     desktop_worker_paused: ['landing.error.desktopPaused.title', 'landing.error.desktopPaused.message', 'landing.error.desktopPaused.action'],
     stats_too_large: ['landing.error.statsTooLarge.title', 'landing.error.statsTooLarge.message', 'landing.error.statsTooLarge.action'],
   } as const;
@@ -171,6 +175,9 @@ export default function LetterboxdLanding() {
   const [posterRoundsPlayed, setPosterRoundsPlayed] = useState(0);
   const shuffledDeckRef = useRef<PosterGameMovie[]>([]);
   const deckIndexRef = useRef(0);
+  const scrapeAbortRef = useRef<AbortController | null>(null);
+  // Story route to navigate to once the scrape wait machine settles READY → STORY.
+  const storyDestinationRef = useRef<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [usernameInput, setUsernameInput] = useState('');
   const [usernameFocused, setUsernameFocused] = useState(false);
@@ -210,18 +217,17 @@ export default function LetterboxdLanding() {
     testBackendConnectivity();
   }, []);
 
-  // ESC closes the upload modal + lock body scroll while it's open
+  useBodyScrollLock(showUploadModal);
+
+  // ESC closes the upload modal
   useEffect(() => {
     if (!showUploadModal) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setShowUploadModal(false);
     };
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
     };
   }, [showUploadModal]);
 
@@ -233,12 +239,8 @@ export default function LetterboxdLanding() {
     setPosterRound(movie);
   }, []);
 
-  // Kick off the first poster round once scraping starts.
-  useEffect(() => {
-    if (isScraping && !posterRound) {
-      drawNextRound();
-    }
-  }, [isScraping, posterRound, drawNextRound]);
+  // Poster-guess is not part of the scrape wait story; it stays unused here so
+  // the wait path does not download the game deck.
 
   const handleWrongGuess = useCallback(() => {
     setPosterWrongGuesses((prev) => prev + 1);
@@ -417,19 +419,21 @@ export default function LetterboxdLanding() {
       trackFilmStats({ total_films: result.stats.total_films, total_countries: result.stats.total_countries, average_rating: result.stats.average_rating });
 
       if (analysisRun && detectedUsername) {
-        try {
-          await finishAnalysis({ id: analysisRun.id, ok: true, task_id: result.task_id ?? null, summary: buildSummaryForPersistence(result.stats as Record<string, unknown>) });
-          await upsertUserSession({
-            session_id: sessionId,
-            username: detectedUsername,
-            consent: 'accept',
-            film_count: result.stats.total_films || null,
-            favorite_genre: result.stats.favorite_genre?.name || null,
-          });
-        } catch { /* analytics failure is non-fatal */ }
+        void (async () => {
+          try {
+            await finishAnalysis({ id: analysisRun.id, ok: true, task_id: result.task_id ?? null, summary: buildSummaryForPersistence(result.stats as Record<string, unknown>) });
+            await upsertUserSession({
+              session_id: sessionId,
+              username: detectedUsername,
+              consent: 'accept',
+              film_count: result.stats.total_films || null,
+              favorite_genre: result.stats.favorite_genre?.name || null,
+            });
+          } catch { /* analytics failure is non-fatal */ }
+        })();
       }
 
-      setTimeout(() => { window.location.href = storyPath(detectedUsername, locale); }, 100);
+      router.push(storyPath(detectedUsername, locale));
     } catch (err) {
       console.error('[upload] analysis failed:', err);
       const normalized = normalizeError(err);
@@ -440,7 +444,7 @@ export default function LetterboxdLanding() {
       setError(normalized);
       setIsUploading(false);
     }
-  }, [locale, zipFiles]);
+  }, [locale, router, zipFiles]);
 
   const handleScrape = useCallback(async () => {
     let raw = usernameInput.trim();
@@ -480,7 +484,12 @@ export default function LetterboxdLanding() {
     setError(null);
     trackEvent('analyze_started', { username, method: 'scrape', analysis_period: 'lifetime' });
     const destination = storyPath(username, locale);
+    storyDestinationRef.current = destination;
     router.prefetch(destination);
+
+    scrapeAbortRef.current?.abort();
+    const scrapeAbort = new AbortController();
+    scrapeAbortRef.current = scrapeAbort;
 
     const sessionId = ensureSessionId();
     const hasPersistenceConsent = getConsent() === 'accept';
@@ -497,7 +506,8 @@ export default function LetterboxdLanding() {
       startedAt = performance.now();
       // The desktop worker scrapes the full profile from a residential IP.
       const method = 'scrape' as const;
-      const result = await scrapeProfile(username, 'lifetime', undefined, setScrapeProgress);
+      const result = await scrapeProfile(username, 'lifetime', scrapeAbort.signal, setScrapeProgress);
+      if (scrapeAbort.signal.aborted) return;
       const returnedUsername = (result.stats as { scraped_username?: string })?.scraped_username;
       if (returnedUsername && returnedUsername !== username) {
         throw new Error(`Username mismatch: requested @${username}, got @${returnedUsername}`);
@@ -508,20 +518,26 @@ export default function LetterboxdLanding() {
       trackConsentedEvent('analyze_succeeded', { total_films: result.stats.total_films, method });
 
       if (analysisRun) {
-        try {
-          await finishAnalysis({ id: analysisRun.id, ok: true, task_id: result.task_id ?? null, summary: buildSummaryForPersistence(result.stats as Record<string, unknown>) });
-          await upsertUserSession({
-            session_id: sessionId,
-            username,
-            consent: 'accept',
-            film_count: result.stats.total_films || null,
-            favorite_genre: result.stats.favorite_genre?.name || null,
-          });
-        } catch { /* analytics failure is non-fatal */ }
+        void (async () => {
+          try {
+            await finishAnalysis({ id: analysisRun.id, ok: true, task_id: result.task_id ?? null, summary: buildSummaryForPersistence(result.stats as Record<string, unknown>) });
+            await upsertUserSession({
+              session_id: sessionId,
+              username,
+              consent: 'accept',
+              film_count: result.stats.total_films || null,
+              favorite_genre: result.stats.favorite_genre?.name || null,
+            });
+          } catch { /* analytics failure is non-fatal */ }
+        })();
       }
 
-      router.push(destination);
+      // Navigation is deferred: ScrapeStoryWait fires onStoryReady when the
+      // machine settles READY → STORY, so the story opens after its settle dwell.
     } catch (err) {
+      if ((err instanceof DOMException && err.name === 'AbortError') || (err instanceof Error && err.name === 'AbortError')) {
+        return;
+      }
       console.error('[scrape] analysis failed:', err);
       const normalized = normalizeError(err);
       if (analysisRun) {
@@ -546,7 +562,18 @@ export default function LetterboxdLanding() {
     }
   }, [locale, router, usernameInput]);
 
+  // STORY handoff: fired exactly once by ScrapeStoryWait when READY settles.
+  const handleStoryReady = useCallback(() => {
+    const destination = storyDestinationRef.current;
+    if (!destination) return;
+    storyDestinationRef.current = null;
+    router.push(destination);
+  }, [router]);
+
   const handleCancel = useCallback(() => {
+    scrapeAbortRef.current?.abort();
+    scrapeAbortRef.current = null;
+    storyDestinationRef.current = null;
     setIsUploading(false);
     setIsScraping(false);
     setScrapeProgress(null);
@@ -566,27 +593,12 @@ export default function LetterboxdLanding() {
   if (isUploading) return <LoadingScreen onCancel={handleCancel} typicalSeconds={45} />;
   if (isScraping) {
     return (
-      <LoadingScreen
+      <ScrapeStoryWait
+        username={getUsername() || usernameInput}
         onCancel={handleCancel}
-        mode="scrape"
-        typicalSeconds={30}
         queued={workerQueued}
         events={scrapeProgress?.trace_events}
-        posterGame={
-          posterRound
-            ? {
-                movie: posterRound,
-                level: posterLevel,
-                maxLevel: POSTER_GAME_MAX_LEVEL,
-                wrongGuesses: posterWrongGuesses,
-                score: posterScore,
-                nextPoints: POSTER_ROUND_POINTS[Math.min(posterWrongGuesses, POSTER_ROUND_POINTS.length - 1)],
-                onWrongGuess: handleWrongGuess,
-                onCorrectGuess: handleCorrectGuess,
-                revealedAnswer: posterRevealed,
-              }
-            : null
-        }
+        onStoryReady={handleStoryReady}
       />
     );
   }
@@ -669,17 +681,41 @@ export default function LetterboxdLanding() {
 
             </div>
 
+            {translatedError && (
+              <div className="mx-auto mt-4 max-w-lg">
+                <ErrorBanner
+                  error={translatedError}
+                  onDismiss={() => setError(null)}
+                  onRetry={needsZipFallback(translatedError.reason) ? undefined : () => setError(null)}
+                  onUpload={
+                    needsZipFallback(translatedError.reason)
+                      ? () => {
+                          setShowUploadModal(true);
+                          trackEvent('upload_modal_opened', { source: 'scrape_error' });
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            )}
+
             {/* Secondary: upload export */}
             <div className="mt-4 grid gap-2 sm:flex sm:justify-center">
               <button
                 type="button"
                 onClick={() => {
                   setShowUploadModal(true);
-                  setError(null);
+                  if (!translatedError || !needsZipFallback(translatedError.reason)) {
+                    setError(null);
+                  }
                   trackEvent('upload_modal_opened');
                 }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-medium text-white/70 transition hover:text-white active:scale-[0.98] sm:w-auto"
-                style={{ borderWidth: 1, borderColor: '#1f262e', backgroundColor: 'rgba(27, 28, 30, 0.4)' }}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-medium transition active:scale-[0.98] sm:w-auto"
+                style={
+                  translatedError && needsZipFallback(translatedError.reason)
+                    ? { backgroundColor: '#ff7f00', color: '#1b1c1e', borderWidth: 1, borderColor: '#ff7f00' }
+                    : { borderWidth: 1, borderColor: '#1f262e', backgroundColor: 'rgba(27, 28, 30, 0.4)', color: 'rgba(255,255,255,0.7)' }
+                }
               >
                 <Upload className="h-4 w-4" />
                 {t('landing.upload.open')}
@@ -748,7 +784,6 @@ export default function LetterboxdLanding() {
             </div>
           )}
 
-          {translatedError && <ErrorBanner error={translatedError} onDismiss={() => setError(null)} onRetry={() => setError(null)} />}
         </div>
       </div>
 

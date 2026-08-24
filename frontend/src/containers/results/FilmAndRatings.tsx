@@ -2,8 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import IsolatedModal from '@/components/IsolatedModal';
 import Section from '@/components/results/Section';
 import { getPosterUrl } from '@/lib/analytics';
 import { PosterImage } from '@/components/results/Placeholders';
@@ -339,15 +339,6 @@ export function RatingBucketModal({
   const [posterPage, setPosterPage] = useState(1);
 
   useEffect(() => {
-    if (!bucket) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [bucket, onClose]);
-
-  useEffect(() => {
     if (!bucket) setPosterPage(1);
   }, [bucket]);
 
@@ -356,90 +347,67 @@ export function RatingBucketModal({
   const hasMoreFilms = bucket ? bucket.films.length > visibleFilms.length : false;
 
   return (
-    <AnimatePresence>
+    <IsolatedModal
+      open={bucket != null}
+      onClose={onClose}
+      label={bucket ? `${bucket.label} rating bucket` : undefined}
+      panelClassName="max-w-4xl rounded-2xl border border-yellow-400/20 bg-[#161616] shadow-2xl"
+    >
       {bucket && (
-        <motion.div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-        >
-          <motion.div
-            className="absolute inset-0 bg-black/80"
-            onClick={onClose}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-          />
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${bucket.label} rating bucket`}
-            className="relative flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-yellow-400/20 bg-[#161616] shadow-2xl"
-            initial={{ opacity: 0, scale: 0.94, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <header className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-yellow-300/70">{t('results.films.ratingBucket')}</p>
-                <h3 className="mt-1 text-2xl font-black text-white">{bucket.label}</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {bucket.films.length} film{bucket.films.length === 1 ? '' : 's'} sorted by community rating
-                </p>
-              </div>
+        <>
+          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-yellow-300/70">{t('results.films.ratingBucket')}</p>
+              <h3 className="mt-1 text-2xl font-black text-white">{bucket.label}</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                {bucket.films.length} film{bucket.films.length === 1 ? '' : 's'} sorted by community rating
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close rating bucket"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </header>
+          <div data-mw-modal-scroll className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto overscroll-contain p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {visibleFilms.map((film) => {
+              const poster = getPosterUrl(film.poster_path, 'grid');
+              return (
+                <div
+                  key={`${film.title}-${film.year ?? ''}`}
+                  className="min-w-0 text-left"
+                >
+                  <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-slate-900 ring-1 ring-white/10">
+                    <PosterImage src={poster} alt={`${film.title} poster`} />
+                    <span className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-0.5 text-xs font-bold text-yellow-300">
+                      ★ {film.rating.toFixed(1)}
+                    </span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-xs font-semibold leading-tight text-white">{film.title}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {film.year ?? '—'} · avg ★ {film.communityRating ? film.communityRating.toFixed(1) : '—'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          {hasMoreFilms && (
+            <div className="shrink-0 border-t border-white/[0.06] px-5 py-3">
               <button
                 type="button"
-                onClick={onClose}
-                aria-label="Close rating bucket"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+                onClick={() => setPosterPage((p) => p + 1)}
+                className="w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold transition-colors py-2.5"
               >
-                <X className="h-4 w-4" />
+                Show more films
               </button>
-            </header>
-            <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {visibleFilms.map((film, index) => {
-                const poster = getPosterUrl(film.poster_path, 'grid');
-                return (
-                  <motion.div
-                    key={`${film.title}-${film.year ?? ''}`}
-                    className="min-w-0 text-left"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: Math.min(index, 12) * 0.02, ease: 'easeOut' }}
-                  >
-                    <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-slate-900 ring-1 ring-white/10">
-                      <PosterImage src={poster} alt={`${film.title} poster`} />
-                      <span className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-0.5 text-xs font-bold text-yellow-300">
-                        ★ {film.rating.toFixed(1)}
-                      </span>
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-xs font-semibold leading-tight text-white">{film.title}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      {film.year ?? '—'} · avg ★ {film.communityRating ? film.communityRating.toFixed(1) : '—'}
-                    </p>
-                  </motion.div>
-                );
-              })}
             </div>
-            {hasMoreFilms && (
-              <div className="border-t border-white/[0.06] px-5 py-3">
-                <button
-                  type="button"
-                  onClick={() => setPosterPage((p) => p + 1)}
-                  className="w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold transition-colors py-2.5"
-                >
-                  Show more films
-                </button>
-              </div>
-            )}
-          </motion.div>
-        </motion.div>
+          )}
+        </>
       )}
-    </AnimatePresence>
+    </IsolatedModal>
   );
 }
 
@@ -458,84 +426,76 @@ function DecadeModal({
   onSelectFilm: (film: RatingBucketFilm) => void;
 }) {
   const [posterPage, setPosterPage] = useState(1);
-
   useEffect(() => {
-    if (!bucket) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [bucket, onClose]);
-
-  if (!bucket) return null;
-
+    if (!bucket) setPosterPage(1);
+  }, [bucket]);
   const visibleCount = posterPage * INITIAL_POSTER_PAGE;
-  const visibleFilms = bucket.films.slice(0, visibleCount);
-  const hasMoreFilms = bucket.films.length > visibleFilms.length;
+  const visibleFilms = bucket ? bucket.films.slice(0, visibleCount) : [];
+  const hasMoreFilms = bucket ? bucket.films.length > visibleFilms.length : false;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${bucket.decade} films`}
-        className="relative flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-purple-400/20 bg-[#161616] shadow-2xl"
-      >
-        <header className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300/70">Decade</p>
-            <h3 className="mt-1 text-2xl font-black text-white">{bucket.decade}</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              {bucket.films.length} film{bucket.films.length === 1 ? '' : 's'} sorted by year
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close decade films"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </header>
-        <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {visibleFilms.map((film) => {
-            const poster = getPosterUrl(film.poster_path, 'grid');
-            return (
-              <button
-                key={`${film.title}-${film.year ?? ''}`}
-                type="button"
-                onClick={() => onSelectFilm(film)}
-                className="group min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-300"
-              >
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-slate-900 ring-1 ring-white/10 transition-transform duration-150 group-hover:scale-[1.02] group-hover:ring-purple-300/40">
-                  <PosterImage src={poster} alt={`${film.title} poster`} />
-                  <span className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-0.5 text-xs font-bold text-purple-300">
-                    {film.year ?? '—'}
-                  </span>
-                </div>
-                <p className="mt-2 line-clamp-2 text-xs font-semibold leading-tight text-white">{film.title}</p>
-                <p className="mt-0.5 text-[11px] text-slate-500">
-                  {film.rating ? `★ ${film.rating.toFixed(1)}` : 'unrated'}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-        {hasMoreFilms && (
-          <div className="border-t border-white/[0.06] px-5 py-3">
+    <IsolatedModal
+      open={bucket != null}
+      onClose={onClose}
+      label={bucket ? `${bucket.decade} films` : undefined}
+      panelClassName="max-w-4xl rounded-2xl border border-purple-400/20 bg-[#161616] shadow-2xl"
+    >
+      {bucket && (
+        <>
+          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-purple-300/70">Decade</p>
+              <h3 className="mt-1 text-2xl font-black text-white">{bucket.decade}</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                {bucket.films.length} film{bucket.films.length === 1 ? '' : 's'} sorted by year
+              </p>
+            </div>
             <button
               type="button"
-              onClick={() => setPosterPage((p) => p + 1)}
-              className="w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold transition-colors py-2.5"
+              onClick={onClose}
+              aria-label="Close decade films"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
-              Show more films
+              <X className="h-4 w-4" />
             </button>
+          </header>
+          <div data-mw-modal-scroll className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto overscroll-contain p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {visibleFilms.map((film) => {
+              const poster = getPosterUrl(film.poster_path, 'grid');
+              return (
+                <button
+                  key={`${film.title}-${film.year ?? ''}`}
+                  type="button"
+                  onClick={() => onSelectFilm(film)}
+                  className="group min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-300"
+                >
+                  <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-slate-900 ring-1 ring-white/10 transition-transform duration-150 group-hover:scale-[1.02] group-hover:ring-purple-300/40">
+                    <PosterImage src={poster} alt={`${film.title} poster`} />
+                    <span className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-0.5 text-xs font-bold text-purple-300">
+                      {film.year ?? '—'}
+                    </span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-xs font-semibold leading-tight text-white">{film.title}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {film.rating ? `★ ${film.rating.toFixed(1)}` : 'unrated'}
+                  </p>
+                </button>
+              );
+            })}
           </div>
-        )}
-      </div>
-    </div>
+          {hasMoreFilms && (
+            <div className="shrink-0 border-t border-white/[0.06] px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setPosterPage((p) => p + 1)}
+                className="w-full rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold transition-colors py-2.5"
+              >
+                Show more films
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </IsolatedModal>
   );
 }

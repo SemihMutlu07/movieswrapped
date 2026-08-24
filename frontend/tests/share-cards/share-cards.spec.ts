@@ -82,11 +82,11 @@ for (const { key, orientation } of SHARE_VARIANTS) {
     const bytes = fs.readFileSync(file);
     expect(bytes.subarray(0, pngSignature.length)).toEqual(pngSignature);
     expect(pngDimensions(file)).toEqual(orientation === 'horizontal'
-      ? { width: 1200, height: 675 }
-      : { width: 1080, height: 1920 });
+      ? { width: 2400, height: 1350 }
+      : { width: 1350, height: 2400 });
     if (process.env.UPDATE_SHARE_SCREENSHOTS === '1') {
       const index = SHARE_VARIANTS.findIndex(({ key: variantKey }) => variantKey === key) + 1;
-      const suffix = orientation === 'horizontal' ? 'twitter-1200x675' : 'story-1080x1920';
+      const suffix = orientation === 'horizontal' ? 'twitter-2400x1350' : 'story-1350x2400';
       const destination = path.resolve('..', '_screenshots', 'share-cards', `${String(index).padStart(2, '0')}-${key}--${suffix}.png`);
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       fs.copyFileSync(file, destination);

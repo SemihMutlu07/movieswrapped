@@ -96,7 +96,7 @@ describe('ReviewAnalysisSection', () => {
     expect(screen.getAllByText(/Review text for film/).length).toBe(3);
   });
 
-  it('uses the same word-first order for the longest stat and list', async () => {
+  it('prefers the backend longest_review summary over client recomputation', () => {
     const reviews = [
       { title: 'Most Liked URL', year: '2025', text: `kısa yorum https://example.com/${'x'.repeat(300)}`, likes: 99, rating: 4 },
       { title: 'Many Words', year: '2024', text: 'İstanbul’da geçen bu film kalbimde uzun süre yaşayacak', likes: 0, rating: 3 },
@@ -107,16 +107,14 @@ describe('ReviewAnalysisSection', () => {
         total_reviews: 3, reviews_with_text: 3, review_rate: 1, total_words_written: 11,
         avg_review_length_words: 4, unique_words_used: 11, vocab_richness: 1,
         word_frequency: [], bigram_frequency: [], avg_length_by_rating: {}, language_mix: {},
-        longest_review: { title: 'Wrong Summary', year: '2000', length: 999 },
+        longest_review: { title: 'Many Words', year: '2024', length: 8, unit: 'words' },
         reviews,
       },
     }, [], reviews);
 
     expect(screen.getByText('Many Words (2024)')).toBeInTheDocument();
-    expect(screen.queryByText(/Wrong Summary/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Longest/i }));
-    const renderedReviews = screen.getAllByRole('listitem');
-    expect(renderedReviews[0]).toHaveTextContent('Many Words');
+    expect(screen.getByText('8')).toBeInTheDocument();
+    expect(screen.getByText('words on your longest review')).toBeInTheDocument();
   });
 
   it('shows the backend longest-review summary when detailed reviews are unavailable', () => {

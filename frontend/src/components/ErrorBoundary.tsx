@@ -3,6 +3,8 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
+import { captureException } from '@/lib/posthog';
+
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
@@ -26,8 +28,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ error, errorInfo });
-    
-    // Log error for debugging
+
+    captureException(error, {
+      source: 'react_error_boundary',
+      component_stack: errorInfo.componentStack,
+    });
+
     if (process.env.NODE_ENV === 'development') {
       console.error('ErrorBoundary caught an error:', error, errorInfo);
     }
@@ -60,26 +66,18 @@ export class ErrorBoundary extends Component<Props, State> {
             retry: 'Try Again',
             home: 'Go Home',
           };
-      // Custom fallback UI
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
 
-      // Default error UI
+      if (this.props.fallback) return this.props.fallback;
+
       return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-slate-800 rounded-2xl border border-red-500/20 p-6 text-center">
             <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-red-400" />
             </div>
-            
-            <h1 className="text-xl font-bold text-white mb-2">
-              {copy.title}
-            </h1>
-            
-            <p className="text-slate-300 mb-6">
-              {copy.message}
-            </p>
+
+            <h1 className="text-xl font-bold text-white mb-2">{copy.title}</h1>
+            <p className="text-slate-300 mb-6">{copy.message}</p>
 
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <details className="mb-6 text-left">
@@ -110,7 +108,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <RefreshCw className="w-4 h-4" />
                 {copy.retry}
               </button>
-              
+
               <button
                 onClick={this.handleGoHome}
                 className="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
@@ -128,9 +126,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-// Hook for functional components to handle errors
 export function useErrorHandler() {
   return React.useCallback((error: Error, errorInfo?: ErrorInfo) => {
+    captureException(error, {
+      source: 'use_error_handler',
+      component_stack: errorInfo?.componentStack,
+    });
+
     if (process.env.NODE_ENV === 'development') {
       console.error('Error caught by useErrorHandler:', error, errorInfo);
     }

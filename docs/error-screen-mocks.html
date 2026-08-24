@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movies Wrapped — Error & Capacity Screen Mocks</title>
+  <style>
+    :root {
+      --bg: #1a1a1a;
+      --card: rgba(27, 28, 30, 0.65);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: #1f262e;
+      --text: #ffffff;
+      --text-80: rgba(255, 255, 255, 0.8);
+      --text-60: rgba(255, 255, 255, 0.6);
+      --text-50: rgba(255, 255, 255, 0.5);
+      --text-40: rgba(255, 255, 255, 0.4);
+      --orange: #fb923c;
+      --orange-solid: #ff7f00;
+      --orange-dim: rgba(255, 127, 0, 0.15);
+      --slate-btn: #2a2f36;
+      --slate-btn-hover: #343b44;
+      --red-border: rgba(248, 113, 113, 0.35);
+      --red-bg: rgba(239, 68, 68, 0.12);
+      --red-text: #fecaca;
+      --amber-border: rgba(251, 191, 36, 0.35);
+      --amber-bg: rgba(245, 158, 11, 0.1);
+      --radius-xl: 1rem;
+      --radius-2xl: 1rem;
+      --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --nav-h: 52px;
+      --pager-h: 4.25rem;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding-bottom: var(--pager-h);
+    }
+
+    /* ── Sticky nav ── */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      height: var(--nav-h);
+      padding: 0 1rem;
+      background: rgba(26, 26, 26, 0.92);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .nav-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-50);
+      margin-right: 0.5rem;
+      flex-shrink: 0;
+    }
+    .nav-pill {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-60);
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0.3rem 0.55rem;
+      border-radius: 0.5rem;
+      border: 1px solid transparent;
+      background: transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .nav-pill:hover {
+      color: var(--text);
+      border-color: var(--border);
+      background: rgba(255,255,255,0.04);
+    }
+    .nav-pill.is-active {
+      color: var(--text);
+      border-color: rgba(251, 146, 60, 0.35);
+      background: var(--orange-dim);
+    }
+
+    /* ── Screen sections (one per page) ── */
+    .screen {
+      display: none;
+      min-height: calc(100vh - var(--nav-h) - var(--pager-h));
+      padding: 2rem 1.25rem 2rem;
+      position: relative;
+    }
+    .screen.is-active {
+      display: block;
+    }
+    .screen-header {
+      max-width: 1100px;
+      margin: 0 auto 1.75rem;
+    }
+    .screen-id {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 0.35rem;
+    }
+    .screen-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .screen-desc {
+      margin-top: 0.35rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-60);
+      max-width: 52rem;
+      line-height: 1.45;
+    }
+
+    /* Meta badge — top right of section */
+    .meta-badge {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.25rem;
+      font-size: 0.62rem;
+      font-weight: 600;
+      text-align: right;
+    }
+    .meta-badge span {
+      padding: 0.2rem 0.45rem;
+      border-radius: 0.35rem;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.35);
+      color: var(--text-60);
+    }
+    .meta-badge .decision {
+      color: var(--orange);
+      border-color: rgba(251, 146, 60, 0.35);
+      background: var(--orange-dim);
+    }
+
+    .variant-block {
+      max-width: 1100px;
+      margin: 0 auto 2rem;
+    }
+    .variant-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-40);
+      margin-bottom: 0.75rem;
+      padding-left: 0.15rem;
+    }
+
+    /* Two-column EN | TR */
+    .locale-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 820px) {
+      .locale-grid { grid-template-columns: 1fr; }
+      .meta-badge { position: static; align-items: flex-start; margin-bottom: 1rem; }
+    }
+    .locale-col {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-2xl);
+      overflow: hidden;
+      background: rgba(0,0,0,0.2);
+    }
+    .locale-tag {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-40);
+      padding: 0.45rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* ── Full-page state canvas ── */
+    .canvas {
+      min-height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.25rem;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(251,146,60,0.06), transparent),
+        var(--bg);
+    }
+    .state-card {
+      width: 100%;
+      max-width: 26rem;
+      text-align: center;
+    }
+    .state-icon {
+      width: 3.25rem;
+      height: 3.25rem;
+      margin: 0 auto 1.25rem;
+      border-radius: var(--radius-xl);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+    }
+    .state-icon svg { width: 1.5rem; height: 1.5rem; }
+    .state-icon.warn { background: var(--amber-bg); border-color: var(--amber-border); color: #fbbf24; }
+    .state-icon.error { background: var(--red-bg); border-color: var(--red-border); color: #f87171; }
+    .state-icon.neutral { background: rgba(255,255,255,0.04); color: var(--text-50); }
+    .state-icon.capacity { background: var(--orange-dim); border-color: rgba(251,146,60,0.3); color: var(--orange); }
+
+    .state-card h2 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+    .state-card .lead {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text-80);
+      margin-bottom: 0.4rem;
+    }
+    .state-card .hint {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text-60);
+      margin-bottom: 1.5rem;
+      line-height: 1.45;
+    }
+    /* Legibility floor: no thin/faint helper copy */
+    .btn-ico {
+      width: 1.05rem;
+      height: 1.05rem;
+      flex-shrink: 0;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2.25;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .path-guide {
+      margin-top: 0.85rem;
+      padding: 0.85rem 0.9rem;
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      text-align: left;
+    }
+    .path-guide > strong {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-80);
+      margin-bottom: 0.55rem;
+    }
+    .path-steps {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem 0.15rem;
+      padding: 0;
+      margin: 0;
+    }
+    .path-steps li {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-80);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 0.4rem;
+      padding: 0.28rem 0.45rem;
+    }
+    .path-steps li code {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--orange);
+    }
+    .path-chevron {
+      width: 0.85rem;
+      height: 0.85rem;
+      flex-shrink: 0;
+      stroke: var(--text-50);
+      fill: none;
+      stroke-width: 2.25;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      margin: 0 0.1rem;
+    }
+    .upload-panel {
+      width: 100%;
+      max-width: 26rem;
+      margin-top: 0.25rem;
+      padding: 1rem;
+      border-radius: var(--radius-2xl);
+      border: 1px solid rgba(251, 146, 60, 0.35);
+      background: rgba(27, 28, 30, 0.85);
+      text-align: left;
+    }
+    .upload-panel-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 0.55rem;
+    }
+    .fake-dropzone {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 4.5rem;
+      border-radius: var(--radius-xl);
+      border: 1.5px dashed rgba(251, 146, 60, 0.45);
+      background: var(--orange-dim);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #fed7aa;
+      margin-bottom: 0.15rem;
+    }
+    .landing-card-live {
+      width: 100%;
+      max-width: 22rem;
+      padding: 1.25rem;
+      border-radius: var(--radius-2xl);
+      border: 1px solid var(--border-strong);
+      background: var(--card);
+    }
+    .landing-card-live .fake-input {
+      margin-top: 0;
+    }
+    .inline-field-error {
+      margin-top: 0.55rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(185, 28, 28, 0.45);
+      background: rgba(30, 41, 59, 0.9);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--red-text);
+      line-height: 1.4;
+    }
+    .inline-field-error .field-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.55rem;
+    }
+    .decision-locked {
+      color: #86efac !important;
+      border-color: rgba(134, 239, 172, 0.35) !important;
+      background: rgba(22, 101, 52, 0.25) !important;
+    }
+    .cta-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      align-items: stretch;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.7rem 1.1rem;
+      border-radius: var(--radius-xl);
+      font-size: 0.875rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+      cursor: default;
+      text-decoration: none;
+      transition: transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: var(--orange-solid);
+      color: #1b1c1e;
+      border-color: rgba(255,127,0,0.5);
+    }
+    .btn-secondary {
+      background: var(--slate-btn);
+      color: var(--text);
+      border-color: var(--border-strong);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-60);
+      border-color: var(--border);
+    }
+    .export-note {
+      display: none; /* path guide lives on upload destination, not error chrome */
+    }
+    .username-chip {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 0.4rem;
+      font-size: 0.75rem;
+      font-family: ui-monospace, monospace;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--text-60);
+    }
+
+    /* ── Banner variant (inline on fake landing) ── */
+    .landing-mock {
+      min-height: 420px;
+      padding: 1.5rem 1rem 2rem;
+      background:
+        radial-gradient(ellipse 70% 45% at 50% 0%, rgba(251,146,60,0.05), transparent),
+        var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 1rem;
+    }
+    .landing-hero-fake h1 {
+      font-size: 1.75rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      text-align: center;
+    }
+    .landing-hero-fake p {
+      font-size: 0.85rem;
+      color: var(--text-60);
+      text-align: center;
+      margin-top: 0.35rem;
+    }
+    .landing-card-fake {
+      width: 100%;
+      max-width: 22rem;
+      padding: 1.25rem;
+      border-radius: var(--radius-2xl);
+      border: 1px solid var(--border-strong);
+      background: var(--card);
+      opacity: 0.45;
+      filter: blur(0.3px);
+    }
+    .fake-input {
+      height: 2.75rem;
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(255,127,0,0.35);
+      background: rgba(30,37,45,0.7);
+      margin-top: 0.75rem;
+    }
+
+    .error-banner {
+      width: 100%;
+      max-width: 26rem;
+      border-radius: var(--radius-2xl);
+      border: 1px solid rgba(185, 28, 28, 0.45);
+      background: rgba(30, 41, 59, 0.9);
+      padding: 1rem 1.1rem;
+      text-align: left;
+    }
+    .error-banner .banner-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+    .banner-icon {
+      flex-shrink: 0;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 0.75rem;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(248,113,113,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f87171;
+    }
+    .banner-icon svg { width: 1.1rem; height: 1.1rem; }
+    .error-banner h3 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--red-text);
+    }
+    .error-banner p {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: rgba(226, 232, 240, 0.95);
+      margin-top: 0.3rem;
+      line-height: 1.45;
+    }
+    .error-banner .action-line {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-60);
+      margin-top: 0.4rem;
+    }
+    .banner-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.65rem;
+    }
+    .banner-btns .btn {
+      padding: 0.4rem 0.7rem;
+      font-size: 0.72rem;
+      border-radius: 0.5rem;
+    }
+
+    /* Capacity banner uses amber, not red — distinct from generic errors */
+    .capacity-banner {
+      border-color: rgba(251, 146, 60, 0.35);
+      background: rgba(30, 35, 40, 0.92);
+    }
+    .capacity-banner .banner-icon {
+      background: var(--orange-dim);
+      border-color: rgba(251,146,60,0.35);
+      color: var(--orange);
+    }
+    .capacity-banner h3 { color: #fed7aa; }
+
+    /* Story-slide banner — playful worker-family errors (C–F), Semih approved */
+    .story-banner {
+      width: 100%;
+      max-width: 26rem;
+      border-radius: var(--radius-2xl);
+      border: 1px solid rgba(251, 146, 60, 0.22);
+      background: linear-gradient(180deg, rgba(32,34,40,0.96), rgba(23,24,29,0.96));
+      padding: 1rem 1.25rem 1.25rem;
+      text-align: center;
+    }
+    .story-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .story-eyebrow {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--orange);
+    }
+    .story-refresh {
+      flex-shrink: 0;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 9999px;
+      border: 1px solid var(--border-strong);
+      background: rgba(255,255,255,0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-60);
+    }
+    .story-refresh svg {
+      width: 0.85rem;
+      height: 0.85rem;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .story-icon {
+      margin: 0.9rem auto 0.25rem;
+      width: 3.25rem;
+      height: 4.25rem;
+      border-radius: 0.6rem;
+      background: #f4f1ea;
+      border: 1px solid rgba(255,255,255,0.25);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.9rem;
+      transform: rotate(-4deg);
+    }
+    .story-banner h3 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-top: 0.55rem;
+    }
+    .story-banner .story-sub {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-60);
+      line-height: 1.5;
+      margin-top: 0.4rem;
+      max-width: 20rem;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .banner-btns.story-btns {
+      justify-content: center;
+      margin-top: 0.9rem;
+    }
+    .story-btns .btn-primary {
+      border-radius: 9999px;
+      padding: 0.5rem 1.1rem;
+      font-size: 0.78rem;
+    }
+
+    .footnote {
+      max-width: 1100px;
+      margin: 3rem auto 2rem;
+      padding: 1.25rem;
+      border-radius: var(--radius-2xl);
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      font-size: 0.8rem;
+      color: var(--text-50);
+    }
+    .footnote h2 {
+      font-size: 0.95rem;
+      color: var(--text-80);
+      margin-bottom: 0.75rem;
+    }
+    .footnote ul { padding-left: 1.1rem; }
+    .footnote li { margin-bottom: 0.35rem; }
+    .footnote .question {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--orange);
+      font-weight: 600;
+    }
+
+    /* ── Fixed pagination bar ── */
+    .pager {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      height: var(--pager-h);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 0 1rem;
+      background: rgba(22, 22, 22, 0.96);
+      border-top: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+    }
+    .pager-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 0.9rem;
+      border-radius: 0.65rem;
+      border: 1px solid var(--border-strong);
+      background: var(--slate-btn);
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .pager-icon {
+      width: 1rem;
+      height: 1rem;
+      flex-shrink: 0;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .pager-btn:hover:not(:disabled) { background: var(--slate-btn-hover); }
+    .pager-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .pager-dots {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      max-width: 14rem;
+      overflow-x: auto;
+      padding: 0 0.25rem;
+    }
+    .pager-dot {
+      flex-shrink: 0;
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 999px;
+      border: none;
+      background: rgba(255, 255, 255, 0.2);
+      cursor: pointer;
+      padding: 0;
+      transition: transform 0.15s, background 0.15s;
+    }
+    .pager-dot:hover { background: rgba(255, 255, 255, 0.45); }
+    .pager-dot.is-active {
+      background: var(--orange-solid);
+      transform: scale(1.25);
+    }
+    .pager-count {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-50);
+      min-width: 3.5rem;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .pager-hint {
+      display: none;
+      font-size: 0.62rem;
+      color: var(--text-40);
+    }
+    @media (min-width: 640px) {
+      .pager-hint { display: inline; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav" aria-label="Screen index">
+  <span class="nav-title">MW errors</span>
+  <button type="button" class="nav-pill" data-screen="a-404">A 404</button>
+  <button type="button" class="nav-pill" data-screen="b-500">B 500</button>
+  <button type="button" class="nav-pill" data-screen="c-offline">C offline</button>
+  <button type="button" class="nav-pill" data-screen="d-paused">D paused</button>
+  <button type="button" class="nav-pill" data-screen="e-queue">E busy</button>
+  <button type="button" class="nav-pill" data-screen="f-blocked">F blocked</button>
+  <button type="button" class="nav-pill" data-screen="g-notfound">G not found</button>
+  <button type="button" class="nav-pill" data-screen="h-unreachable">H network</button>
+  <button type="button" class="nav-pill" data-screen="i-timeout">I timeout</button>
+  <button type="button" class="nav-pill" data-screen="summary">Summary</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     A — Route 404 (unknown URL / Netlify)
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="a-404">
+  <div class="meta-badge">
+    <span>HTTP 404</span>
+    <span>error_code: — (route)</span>
+    <span class="decision decision-locked">LOCKED · full-page only</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen A</div>
+    <h1 class="screen-title">Route 404 — unknown URL</h1>
+    <p class="screen-desc">Decision: <strong>full-page dedicated</strong> (no landing banner). Single CTA home. No scrape/ZIP language. No thin helper copy.</p>
+  </div>
+
+  <div class="variant-block">
+    <div class="variant-label">Full-page dedicated state · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="canvas">
+          <div class="state-card">
+            <div class="state-icon neutral">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <h2>Page not found</h2>
+            <p class="lead">This URL doesn’t exist on Movies Wrapped.</p>
+            <p class="hint">If you pasted a link, check for typos. This isn’t a Letterboxd or server capacity issue.</p>
+            <div class="cta-stack">
+              <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> Back to Movies Wrapped</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="canvas">
+          <div class="state-card">
+            <div class="state-icon neutral">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <h2>Sayfa bulunamadı</h2>
+            <p class="lead">Bu adres Movies Wrapped’da yok.</p>
+            <p class="hint">Bir bağlantı yapıştırdıysan yazımı kontrol et. Bu Letterboxd veya kapasite hatası değil.</p>
+            <div class="cta-stack">
+              <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> Movies Wrapped’a dön</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     B — Generic 500
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="b-500">
+  <div class="meta-badge">
+    <span>HTTP 500</span>
+    <span>error_code: unknown_error</span>
+    <span class="decision decision-locked">LOCKED · full-page · retry only</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen B</div>
+    <h1 class="screen-title">Generic 500 — server crashed</h1>
+    <p class="screen-desc">Decision: <strong>full-page dedicated</strong>. Retry primary; no ZIP (export can’t help if the backend can’t process).</p>
+  </div>
+  <div class="variant-block">
+    <div class="variant-label">Full-page only · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="canvas">
+          <div class="state-card">
+            <div class="state-icon error">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            </div>
+            <h2>Something went wrong</h2>
+            <p class="lead">Our server hit an unexpected error.</p>
+            <p class="hint">This isn’t your username or a capacity limit — the backend failed while handling your request.</p>
+            <div class="cta-stack">
+              <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Try again</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> Back to Movies Wrapped</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="canvas">
+          <div class="state-card">
+            <div class="state-icon error">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+            </div>
+            <h2>Bir şeyler ters gitti</h2>
+            <p class="lead">Sunucumuz beklenmeyen bir hatayla karşılaştı.</p>
+            <p class="hint">Bu kullanıcı adın veya kapasite limitin değil — backend isteği işlerken çöktü.</p>
+            <div class="cta-stack">
+              <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Tekrar dene</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> Movies Wrapped’a dön</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     C — desktop_worker_offline 503
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="c-offline">
+  <div class="meta-badge">
+    <span>HTTP 503</span>
+    <span>error_code: desktop_worker_offline</span>
+    <span class="decision decision-locked">LOCKED · inline + auto export</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen C</div>
+    <h1 class="screen-title">Desktop worker offline</h1>
+    <p class="screen-desc">Decision: <strong>inline banner on landing</strong>; export panel auto-opens. Path guide (“How to get your file”) lives on the upload destination — not inside the error banner. Softened copy: no “always works”. Visual: playful story-slide card (Semih approved).</p>
+  </div>
+
+  <div class="variant-block">
+    <div class="variant-label">Production shape · banner + auto-open export · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1><p>Your year in film, decoded.</p></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">14 · Offline Worker Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">🃏</div>
+            <h3>The worker is napping right now</h3>
+            <p class="story-sub">Machine’s offline — but your export still gets you the full story.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Upload Letterboxd export</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Try username again</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Export path opened from error</div>
+            <div class="fake-dropzone">Drop Letterboxd .zip here</div>
+            <div class="path-guide">
+              <strong>How to get your file</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> here</li></ol>
+            </div>
+          </div>
+          <div class="landing-card-fake" style="opacity:0.35"><div class="fake-input"></div></div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1><p>Yılının sinema özeti.</p></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">14 · Offline Worker Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">🃏</div>
+            <h3>Worker şu an uyuyor</h3>
+            <p class="story-sub">Makine kapalı — ama verini yükle, story yine de senin.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Letterboxd export’unu yükle</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Kullanıcı adını tekrar dene</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Hata sonrası açılan export yolu</div>
+            <div class="fake-dropzone">Letterboxd .zip dosyasını buraya bırak</div>
+            <div class="path-guide">
+              <strong>Dosyanı al</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> buraya</li></ol>
+            </div>
+          </div>
+          <div class="landing-card-fake" style="opacity:0.35"><div class="fake-input"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     D — desktop_worker_paused 503
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="d-paused">
+  <div class="meta-badge">
+    <span>HTTP 503</span>
+    <span>error_code: desktop_worker_paused</span>
+    <span class="decision decision-locked">LOCKED · inline + auto export</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen D</div>
+    <h1 class="screen-title">Desktop worker paused (maintenance)</h1>
+    <p class="screen-desc">Decision: same as C — <strong>inline banner</strong> + auto-open export panel; path guide on destination.</p>
+  </div>
+  <div class="variant-block">
+    <div class="variant-label">Production shape · banner + auto-open export · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">15 · Maintenance Break Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">☕</div>
+            <h3>Worker’s on a coffee break</h3>
+            <p class="story-sub">Quick maintenance under the hood — upload your export and the full Wrapped is still yours.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Upload Letterboxd export</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Try username later</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Export path opened from error</div>
+            <div class="fake-dropzone">Drop Letterboxd .zip here</div>
+            <div class="path-guide">
+              <strong>How to get your file</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> here</li></ol>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">15 · Maintenance Break Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">☕</div>
+            <h3>Worker kahve molasında</h3>
+            <p class="story-sub">Kısa bir bakım var — export’unu yükle, tam Wrapped yine de senin.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Letterboxd export’unu yükle</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Daha sonra tekrar dene</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Hata sonrası açılan export yolu</div>
+            <div class="fake-dropzone">Letterboxd .zip dosyasını buraya bırak</div>
+            <div class="path-guide">
+              <strong>Dosyanı al</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> buraya</li></ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     E — queue_full / site busy 503
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="e-queue">
+  <div class="meta-badge">
+    <span>HTTP 503</span>
+    <span>error_code: queue_full</span>
+    <span class="decision decision-locked">LOCKED · inline + auto export</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen E</div>
+    <h1 class="screen-title">Site busy (queue full)</h1>
+    <p class="screen-desc">Decision: inline banner; ZIP primary, retry secondary; export panel auto-opens with path guide. Softened: “usually faster” — not absolute “immediate / always”.</p>
+  </div>
+  <div class="variant-block">
+    <div class="variant-label">Production shape · banner + auto-open export · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">16 · Busy Night Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">🍿</div>
+            <h3>Tonight’s screening is packed</h3>
+            <p class="story-sub">Everyone’s wrapping right now. Try again shortly, or upload your export — usually the faster path when we’re busy.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Upload Letterboxd export</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Try again in a minute</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Export path opened from error</div>
+            <div class="fake-dropzone">Drop Letterboxd .zip here</div>
+            <div class="path-guide">
+              <strong>How to get your file</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> here</li></ol>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">16 · Busy Night Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">🍿</div>
+            <h3>Bu akşam salon dolu</h3>
+            <p class="story-sub">Şu an herkes Wrapped yapıyor. Biraz sonra dene ya da export yükle — yoğunken genelde daha hızlı yol.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Letterboxd export’unu yükle</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Bir dakika sonra tekrar dene</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Hata sonrası açılan export yolu</div>
+            <div class="fake-dropzone">Letterboxd .zip dosyasını buraya bırak</div>
+            <div class="path-guide">
+              <strong>Dosyanı al</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> buraya</li></ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     F — scrape_blocked
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="f-blocked">
+  <div class="meta-badge">
+    <span>HTTP 503</span>
+    <span>error_code: scrape_blocked</span>
+    <span class="decision decision-locked">LOCKED · inline + auto export</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen F</div>
+    <h1 class="screen-title">Letterboxd bot block</h1>
+    <p class="screen-desc">Decision: inline banner + auto-open export; path guide on destination. Not the user’s fault.</p>
+  </div>
+  <div class="variant-block">
+    <div class="variant-label">Production shape · banner + auto-open export · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">17 · Locked Door Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">🔒</div>
+            <h3>Letterboxd shut the door (for now)</h3>
+            <p class="story-sub">Your profile is probably fine — we just can’t peek right now. The official export is the most reliable way in.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Upload Letterboxd export</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Try username later</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Export path opened from error</div>
+            <div class="fake-dropzone">Drop Letterboxd .zip here</div>
+            <div class="path-guide">
+              <strong>How to get your file</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> here</li></ol>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="story-banner">
+            <div class="story-top">
+              <span class="story-eyebrow">17 · Locked Door Slide</span>
+              <span class="story-refresh" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg></span>
+            </div>
+            <div class="story-icon">🔒</div>
+            <h3>Letterboxd kapıyı kilitledi</h3>
+            <p class="story-sub">Profilin büyük ihtimalle sağlam — şu an sadece bakamıyoruz. Resmi export en güvenilir yol.</p>
+            <div class="banner-btns story-btns">
+              <button class="btn btn-primary" type="button">Letterboxd export’unu yükle</button>
+              <button class="btn btn-ghost" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Daha sonra tekrar dene</button>
+            </div>
+          </div>
+          <div class="upload-panel">
+            <div class="upload-panel-label">Hata sonrası açılan export yolu</div>
+            <div class="fake-dropzone">Letterboxd .zip dosyasını buraya bırak</div>
+            <div class="path-guide">
+              <strong>Dosyanı al</strong>
+              <ol class="path-steps"><li>Letterboxd</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Settings</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Import &amp; Export</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li>Export your data</li><svg class="path-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg><li><code>.zip</code> buraya</li></ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     G — user_not_found
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="g-notfound">
+  <div class="meta-badge">
+    <span>HTTP 404</span>
+    <span>error_code: user_not_found</span>
+    <span class="decision decision-locked">LOCKED · inline by username</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen G</div>
+    <h1 class="screen-title">Profile not found (Letterboxd 404)</h1>
+    <p class="screen-desc">Decision: <strong>inline next to username</strong> — keep the form; no full-page hard cut after loading. Primary: fix username. Secondary: export (path guide only if they open upload). Planned: username wave → wait → soft return here on fail.</p>
+  </div>
+  <div class="variant-block">
+    <div class="variant-label">Production shape · inline field error · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1><p>Your year in film, decoded.</p></div>
+          <div class="landing-card-live">
+            <div class="fake-input" style="display:flex;align-items:center;padding:0 0.9rem;font-weight:600;color:var(--text-80);font-family:ui-monospace,monospace;font-size:0.9rem;">@nota_real_user_xyz</div>
+            <div class="inline-field-error">
+              We couldn’t find this Letterboxd user. Check spelling and make sure the profile is public — this isn’t a capacity issue.
+              <div class="field-actions">
+                <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> Edit username</button>
+                <button class="btn btn-secondary" type="button">Upload export instead</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1><p>Yılının sinema özeti.</p></div>
+          <div class="landing-card-live">
+            <div class="fake-input" style="display:flex;align-items:center;padding:0 0.9rem;font-weight:600;color:var(--text-80);font-family:ui-monospace,monospace;font-size:0.9rem;">@nota_real_user_xyz</div>
+            <div class="inline-field-error">
+              Bu Letterboxd kullanıcısı bulunamadı. Yazımı kontrol et; profil herkese açık olmalı — bu bir kapasite sorunu değil.
+              <div class="field-actions">
+                <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> Kullanıcı adını düzelt</button>
+                <button class="btn btn-secondary" type="button">Bunun yerine export yükle</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     H — backend_unreachable
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="h-unreachable">
+  <div class="meta-badge">
+    <span>HTTP — (network)</span>
+    <span>error_code: backend_unreachable</span>
+    <span class="decision decision-locked">LOCKED · inline · no ZIP</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen H</div>
+    <h1 class="screen-title">Can’t reach the server</h1>
+    <p class="screen-desc">Decision: <strong>inline banner</strong>; retry primary; <strong>no ZIP</strong> (same backend would receive the upload).</p>
+  </div>
+  <div class="variant-block">
+    <div class="variant-label">Production shape · inline banner · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="error-banner">
+            <div class="banner-row">
+              <div class="banner-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18.364 5.636L5.636 18.364M5.636 5.636l12.728 12.728"/></svg></div>
+              <div>
+                <h3>Can’t reach the server</h3>
+                <p>The analysis server appears offline or your connection dropped.</p>
+                <p class="action-line">Check your internet, then try again.</p>
+                <div class="banner-btns">
+                  <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Try again</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="landing-card-live"><div class="fake-input"></div></div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="error-banner">
+            <div class="banner-row">
+              <div class="banner-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18.364 5.636L5.636 18.364M5.636 5.636l12.728 12.728"/></svg></div>
+              <div>
+                <h3>Sunucuya ulaşılamıyor</h3>
+                <p>Analiz sunucusu çevrimdışı olabilir veya bağlantın kesilmiş olabilir.</p>
+                <p class="action-line">İnternetini kontrol edip tekrar dene.</p>
+                <div class="banner-btns">
+                  <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Tekrar dene</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="landing-card-live"><div class="fake-input"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     I — scrape_timeout (optional)
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="i-timeout">
+  <div class="meta-badge">
+    <span>HTTP 202 → poll timeout</span>
+    <span>error_code: scrape_timeout</span>
+    <span class="decision decision-locked">LOCKED · inline · retry + export</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Screen I</div>
+    <h1 class="screen-title">Analysis timeout</h1>
+    <p class="screen-desc">Decision: inline banner; retry primary, export secondary. Path guide only on export destination if opened.</p>
+  </div>
+  <div class="variant-block">
+    <div class="variant-label">Production shape · inline banner · EN | TR</div>
+    <div class="locale-grid">
+      <div class="locale-col">
+        <div class="locale-tag">EN</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="error-banner capacity-banner">
+            <div class="banner-row">
+              <div class="banner-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+              <div>
+                <h3>Analysis took too long</h3>
+                <p>We started reading your profile, but it didn’t finish in time.</p>
+                <p class="action-line">Your username is probably fine — try again, or upload an export.</p>
+                <div class="banner-btns">
+                  <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Try again</button>
+                  <button class="btn btn-secondary" type="button">Upload Letterboxd export</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="landing-card-live"><div class="fake-input"></div></div>
+        </div>
+      </div>
+      <div class="locale-col">
+        <div class="locale-tag">TR</div>
+        <div class="landing-mock">
+          <div class="landing-hero-fake"><h1>Movies Wrapped</h1></div>
+          <div class="error-banner capacity-banner">
+            <div class="banner-row">
+              <div class="banner-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+              <div>
+                <h3>Analiz çok uzun sürdü</h3>
+                <p>Profilini okumaya başladık ama zamanında bitmedi.</p>
+                <p class="action-line">Kullanıcı adın muhtemelen doğru — tekrar dene ya da export yükle.</p>
+                <div class="banner-btns">
+                  <button class="btn btn-primary" type="button"><svg class="btn-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg> Tekrar dene</button>
+                  <button class="btn btn-secondary" type="button">Letterboxd export’unu yükle</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="landing-card-live"><div class="fake-input"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     Summary
+     ═══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="summary">
+  <div class="meta-badge">
+    <span>Review sheet</span>
+    <span class="decision decision-locked">LOCKED · hybrid model</span>
+  </div>
+  <div class="screen-header">
+    <div class="screen-id">Summary</div>
+    <h1 class="screen-title">Locked product decisions</h1>
+    <p class="screen-desc">Updated 2026-08-22 from review. Typography floor: no thin/faint helper text. Arrows are SVG. Path guide lives on export destination when opened from C–F.</p>
+  </div>
+  <div class="footnote" style="margin:0; max-width:1100px;">
+    <ul>
+      <li><strong>A Route 404:</strong> Full-page only → home. No banner, no ZIP, no scrape language.</li>
+      <li><strong>B Generic 500:</strong> Full-page only → retry. No ZIP.</li>
+      <li><strong>C–F capacity / worker / block:</strong> Inline banner + <em>auto-open export panel</em>. “Dosyanı al / How to get your file” on the upload destination, not in the banner. Visual: playful story-slide language (eyebrow + joker-style icon + orange pill CTA) across C–F; A/B stay serious full-page.</li>
+      <li><strong>G User not found:</strong> Inline by username field; primary fix name; secondary export. Soft return after wait (wave micro-interaction planned).</li>
+      <li><strong>H Backend unreachable:</strong> Inline; retry only; no ZIP.</li>
+      <li><strong>I Timeout:</strong> Inline; retry primary, export secondary.</li>
+      <li><strong>Copy:</strong> Softened absolutes (“always / immediate”) → “usually / for a full Wrapped”.</li>
+    </ul>
+    <p class="question">Next: Semih visual pass on refreshed mocks → then conflict manifest vs scrape WIP → separate error-state PR.</p>
+  </div>
+</section>
+
+<footer class="pager" role="navigation" aria-label="Screen pagination">
+  <button type="button" class="pager-btn" id="pager-prev" aria-label="Previous screen">
+    <svg class="pager-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+    Previous
+  </button>
+  <div class="pager-dots" id="pager-dots" aria-hidden="true"></div>
+  <span class="pager-count" id="pager-count" aria-live="polite">1 / 10</span>
+  <span class="pager-hint">arrow keys</span>
+  <button type="button" class="pager-btn" id="pager-next" aria-label="Next screen">
+    Next
+    <svg class="pager-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</footer>
+
+<script>
+(function () {
+  const screens = Array.from(document.querySelectorAll('.screen'));
+  const ids = screens.map((s) => s.id);
+  const navPills = Array.from(document.querySelectorAll('.nav-pill'));
+  const prevBtn = document.getElementById('pager-prev');
+  const nextBtn = document.getElementById('pager-next');
+  const countEl = document.getElementById('pager-count');
+  const dotsEl = document.getElementById('pager-dots');
+  let index = 0;
+
+  ids.forEach((id, i) => {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'pager-dot';
+    dot.setAttribute('aria-label', 'Go to screen ' + (i + 1));
+    dot.addEventListener('click', () => goTo(i));
+    dotsEl.appendChild(dot);
+  });
+
+  const dots = Array.from(dotsEl.children);
+
+  function goTo(nextIndex, updateHash) {
+    if (updateHash === undefined) updateHash = true;
+    index = Math.max(0, Math.min(screens.length - 1, nextIndex));
+    screens.forEach((screen, i) => {
+      const active = i === index;
+      screen.classList.toggle('is-active', active);
+      screen.setAttribute('aria-hidden', active ? 'false' : 'true');
+    });
+    navPills.forEach((pill, i) => {
+      const active = pill.dataset.screen === ids[index];
+      pill.classList.toggle('is-active', active);
+      pill.setAttribute('aria-current', active ? 'page' : 'false');
+    });
+    dots.forEach((dot, i) => dot.classList.toggle('is-active', i === index));
+    prevBtn.disabled = index === 0;
+    nextBtn.disabled = index === screens.length - 1;
+    countEl.textContent = (index + 1) + ' / ' + screens.length;
+    document.title = 'MW errors — ' + ids[index];
+    if (updateHash) {
+      history.replaceState(null, '', '#' + ids[index]);
+    }
+    window.scrollTo(0, 0);
+  }
+
+  navPills.forEach((pill) => {
+    pill.addEventListener('click', () => {
+      const i = ids.indexOf(pill.dataset.screen);
+      if (i >= 0) goTo(i);
+    });
+  });
+
+  prevBtn.addEventListener('click', () => goTo(index - 1));
+  nextBtn.addEventListener('click', () => goTo(index + 1));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea, select')) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(index - 1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); goTo(index + 1); }
+  });
+
+  window.addEventListener('hashchange', () => {
+    const i = ids.indexOf(location.hash.slice(1));
+    if (i >= 0) goTo(i, false);
+  });
+
+  const start = ids.indexOf(location.hash.slice(1));
+  goTo(start >= 0 ? start : 0, false);
+})();
+</script>
+
+</body>
+</html>

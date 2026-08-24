@@ -12,6 +12,9 @@ vi.mock('next/link', () => ({
     <a href={href}>{children}</a>
   ),
 }));
+vi.mock('@/hooks/useIntersectionObserver', () => ({
+  useLazyMount: () => ({ ref: null, shouldMount: true }),
+}));
 
 vi.mock('@/lib/analytics', async () => {
   const actual = await vi.importActual<typeof import('@/lib/analytics')>('@/lib/analytics');

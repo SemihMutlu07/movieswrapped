@@ -96,7 +96,7 @@ jobs:
           PATTERNS=("rss_feed" "sentry_sdk" "TestLab" "test-lab")
           FOUND=0
           for p in "${PATTERNS[@]}"; do
-            if grep -RIl --exclude-dir=node_modules --exclude-dir=.git -- "$p" . ; then
+            if grep -RIl --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -- "$p" . ; then
               echo "::error::Found resurrected dead-code pattern: $p"
               FOUND=1
             fi

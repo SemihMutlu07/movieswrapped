@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Repeat } from 'lucide-react';
 import Section from '@/components/results/Section';
 import { getTmdbImageUrl } from '@/lib/analytics';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface ChampionFilm {
   title: string;
@@ -21,6 +22,7 @@ const COLLAPSED = 1;
 const EXPANDED_MAX = 3;
 
 export default function RewatchChampions({ films }: RewatchChampionsProps) {
+  const { t, plural } = useI18n();
   const [expanded, setExpanded] = useState(false);
   if (!films || films.length === 0) return null;
 
@@ -29,7 +31,7 @@ export default function RewatchChampions({ films }: RewatchChampionsProps) {
   const canExpand = !expanded && films.length > COLLAPSED;
 
   return (
-    <Section title="Rewatch Champions" subtitle="Films you couldn't watch just once">
+    <Section title={t('results.rewatch.title')} subtitle={t('results.rewatch.subtitle')}>
       <div className="grid gap-3">
         {shown.map((f) => {
           const posterUrl = f.poster_path ? getTmdbImageUrl(f.poster_path, 'w342') : null;
@@ -60,7 +62,10 @@ export default function RewatchChampions({ films }: RewatchChampionsProps) {
                 </p>
                 <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300">
                   <Repeat className="size-3.5" />
-                  Watched {f.watch_count}× times
+                  {plural(f.watch_count, {
+                    one: t('results.rewatch.watched_one'),
+                    other: t('results.rewatch.watched_other'),
+                  }, { count: f.watch_count })}
                 </p>
               </div>
             </div>
@@ -75,7 +80,10 @@ export default function RewatchChampions({ films }: RewatchChampionsProps) {
             onClick={() => setExpanded(true)}
             className="rounded-full border border-slate-700/50 px-4 py-2 text-xs font-semibold text-slate-400 transition-colors hover:border-slate-500 hover:text-white"
           >
-            Show {Math.min(films.length, EXPANDED_MAX) - COLLAPSED} more
+            {plural(Math.min(films.length, EXPANDED_MAX) - COLLAPSED, {
+              one: t('results.rewatch.showMore_one'),
+              other: t('results.rewatch.showMore_other'),
+            }, { count: Math.min(films.length, EXPANDED_MAX) - COLLAPSED })}
           </button>
         </div>
       )}

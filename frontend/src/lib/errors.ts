@@ -17,6 +17,8 @@ export type ErrorReason =
   | 'scrape_failed'
   | 'scrape_blocked'
   | 'scraper_unavailable'
+  | 'queue_full'
+  | 'desktop_worker_offline'
   | 'desktop_worker_paused'
   | 'stats_too_large'
   | 'unknown_error';
@@ -28,13 +30,39 @@ export interface NormalizedError {
   reason: ErrorReason;
 }
 
+/** Scrape-path failures where export upload is the reliable next step. */
+export const ZIP_FALLBACK_REASONS: readonly ErrorReason[] = [
+  'scraper_unavailable',
+  'queue_full',
+  'desktop_worker_offline',
+  'desktop_worker_paused',
+  'scrape_blocked',
+];
+
+export function needsZipFallback(reason: ErrorReason): boolean {
+  return ZIP_FALLBACK_REASONS.includes(reason);
+}
+
 /**
  * Map a raw error (from backend detail or network failure) to a structured
  * NormalizedError that the UI can display consistently.
  */
 export function normalizeError(err: unknown): NormalizedError {
+  const errObj = err as { code?: unknown; error_code?: unknown; message?: unknown } | null;
+  const code =
+    typeof errObj?.code === 'string'
+      ? errObj.code
+      : typeof errObj?.error_code === 'string'
+        ? errObj.error_code
+        : '';
   const raw =
-    err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : typeof errObj?.message === 'string'
+          ? errObj.message
+          : code;
 
   // Backend unreachable / network failure
   if (
@@ -118,6 +146,30 @@ export function normalizeError(err: unknown): NormalizedError {
 
   // Scraper-service failure (worker failed/unreachable/too busy). These messages
   // come from the local scraper or desktop worker when it cannot complete a job.
+  if (/desktop_worker_offline|desktop scraper is offline/i.test(raw) || code === 'desktop_worker_offline') {
+    return {
+      title: 'Desktop scraper offline',
+      message:
+        raw ||
+        'The desktop scraper is offline right now.',
+      action:
+        'Upload your Letterboxd export ZIP — that path does not use the scraper.',
+      reason: 'desktop_worker_offline',
+    };
+  }
+
+  if (code === 'queue_full' || /queue_full|analysis queue is full|worker queue is full/i.test(raw)) {
+    return {
+      title: 'Scraper queue is full',
+      message:
+        raw ||
+        'Too many scrapes are already running from this network. Export upload still works.',
+      action:
+        'Upload your Letterboxd export ZIP (Settings → Import & Export). Username scrape can wait.',
+      reason: 'queue_full',
+    };
+  }
+
   if (
     /scraper_unavailable|scraper service|too many people are using the scraper|all scraper slots are full|worker is (busy|offline|not available)|scrape queue full/i.test(
       raw,
@@ -127,7 +179,7 @@ export function normalizeError(err: unknown): NormalizedError {
       title: 'Scraper is busy',
       message: raw || 'Too many people are using the scraper right now. Please wait a few seconds and try again.',
       action:
-        'Wait 30–60 seconds and retry, or use the export upload option below for a guaranteed result.',
+        'Upload your Letterboxd export ZIP for a guaranteed result, or retry in a minute.',
       reason: 'scraper_unavailable',
     };
   }
@@ -140,20 +192,7 @@ export function normalizeError(err: unknown): NormalizedError {
         raw ||
         'The desktop scraper is paused for maintenance.',
       action:
-        'Use the export upload option for a complete Wrapped, or try again shortly.',
-      reason: 'desktop_worker_paused',
-    };
-  }
-
-  // Admin-paused desktop worker path
-  if (/desktop_worker_paused|desktop scraper is paused/i.test(raw)) {
-    return {
-      title: 'Desktop scraper paused',
-      message:
-        raw ||
-        'The desktop scraper is paused for maintenance.',
-      action:
-        'Use the export upload option for a complete Wrapped, or try again shortly.',
+        'Upload your Letterboxd export ZIP — that path does not use the scraper.',
       reason: 'desktop_worker_paused',
     };
   }
@@ -163,7 +202,7 @@ export function normalizeError(err: unknown): NormalizedError {
     return {
       title: 'Letterboxd access blocked',
       message: raw || 'Letterboxd has temporarily blocked automated profile access.',
-      action: 'For the most reliable results, download your Letterboxd export and upload it here.',
+      action: 'Download your Letterboxd export ZIP and upload it here — that always works.',
       reason: 'scrape_blocked',
     };
   }

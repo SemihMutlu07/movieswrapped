@@ -101,7 +101,7 @@ describe('LetterboxdLanding persistence consent gate', () => {
     expect(apiMocks.scrapeProfile).toHaveBeenCalledWith(
       'alice',
       'lifetime',
-      undefined,
+      expect.any(AbortSignal),
       expect.any(Function),
     );
   });

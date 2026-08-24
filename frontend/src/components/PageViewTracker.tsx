@@ -1,7 +1,10 @@
 'use client';
+
 import { useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { captureEvent, initPostHog, flushQueue } from '@/lib/posthog';
+
+import { captureEvent, flushQueue, initPostHog } from '@/lib/posthog';
+import { getConsent } from '@/lib/session-id';
 
 export default function PageViewTracker() {
   const pathname = usePathname();
@@ -9,15 +12,41 @@ export default function PageViewTracker() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (sessionStorage.getItem('consent_decision') !== 'accept') return;
-    initPostHog();
-    flushQueue();
+
+    const activate = () => {
+      if (getConsent() !== 'accept') return;
+      initPostHog();
+      flushQueue();
+    };
+
+    activate();
+    window.addEventListener('analytics-consent-changed', activate);
+    return () => window.removeEventListener('analytics-consent-changed', activate);
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || getConsent() !== 'accept') return;
+    captureEvent('$pageview', {
+      path: pathname,
+      search: searchParams?.toString() || '',
+    });
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (sessionStorage.getItem('consent_decision') !== 'accept') return;
-    captureEvent('$pageview', { path: pathname, search: searchParams?.toString() || '' });
+
+    const captureCurrentPage = (event: Event) => {
+      const detail = (event as CustomEvent<'accept' | 'decline'>).detail;
+      if (detail !== 'accept') return;
+      captureEvent('$pageview', {
+        path: pathname,
+        search: searchParams?.toString() || '',
+        consent_activated: true,
+      });
+    };
+
+    window.addEventListener('analytics-consent-changed', captureCurrentPage);
+    return () => window.removeEventListener('analytics-consent-changed', captureCurrentPage);
   }, [pathname, searchParams]);
 
   return null;

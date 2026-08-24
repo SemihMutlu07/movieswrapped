@@ -170,18 +170,33 @@ async def test_lifetime_pipeline_attaches_last_12_months_window(monkeypatch):
             {"title": "Old", "year": "2023", "rating": 3, "watch_date": old_date},
         ],
         grid=[],
+        review_count=2,
+        reviews=[
+            {"title": "Recent", "year": "2026", "date": recent_date, "review_text": "recent review"},
+            {"title": "Old", "year": "2023", "date": old_date, "review_text": "old review"},
+        ],
     )
 
     async def fake_sources(*_args, **_kwargs):
         return sources
 
     seen_watched_titles = []
+    seen_review_rows = []
 
     async def fake_analysis(_session, csv_files, *_args):
         import pandas as pd
         titles = pd.read_csv(csv_files["watched.csv"])["Name"].tolist()
         seen_watched_titles.append(titles)
-        return {"total_films": len(titles), "all_films": []}
+        review_rows = len(pd.read_csv(csv_files["reviews.csv"])) if "reviews.csv" in csv_files else 0
+        seen_review_rows.append(review_rows)
+        return {
+            "total_films": len(titles),
+            "all_films": [],
+            "review_analysis": {
+                "reviews_with_text": review_rows,
+                "reviews": [{"title": "x"}] * review_rows,
+            },
+        }
 
     monkeypatch.setattr("app.services.scrape_pipeline.scrape_profile_sources", fake_sources)
     monkeypatch.setattr("app.services.scrape_pipeline.process_comprehensive_letterboxd_data", fake_analysis)
@@ -190,7 +205,11 @@ async def test_lifetime_pipeline_attaches_last_12_months_window(monkeypatch):
 
     assert seen_watched_titles[0] == ["Recent", "Old"]
     assert seen_watched_titles[1] == ["Recent"]
+    assert seen_review_rows == [2, 1]
     assert stats["total_films"] == 2
+    assert stats["scraped_review_count"] == 2
+    assert stats["last_12_months"]["scraped_review_count"] == 1
+    assert stats["last_12_months"]["review_analysis"]["reviews_with_text"] == 1
     assert stats["last_12_months"]["analysis_period"]["key"] == "year"
     assert stats["last_12_months"]["total_films"] == 1
 

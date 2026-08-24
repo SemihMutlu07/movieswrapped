@@ -14,18 +14,19 @@
  */
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { getProfileUrl } from '@/lib/analytics';
+import { motion, useReducedMotion } from 'framer-motion';
+import { getDirectTmdbImageUrl, getProfileUrl } from '@/lib/analytics';
 import type { StatsData, PersonFilm } from './types';
 import type { GateResult, SectionToggle } from './section-utils';
 import PersonFilmsModal from './PersonFilmsModal';
 import { PersonAvatarPlaceholder } from '@/components/results/Placeholders';
+import { boundSectionItems, SECTION_GRID_CLASS } from '@/containers/results/section-layout';
+import { useCompactLayout } from '@/hooks/useCompactLayout';
 import {
   gateOk,
   gateFail,
   trackSectionViewed,
   trackToggleChanged,
-  trackShowMore,
   trackItemClicked,
   toggleClass,
 } from './section-utils';
@@ -51,21 +52,20 @@ interface DirectorCard {
 }
 
 const PAGE_SIZE = 5;
-const EXPANDED_MAX = 8;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function DirectorsGrid({ stats, onDirectorClick }: { stats: StatsData; onDirectorClick?: (name: string) => void }) {
+export default function DirectorsGrid({ stats }: { stats: StatsData; onDirectorClick?: (name: string) => void }) {
   const gate = requiresDirectorsGrid(stats);
   if (!gate.ok) return null;
 
-  return <DirectorsGridInner stats={stats} onDirectorClick={onDirectorClick} />;
+  return <DirectorsGridInner stats={stats} />;
 }
 
-function DirectorsGridInner({ stats, onDirectorClick }: { stats: StatsData; onDirectorClick?: (name: string) => void }) {
+function DirectorsGridInner({ stats }: { stats: StatsData }) {
   const [mode, setMode] = useState<SectionToggle>('most_watched');
-  const [visible, setVisible] = useState(PAGE_SIZE);
   const [selected, setSelected] = useState<DirectorCard | null>(null);
+  const compact = useCompactLayout();
 
   const hasRatings = (stats.directors_with_ratings?.length ?? 0) > 0;
 
@@ -83,7 +83,6 @@ function DirectorsGridInner({ stats, onDirectorClick }: { stats: StatsData; onDi
   const handleToggle = useCallback(
     (next: SectionToggle) => {
       setMode(next);
-      setVisible(PAGE_SIZE);
       trackToggleChanged('directors_grid', next);
     },
     [],
@@ -106,8 +105,7 @@ function DirectorsGridInner({ stats, onDirectorClick }: { stats: StatsData; onDi
     }));
   }, [mode, stats.top_directors, stats.directors_with_ratings, hasRatings, filmsByName]);
 
-  const shown = directors.slice(0, visible);
-  const hasMore = visible < directors.length;
+  const shown = boundSectionItems(directors, 'directors', compact);
 
   return (
     <SectionShell
@@ -118,12 +116,13 @@ function DirectorsGridInner({ stats, onDirectorClick }: { stats: StatsData; onDi
       ratedTabHint={!hasRatings ? 'Ratings data not available in this export' : undefined}
       ratedTabTooltip="Your average rating across films you&apos;ve rated for each director (minimum 3 rated films)"
     >
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className={SECTION_GRID_CLASS.people}>
         {shown.map((d) => (
           <PersonCard
             key={d.name}
             name={d.name}
             profilePath={d.profile_path}
+            liteMotion={compact}
             primaryStat={
               mode === 'highest_rated' && d.avg_rating != null
                 ? `★ ${d.avg_rating.toFixed(1)} avg`
@@ -153,8 +152,6 @@ function DirectorsGridInner({ stats, onDirectorClick }: { stats: StatsData; onDi
         films={selected?.films ?? []}
         profilePath={selected?.profile_path}
       />
-
-      {/* Showing exactly four people in each mode. */}
     </SectionShell>
   );
 }
@@ -185,10 +182,10 @@ export function SectionShell({
     : ratedTabHint;
   return (
     <div className="bg-[#1a1a1a]/80 border border-white/8 rounded-2xl p-5 md:p-6 space-y-5">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div />
-        <h3 className="text-lg md:text-xl font-extrabold text-white text-center justify-self-center">{title}</h3>
-        <div className="flex items-center gap-1 p-0.5 bg-slate-800/60 border border-slate-700/30 rounded-full justify-self-end">
+      <div className="flex flex-col items-center gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-3">
+        <div className="hidden sm:block" />
+        <h3 className="text-lg md:text-xl font-extrabold text-white text-center">{title}</h3>
+        <div className="flex max-w-full flex-wrap items-center justify-center gap-1 p-0.5 bg-slate-800/60 border border-slate-700/30 rounded-full sm:justify-self-end">
           <button
             className={toggleClass(mode === 'most_watched')}
             onClick={() => onToggle('most_watched')}
@@ -218,6 +215,7 @@ export function PersonCard({
   primaryStat,
   secondaryStat,
   onShowFilms,
+  liteMotion = false,
 }: {
   name: string;
   profilePath?: string;
@@ -225,11 +223,19 @@ export function PersonCard({
   secondaryStat?: string;
   /** When provided, renders a "+" button that opens this person's films modal. */
   onShowFilms?: () => void;
+  /** Skip hover scale / blur-backdrop work on compact and reduced-motion. */
+  liteMotion?: boolean;
 }) {
-  const imageUrl = profilePath ? getProfileUrl(profilePath, 'grid') : null;
+  const imageUrl = profilePath
+    ? liteMotion
+      ? getDirectTmdbImageUrl(profilePath, 'w185')
+      : getProfileUrl(profilePath, 'grid')
+    : null;
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [retried, setRetried] = useState(false);
+  const reduce = useReducedMotion();
+  const quietMotion = liteMotion || Boolean(reduce);
 
   const showImage = imageUrl && !imageError;
   const showFallback = !imageUrl || imageError || !imageLoaded;
@@ -280,38 +286,37 @@ export function PersonCard({
         className="relative w-28 h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden bg-gradient-to-b from-slate-700 to-slate-900"
         style={{ transformOrigin: '50% 100%' }}
         initial={false}
-        whileHover={{
+        whileHover={quietMotion ? undefined : {
           scale: 1.15,
           boxShadow: '0 18px 34px -8px rgba(0,0,0,0.55)',
         }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: quietMotion ? 0 : 0.35, ease: [0.22, 1, 0.36, 1] }}
       >
         {showImage && (
           <>
-            {/* Blurred backdrop: same photo, scaled + blurred, so the fill behind the
-                un-cropped image always matches the subject's own colors. */}
-            <img
-              src={imageUrl!}
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-              className={`absolute inset-0 w-full h-full object-cover scale-150 blur-2xl saturate-150 brightness-75 transition-opacity duration-300 ${
-                imageLoaded ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-            {/* Image starts zoomed in (cropped) and eases down to its natural scale on
-                hover, so the parts cut off by object-cover smoothly slide into view
-                instead of snapping — object-fit itself never changes. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {!quietMotion && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imageUrl!}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                className={`absolute inset-0 w-full h-full object-cover scale-150 blur-2xl saturate-150 brightness-75 transition-opacity duration-300 ${
+                  imageLoaded ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            )}
             <motion.img
               src={imageUrl!}
               alt={name}
               loading="lazy"
+              decoding="async"
               className="absolute inset-0 w-full h-full object-cover"
               initial={false}
-              animate={{ opacity: imageLoaded ? 1 : 0, scale: 1.12 }}
-              whileHover={{ scale: 1 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+              animate={{ opacity: imageLoaded ? 1 : 0, scale: quietMotion ? 1 : 1.12 }}
+              whileHover={quietMotion ? undefined : { scale: 1 }}
+              transition={{ duration: quietMotion ? 0.2 : 0.45, ease: [0.22, 1, 0.36, 1] }}
               onLoad={() => {
                 setImageLoaded(true);
                 setImageError(false);

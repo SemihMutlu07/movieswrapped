@@ -1,6 +1,6 @@
 'use client';
 
-import type { UIEventHandler, RefObject } from 'react';
+import type { UIEventHandler, Ref } from 'react';
 
 import type { ShareCardData, ShareVariant } from '@/components/share/types';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -9,7 +9,7 @@ import { VariantPage } from './VariantPage';
 import type { Orientation } from './types';
 
 type VariantRailProps = {
-  railRef: RefObject<HTMLDivElement | null>;
+  railRef: Ref<HTMLDivElement | null>;
   availableVariants: ReadonlyArray<{ key: ShareVariant; label: string }>;
   activeIdx: number;
   pageW: number;

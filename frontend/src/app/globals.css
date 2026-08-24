@@ -5,6 +5,74 @@
   --foreground: #171717;
   --font-display: var(--font-syne), "Avenir Next", "Segoe UI", sans-serif;
   --font-body: var(--font-manrope), "Avenir Next", "Segoe UI", sans-serif;
+  /* Language switcher occupies a reserved top-right band. Loading (and any
+     other full-viewport overlay) should pad by --mw-top-chrome-reserve so
+     heading/card content never shares that space. Height = min-h-9 buttons
+     plus the switcher's p-1 chrome. */
+  --mw-top-chrome-height: 2.75rem;
+  --mw-top-chrome-offset: max(0.75rem, env(safe-area-inset-top, 0px));
+  --mw-top-chrome-reserve: calc(var(--mw-top-chrome-offset) + var(--mw-top-chrome-height) + 0.75rem);
+  /* Isolated modals sit above page chrome (language z-90, share was 100). */
+  --mw-modal-z: 200;
+}
+
+html[data-mw-scroll-locked] {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body[data-mw-scroll-locked] {
+  position: fixed;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+.mw-isolated-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--mw-modal-z);
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  pointer-events: auto;
+}
+
+.mw-isolated-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  touch-action: none;
+}
+
+/* Safe-area inset lives on the frame, not the overlay. Padding on the
+   overlay would leave a tap-through gap to page chrome. */
+.mw-isolated-modal__frame {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+}
+
+.mw-isolated-modal__panel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 100%;
+  /* Intentional: the modal chrome is the scrollport boundary; inner
+     [data-mw-modal-scroll] is the only region that may scroll. */
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 @theme inline {
@@ -44,6 +112,28 @@ input, button, textarea, select {
 .min-h-screen {
   min-height: 100vh;
   min-height: 100dvh;
+}
+
+/* Story uses the *small* viewport so slides still fit while mobile browser
+   chrome is visible. dvh would overflow when the URL bar is showing. */
+.story-viewport {
+  height: 100vh;
+  height: 100svh;
+  max-height: 100vh;
+  max-height: 100svh;
+}
+
+/* Reduced-motion CSS backstop: JS layer (StoryMotionContext / framer useReducedMotion)
+   handles framer animations; this kills any CSS animation/transition left running. */
+@media (prefers-reduced-motion: reduce) {
+  .story-viewport *,
+  .story-viewport *::before,
+  .story-viewport *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 h1, h2, h3 {

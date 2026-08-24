@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from 'react';
 import { Manrope, Syne } from 'next/font/google';
 
+import AnalyticsConsentBanner from '@/components/AnalyticsConsentBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import PageViewTracker from '@/components/PageViewTracker';
@@ -108,6 +109,7 @@ export default function RootDocument({
             <Suspense fallback={null}>
               <PageViewTracker />
             </Suspense>
+            <AnalyticsConsentBanner locale={locale} />
           </ErrorBoundary>
         </I18nProvider>
       </body>

@@ -55,7 +55,9 @@ export default function HeroStats({
                 <img
                   src={avatarUrl}
                   alt={`${username}'s Letterboxd avatar`}
-                  loading="lazy"
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
                   className="h-24 w-24 md:h-28 md:w-28 rounded-full object-cover ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500"
                 />
               ) : (

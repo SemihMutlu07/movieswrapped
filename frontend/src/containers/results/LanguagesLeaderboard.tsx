@@ -25,15 +25,32 @@ interface Film {
   rating?: number | null;
 }
 
+export function normalizeLanguageKey(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase().replace('_', '-');
+  if (!normalized) return null;
+  return normalized.split('-')[0] || null;
+}
+
 export default function LanguagesLeaderboard({ data, allFilms }: { data: Row[]; allFilms: any[] }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
   const [hoveredLanguage, setHoveredLanguage] = useState<string | null>(null);
 
   const sortedData = useMemo(
-    () => (Array.isArray(data) ? data : [])
-      .filter(d => d && Number.isFinite(d.count) && d.count > 0)
-      .sort((a, b) => b.count - a.count),
+    () => {
+      const aggregated = (Array.isArray(data) ? data : []).reduce((acc, row) => {
+        if (!row || !Number.isFinite(row.count) || row.count <= 0) return acc;
+        const key = normalizeLanguageKey(row.language);
+        if (!key) return acc;
+        acc.set(key, (acc.get(key) ?? 0) + row.count);
+        return acc;
+      }, new Map<string, number>());
+
+      return Array.from(aggregated.entries())
+        .map(([language, count]) => ({ language, count }))
+        .sort((a, b) => b.count - a.count);
+    },
     [data],
   );
 
@@ -43,7 +60,7 @@ export default function LanguagesLeaderboard({ data, allFilms }: { data: Row[]; 
   const selectedFilms = useMemo(() => {
     if (!selectedLanguage) return [];
     return (allFilms ?? [])
-      .filter((f: any) => f.language === selectedLanguage)
+      .filter((f: any) => normalizeLanguageKey(f.language) === selectedLanguage)
       .map((f: any) => ({
         title: f.title,
         year: f.year ? Number(f.year) : undefined,

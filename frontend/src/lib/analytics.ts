@@ -56,7 +56,7 @@ export function getTmdbImageUrl(path: string | null | undefined, size: string = 
 export function getPosterUrl(path: string | null | undefined, quality: 'grid' | 'share' = 'grid'): string | null {
   return quality === 'share'
     ? getTmdbImageUrl(path, 'original')
-    : getDirectTmdbImageUrl(path, 'w780');
+    : getDirectTmdbImageUrl(path, 'w342');
 }
 
 export function getProfileUrl(path: string | null | undefined, quality: 'grid' | 'share' = 'grid'): string | null {

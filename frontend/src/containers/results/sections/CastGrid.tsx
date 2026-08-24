@@ -15,15 +15,16 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import type { StatsData, PersonFilm } from './types';
 import type { GateResult, SectionToggle } from './section-utils';
 import PersonFilmsModal from './PersonFilmsModal';
+import { boundSectionItems, SECTION_GRID_CLASS } from '@/containers/results/section-layout';
+import { useCompactLayout } from '@/hooks/useCompactLayout';
 import {
   gateOk,
   gateFail,
   trackSectionViewed,
   trackToggleChanged,
-  trackShowMore,
   trackItemClicked,
 } from './section-utils';
-import { SectionShell, PersonCard, ShowMoreButton } from './DirectorsGrid';
+import { SectionShell, PersonCard } from './DirectorsGrid';
 
 // ─── Gating ──────────────────────────────────────────────────────────────────
 
@@ -45,22 +46,19 @@ interface ActorCard {
   films?: PersonFilm[];
 }
 
-const PAGE_SIZE = 5;
-const EXPANDED_MAX = 4;
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function CastGrid({ stats, onActorClick }: { stats: StatsData; onActorClick?: (name: string) => void }) {
+export default function CastGrid({ stats }: { stats: StatsData; onActorClick?: (name: string) => void }) {
   const gate = requiresCastGrid(stats);
   if (!gate.ok) return null;
 
-  return <CastGridInner stats={stats} onActorClick={onActorClick} />;
+  return <CastGridInner stats={stats} />;
 }
 
-function CastGridInner({ stats, onActorClick }: { stats: StatsData; onActorClick?: (name: string) => void }) {
+function CastGridInner({ stats }: { stats: StatsData }) {
   const [mode, setMode] = useState<SectionToggle>('most_watched');
-  const [visible, setVisible] = useState(PAGE_SIZE);
   const [selected, setSelected] = useState<ActorCard | null>(null);
+  const compact = useCompactLayout();
 
   const hasRatings = (stats.actors_with_ratings?.length ?? 0) > 0;
 
@@ -75,7 +73,6 @@ function CastGridInner({ stats, onActorClick }: { stats: StatsData; onActorClick
 
   const handleToggle = useCallback((next: SectionToggle) => {
     setMode(next);
-    setVisible(PAGE_SIZE);
     trackToggleChanged('cast_grid', next);
   }, []);
 
@@ -96,8 +93,7 @@ function CastGridInner({ stats, onActorClick }: { stats: StatsData; onActorClick
     }));
   }, [mode, stats.top_actors, stats.actors_with_ratings, hasRatings, filmsByName]);
 
-  const shown = actors.slice(0, visible);
-  const hasMore = visible < actors.length;
+  const shown = boundSectionItems(actors, 'cast', compact);
 
   return (
     <SectionShell
@@ -108,12 +104,13 @@ function CastGridInner({ stats, onActorClick }: { stats: StatsData; onActorClick
       ratedTabHint={!hasRatings ? 'Ratings data not available in this export' : undefined}
   ratedTabTooltip="Your average rating across films you&apos;ve rated for each actor (minimum 3 rated films)"
     >
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className={SECTION_GRID_CLASS.people}>
         {shown.map((a) => (
           <PersonCard
             key={a.name}
             name={a.name}
             profilePath={a.profile_path}
+            liteMotion={compact}
             primaryStat={
               mode === 'highest_rated' && a.avg_rating != null
                 ? `★ ${a.avg_rating.toFixed(1)} avg`
@@ -143,8 +140,6 @@ function CastGridInner({ stats, onActorClick }: { stats: StatsData; onActorClick
         films={selected?.films ?? []}
         profilePath={selected?.profile_path}
       />
-
-      {/* Showing exactly four people in each mode. */}
     </SectionShell>
   );
 }

@@ -55,19 +55,6 @@ export function ShareModalSidebar({
 }: ShareModalSidebarProps) {
   return (
     <div className="relative space-y-3 px-5 pb-6 pt-3 md:w-[300px] md:shrink-0 md:space-y-5 md:overflow-y-auto md:border-l md:border-white/10 md:px-6 md:py-5 lg:w-[340px]">
-      {showSwapTrigger && swapOpen && (
-        <SwapDrawer
-          cardProps={cardProps}
-          hasActors={hasActors}
-          hasDirectors={hasDirectors}
-          actorIdx={actorIdx}
-          directorIdx={directorIdx}
-          isSaving={isSaving}
-          onActorIdxChange={setActorIdx}
-          onDirectorIdxChange={setDirectorIdx}
-        />
-      )}
-
       <FormatControls
         orientation={orientation}
         setOrientation={setOrientation}
@@ -76,8 +63,20 @@ export function ShareModalSidebar({
         showSwapHint={showSwapHint}
         hintFading={hintFading}
         swapOpen={swapOpen}
-        onSwapToggle={() => { setSwapOpen((s) => !s); dismissSwapHint(); }}
+        onSwapOpenChange={setSwapOpen}
         onDismissSwapHint={dismissSwapHint}
+        swapPanel={(
+          <SwapDrawer
+            cardProps={cardProps}
+            hasActors={hasActors}
+            hasDirectors={hasDirectors}
+            actorIdx={actorIdx}
+            directorIdx={directorIdx}
+            isSaving={isSaving}
+            onActorIdxChange={setActorIdx}
+            onDirectorIdxChange={setDirectorIdx}
+          />
+        )}
       />
 
       {cardProps.username && (

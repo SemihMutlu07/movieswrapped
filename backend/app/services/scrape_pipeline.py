@@ -176,7 +176,9 @@ async def _analyze_window(
     stats["scraped_film_count"] = len(films)
     stats["scraped_diary_count"] = len(diary)
     stats["scraped_grid_only_count"] = len(films) - len(diary)
-    stats["scraped_review_count"] = sources.review_count
+    # Keep these counters window-scoped so lifetime vs last_12_months toggles
+    # reflect the selected period in the UI.
+    stats["scraped_review_count"] = len(reviews)
     stats["scraped_film_count_estimated"] = sources.film_count
     stats["scraped_reviews_with_text"] = sum(1 for r in reviews if r.get("review_text"))
     stats["profile_avatar_url"] = sources.profile_avatar_url

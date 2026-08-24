@@ -29,7 +29,8 @@ export function useShareExport({
   const { t } = useI18n();
 
   const findExportRoot = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('[data-active="true"] [data-export-root="true"]');
+    document.querySelector<HTMLElement>('[data-canonical-export="true"] [data-export-root="true"]')
+    ?? document.querySelector<HTMLElement>('[data-active="true"] [data-export-root="true"]');
 
   const handleSavePNG = useCallback(async () => {
     if (isSaving) return;
@@ -37,6 +38,12 @@ export function useShareExport({
     if (!exportRoot) {
       setExportError(t('share.prepareError'));
       trackEvent('share_export_failed', { variant: variantKey, orientation, reason: 'missing_export_root' });
+      return;
+    }
+    // Prefer the canonical offscreen card; never export the CSS-scaled modal preview.
+    if (exportRoot.closest('[data-scaled-preview="true"]')) {
+      setExportError(t('share.prepareError'));
+      trackEvent('share_export_failed', { variant: variantKey, orientation, reason: 'scaled_preview_root' });
       return;
     }
     setIsSaving(true);
@@ -51,7 +58,10 @@ export function useShareExport({
         img.crossOrigin = 'anonymous';
         img.src = safeUrl;
       });
-      await Promise.all(images.map((img) => img.decode().catch(() => undefined)));
+      await Promise.all([
+        ...images.map((img) => img.decode().catch(() => undefined)),
+        document.fonts?.ready.catch(() => undefined) ?? Promise.resolve(),
+      ]);
       const bg = '#0B1220';
       const blob = await exportExactPng(exportRoot, orientation, bg);
       let method: 'system_share' | 'file_picker' | 'download' = 'download';

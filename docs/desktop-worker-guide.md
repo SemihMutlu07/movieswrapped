@@ -67,7 +67,7 @@ Eğer bilgisayar açıldığında `.bat` dosyasının kendiliğinden başlaması
 
 ### 🔴 Yapılmaması Gerekenler (Don'ts)
 1. **Eski `.env` Dosyasındaki `SCRAPER_API_KEY` Satırını Silin**: ScraperAPI entegrasyonu 2026-07-02'de kod tabanından tümüyle kaldırıldı — bu değişken artık hiçbir şey yapmıyor. Worker her zaman kendi ev internetiniz (residential IP) üzerinden doğrudan kazır.
-2. **Aynı Token ile Birden Fazla Worker Çalıştırmayın**: Aynı anda aynı bilgisayarda veya farklı makinelerde birden fazla worker başlatmak, Letterboxd tarafında IP engellemesine (rate-limit) sebep olabilir.
+2. **Aynı `WORKER_ID` ile Birden Fazla Worker Çalıştırmayın**: Aynı kimliği taşıyan birden fazla worker başlatmak, claim'lerin karışmasına ve Letterboxd tarafında IP engellemesine (rate-limit) sebep olabilir. Farklı makinelerde çalıştıracaksanız her birine ayrı bir `WORKER_ID` verin — aynı `WORKER_TOKEN`'ı paylaşmaları normaldir ve gereklidir.
 3. **Admin Dashboard Şifresini (`ADMIN_SECRET`) Boş Bırakmayın**: `admin.py` içerisindeki yedek fallback şifresi yerine Render üzerinde güçlü ve benzersiz bir `ADMIN_SECRET` tanımladığınızdan emin olun.
 
 ---
@@ -77,11 +77,11 @@ Eğer bilgisayar açıldığında `.bat` dosyasının kendiliğinden başlaması
 | Sorun | Neden Olur? | Çözüm |
 | :--- | :--- | :--- |
 | **HTTP 401 Unauthorized** | Yerel `.env` içindeki `WORKER_TOKEN` ile Render'daki uyuşmuyor. | İki taraftaki token değerinin de birebir aynı olduğunu kontrol edin ve Render backend'i yeniden deploy edin. |
-| **HTTP 404 Not Found** | Render backend henüz `desktop_server` branch'ine güncellenmedi. | Render üzerindeki backend reposunun `desktop_server` branch'inden güncel sürümle derlendiğinden emin olun. |
+| **HTTP 404 Not Found** | Render backend henüz `main` branch'ine güncellenmedi. | Render üzerindeki backend reposunun `main` branch'inden güncel sürümle derlendiğinden emin olun. |
 | **UnicodeDecodeError** | Loglarda veya film detaylarında Türkçe/özel karakterlerin okunması Windows yerel diline takılıyor. | `.bat` dosyasının ilk satırlarında `set PYTHONUTF8=1` tanımının olduğunu doğrulayın. (Bunu son güncellemede optimize ettik). |
 
 ---
 
 > [!TIP]
 > Masaüstü worker'ın canlı durumunu, son heartbeat süresini ve kazıma metriklerini şu adresteki admin panelinden canlı takip edebilirsiniz:  
-> `https://wrapped-backend.onrender.com/admin/dashboard?key=ADMIN_SECRETINIZ`
+> `https://wrapped-backend.onrender.com/admin/dashboard` — açıp `ADMIN_SECRET` ile giriş formundan oturum açın (URL'e key koymak artık çalışmaz).

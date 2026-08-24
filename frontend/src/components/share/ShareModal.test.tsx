@@ -98,6 +98,9 @@ function exportRoot() {
 
 async function openSwapDrawer() {
   await userEvent.click(screen.getByRole('button', { name: /tune actor/i }));
+  await waitFor(() => {
+    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeTruthy();
+  });
 }
 
 beforeEach(() => {
@@ -129,6 +132,118 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+
+describe('ShareModal customization popover', () => {
+  it('reuses IsolatedModal so page chrome is inert', async () => {
+    const chrome = document.createElement('div');
+    chrome.textContent = 'page chrome';
+    document.body.appendChild(chrome);
+    renderShareModal();
+    expect(await screen.findByTestId('isolated-modal')).toBeInTheDocument();
+    expect(chrome).toHaveAttribute('inert');
+    chrome.remove();
+  });
+
+  it('renders the customization panel in a body portal anchored to the tune button', async () => {
+    renderShareModal();
+    await openSwapDrawer();
+
+    const panel = document.querySelector('[data-share-popover-panel="true"]');
+    expect(panel).toBeTruthy();
+    expect(panel?.parentElement).toBe(document.body);
+    expect(within(panel as HTMLElement).getByText('Actor')).toBeInTheDocument();
+  });
+
+  it('keeps the popover inside the viewport when the tune button is near the top-right edge', async () => {
+    const tuneRect = {
+      top: 8,
+      left: 348,
+      right: 392,
+      bottom: 52,
+      width: 44,
+      height: 44,
+      x: 348,
+      y: 8,
+      toJSON: () => ({}),
+    } as DOMRect;
+    const defaultRect = {
+      top: 0,
+      left: 0,
+      right: 400,
+      bottom: 700,
+      width: 400,
+      height: 700,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect;
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: function (this: HTMLElement) {
+        if (this.getAttribute('aria-label') === 'Tune actor and director') return tuneRect;
+        if (this.dataset.sharePopoverPanel === 'true') return original.call(this);
+        return defaultRect;
+      },
+    });
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+
+    renderShareModal();
+    await openSwapDrawer();
+
+    const panel = document.querySelector<HTMLElement>('[data-share-popover-panel="true"]');
+    expect(panel).toBeTruthy();
+
+    await waitFor(() => {
+      expect(Number.isFinite(Number.parseFloat(panel!.style.top))).toBe(true);
+      expect(Number.isFinite(Number.parseFloat(panel!.style.left))).toBe(true);
+    });
+
+    const top = Number.parseFloat(panel!.style.top);
+    const left = Number.parseFloat(panel!.style.left);
+    expect(top).toBeGreaterThanOrEqual(12);
+    expect(left).toBeGreaterThanOrEqual(12);
+    expect(left + 256).toBeLessThanOrEqual(400 - 12);
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: original,
+    });
+  });
+
+  it('closes the customization popover on Escape without closing the share modal', async () => {
+    const onClose = vi.fn();
+    render(
+      <I18nProvider locale="en"><ShareModal
+        open
+        onClose={onClose}
+        orientation="horizontal"
+        setOrientation={() => {}}
+        cardProps={baseData}
+      /></I18nProvider>,
+    );
+
+    await openSwapDrawer();
+    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeTruthy();
+
+    await userEvent.keyboard('{Escape}');
+    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Share' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes the customization popover when clicking outside', async () => {
+    renderShareModal();
+    await openSwapDrawer();
+    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeTruthy();
+
+    await userEvent.pointer({ keys: '[MouseLeft]', target: document.body });
+    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeNull();
+  });
 });
 
 describe('ShareModal person swap', () => {
@@ -203,17 +318,18 @@ describe('ShareModal review words', () => {
 
 describe('share registry and privacy', () => {
   it('maps the four landscape and three portrait sketches to distinct compositions', () => {
-    expect(SHARE_VARIANTS.map(({ label, orientation }) => [label, orientation])).toEqual([
-      ['Your Wrapped', 'horizontal'],
-      ['Apple Clean', 'horizontal'],
-      ['Editorial Story', 'horizontal'],
-      ['Tile Dashboard', 'horizontal'],
-      ['Portrait Story', 'vertical'],
-      ['Letterboxd Vertical', 'vertical'],
-      ['Clean Vertical', 'vertical'],
+    expect(SHARE_VARIANTS.map(({ labelKey, orientation }) => [labelKey, orientation])).toEqual([
+      ['share.variant.default', 'horizontal'],
+      ['share.variant.appleHig', 'horizontal'],
+      ['share.variant.editorial', 'horizontal'],
+      ['share.variant.variant3', 'horizontal'],
+      ['share.variant.doubleFeature', 'vertical'],
+      ['share.variant.contactSheet', 'vertical'],
+      ['share.variant.admitOne', 'vertical'],
     ]);
-    expect(shareVariantsForOrientation('horizontal')).toHaveLength(4);
-    expect(shareVariantsForOrientation('vertical')).toHaveLength(3);
+    const label = (key: string) => key;
+    expect(shareVariantsForOrientation('horizontal', label)).toHaveLength(4);
+    expect(shareVariantsForOrientation('vertical', label)).toHaveLength(3);
   });
 
   it('keeps format choices and tuning in one ordered control row', () => {
@@ -242,7 +358,7 @@ describe('share registry and privacy', () => {
       })),
     });
     expect(normalized.favoriteDirector).toEqual({
-      name: 'Director unavailable',
+      name: '',
       headshotUrl: '',
       count: 0,
     });
@@ -289,7 +405,7 @@ describe('ShareModal export outcomes', () => {
       canShare: () => true,
       share,
     });
-    vi.mocked(toBlob).mockResolvedValue(pngBlob(1200, 675));
+    vi.mocked(toBlob).mockResolvedValue(pngBlob(2400, 1350));
     const onDownloadSuccess = vi.fn();
 
     render(
@@ -335,8 +451,8 @@ describe('exact intended exports', () => {
   it.each(SHARE_VARIANTS)('keeps $label at its exact low-memory output size', async ({ key, orientation }) => {
     Object.defineProperty(navigator, 'deviceMemory', { configurable: true, value: 1 });
     const expected = orientation === 'horizontal'
-      ? { width: 1200, height: 675, pixelRatio: 1 }
-      : { width: 1080, height: 1920, pixelRatio: 1.6 };
+      ? { width: 2400, height: 1350, pixelRatio: 2 }
+      : { width: 1350, height: 2400, pixelRatio: 2 };
     vi.mocked(toBlob).mockResolvedValueOnce(pngBlob(expected.width, expected.height));
     const rendered = render(
       <I18nProvider locale="en">
@@ -362,8 +478,8 @@ describe('exact intended exports', () => {
 });
 
 describe.each([
-  ['horizontal', 1200, 675, 1],
-  ['vertical', 1080, 1920, 1.6],
+  ['horizontal', 2400, 1350, 2],
+  ['vertical', 1350, 2400, 2],
 ] as const)('exact %s export', (orientation, width, height, pixelRatio) => {
 
   it('retries failures and wrong-sized blobs without lowering quality', async () => {

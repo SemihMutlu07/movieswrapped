@@ -21,6 +21,8 @@ import { PosterImage } from '@/components/results/Placeholders';
 import FilmModal from './FilmModal';
 import type { StatsData } from './types';
 import type { GateResult } from './section-utils';
+import { boundSectionItems, SECTION_GRID_CLASS } from '@/containers/results/section-layout';
+import { useCompactLayout } from '@/hooks/useCompactLayout';
 import { useI18n } from '@/i18n/I18nProvider';
 import {
   gateOk,
@@ -80,7 +82,6 @@ interface EnrichedFilm {
 }
 
 type SubTab = 'higher' | 'lower';
-const PAGE_SIZE = 6;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -93,6 +94,7 @@ export default function RatingDeviation({ stats }: { stats: StatsData }) {
 
 function RatingDeviationInner({ stats }: { stats: StatsWithAverageRating }) {
   const { t } = useI18n();
+  const compact = useCompactLayout();
   const [tab, setTab] = useState<SubTab>('higher');
   const [selectedFilm, setSelectedFilm] = useState<EnrichedFilm | null>(null);
 
@@ -142,7 +144,7 @@ function RatingDeviationInner({ stats }: { stats: StatsWithAverageRating }) {
   }, [stats.rated_films, stats.all_films]);
 
   const list = tab === 'higher' ? higher : lower;
-  const shown = list.slice(0, PAGE_SIZE);
+  const shown = boundSectionItems(list, 'outliers', compact);
 
   const handleTabChange = (next: SubTab) => {
     setTab(next);
@@ -162,7 +164,7 @@ function RatingDeviationInner({ stats }: { stats: StatsWithAverageRating }) {
       />
       <div className="bg-[#1a1a1a]/80 border border-white/8 rounded-2xl p-5 md:p-6 space-y-5">
         {/* Header */}
-        <div className="flex items-start justify-between flex-wrap gap-3">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="text-base font-bold text-white">{t('results.ratingOutliers.title')}</h3>
             <p className="text-xs text-slate-300 mt-0.5">
@@ -190,16 +192,13 @@ function RatingDeviationInner({ stats }: { stats: StatsWithAverageRating }) {
 
         {/* Film grid */}
         {shown.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-3 md:gap-4">
-            {shown.map((film, idx) => (
+          <div className={SECTION_GRID_CLASS.outliers}>
+            {shown.map((film) => (
               <FilmPosterCard
                 key={`${film.title}-${film.year}`}
                 film={film}
                 userAvg={userAvg}
                 polarity={tab}
-                // With md:grid-cols-5, a 6th card would sit alone on its own row
-                // and expand the box — only show it once lg:grid-cols-6 fits it.
-                className={idx === 5 ? 'hidden lg:flex' : undefined}
                 onOpenModal={(f) => {
                   setSelectedFilm(f);
                   trackItemClicked('rating_deviation', 'film');
@@ -218,7 +217,6 @@ function RatingDeviationInner({ stats }: { stats: StatsWithAverageRating }) {
 
 function FilmPosterCard({
   film,
-  userAvg,
   polarity,
   onOpenModal,
   className,

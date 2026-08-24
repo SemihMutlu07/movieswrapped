@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import RatingDeviation from './RatingDeviation';
 import type { StatsData } from './types';
@@ -43,6 +43,18 @@ function higherFilm(title: string, yourRating: number, community: number): Rated
 }
 
 describe('RatingDeviation outliers', () => {
+  afterEach(() => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  });
   it('measures delta against each film\'s own community rating, not the global average', () => {
     const films = [
       higherFilm('Pick', 5, 3.0),
@@ -73,13 +85,31 @@ describe('RatingDeviation outliers', () => {
     expect(screen.getAllByText(/vs community/).length).toBe(5);
   });
 
-  it('caps each tab at 6 films with no show-more control', () => {
+  it('caps each tab at 6 films on expanded layouts with no show-more control', () => {
     const films = Array.from({ length: 8 }, (_, i) =>
       higherFilm(`Film${i + 1}`, 5, 5 - (i + 1) * 0.1),
     );
     renderWithI18n(<RatingDeviation stats={statsWith(films)} />);
     expect(screen.getAllByText(/vs community/).length).toBe(6);
     expect(screen.queryByRole('button', { name: /more/i })).toBeNull();
+  });
+
+  it('caps each tab at 4 films on compact layouts', () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const films = Array.from({ length: 8 }, (_, i) =>
+      higherFilm(`Film${i + 1}`, 5, 5 - (i + 1) * 0.1),
+    );
+    renderWithI18n(<RatingDeviation stats={statsWith(films)} />);
+    expect(screen.getAllByText(/vs community/).length).toBe(4);
   });
 
   it('falls back to the matching all_films poster', () => {

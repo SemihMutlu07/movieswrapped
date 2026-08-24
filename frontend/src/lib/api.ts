@@ -271,16 +271,21 @@ export type ScrapeProgress = {
 async function pollTask<T = { status: string; stats: LetterboxdStats }>(
   taskId: string,
   pollToken: string,
-  opts: { intervalMs?: number; timeoutMs?: number; onProgress?: (p: ScrapeProgress) => void } = {},
+  opts: { intervalMs?: number; timeoutMs?: number; onProgress?: (p: ScrapeProgress) => void; signal?: AbortSignal } = {},
 ): Promise<T> {
   const intervalMs = opts.intervalMs ?? 2000;
   const timeoutMs  = opts.timeoutMs  ?? 600_000; // 10 min max
   const deadline = Date.now() + timeoutMs;
+  const signal = opts.signal;
 
   while (Date.now() < deadline) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     const r = await fetch(`${API_BASE}/api/progress/${taskId}`, {
       method: 'GET',
       headers: { 'Accept': 'application/json', 'X-Task-Token': pollToken },
+      signal,
     });
 
     if (!r.ok) {
@@ -321,7 +326,18 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
 
     // pending | running — surface live progress, then wait and retry
     opts.onProgress?.({ stage: task.stage, message: task.message, trace_events: task.trace_events });
-    await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
+    await new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'));
+        return;
+      }
+      const timer = setTimeout(resolve, intervalMs);
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
   }
 
   throw new Error('Analysis timed out after 10 minutes');
@@ -448,7 +464,7 @@ export async function scrapeProfile(
 
     // Desktop-worker mode: the job was queued — poll until the worker finishes.
     if (data && data.task_id && !data.stats) {
-      const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, { onProgress });
+      const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, { onProgress, signal });
       return { ...result, task_id: data.task_id };
     }
 
@@ -459,7 +475,7 @@ export async function scrapeProfile(
     return data as ScrapeProfileResult;
   } catch (error) {
     // Pass through AbortError so the caller can distinguish cancellation
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if ((error instanceof DOMException && error.name === 'AbortError') || (error instanceof Error && error.name === 'AbortError')) {
       throw error;
     }
     throw handleApiError(error, 'profile scraping');

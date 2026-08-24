@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Build the offline /smt demo fixture:
+ * 1. Read `dev-fixtures/analysis-runs/semihmutsuz.json`
+ * 2. Restore review posters from all_films metadata
+ * 3. Download every poster_path / profile_path into `public/demo/smt-media`
+ * 4. Rewrite those fields to `/demo/smt-media/<file>` so local UI needs no TMDB/backend
+ */
 import { access, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,15 +79,19 @@ function localizeFixtureMedia(value, mediaFiles) {
       if (
         (key === 'poster_path' || key === 'profile_path') &&
         typeof item === 'string' &&
-        mediaFiles.has(basename(item))
+        item
       ) {
-        return [key, `/demo/smt-media/${basename(item)}`];
+        const file = basename(item.split('?')[0]);
+        if (mediaFiles.has(file)) {
+          return [key, `/demo/smt-media/${file}`];
+        }
       }
       return [key, localizeFixtureMedia(item, mediaFiles)];
     }),
   );
 }
 
+/** Collect every poster/profile path in the fixture (full offline coverage). */
 function collectMediaPaths(value, collected = new Map()) {
   if (Array.isArray(value)) {
     for (const item of value) collectMediaPaths(item, collected);
@@ -92,9 +103,26 @@ function collectMediaPaths(value, collected = new Map()) {
     if (
       (key === 'poster_path' || key === 'profile_path') &&
       typeof item === 'string' &&
-      item
+      item.trim()
     ) {
-      collected.set(basename(item), item);
+      const raw = item.trim();
+      // Already-local demo paths still need their file present.
+      const file = basename(raw.replace(/^\/demo\/smt-media\//, '').split('?')[0]);
+      if (!file || file === 'smt-media') continue;
+      // Prefer TMDB-relative path for CDN fetch; keep basename as disk key.
+      let remote = raw;
+      if (raw.startsWith('/demo/smt-media/')) {
+        remote = `/${file}`;
+      } else if (raw.includes('image.tmdb.org')) {
+        try {
+          remote = new URL(raw).pathname.replace(/^\/t\/p\/[^/]+\//, '/');
+        } catch {
+          remote = `/${file}`;
+        }
+      } else if (!raw.startsWith('/')) {
+        remote = `/${file}`;
+      }
+      if (!collected.has(file)) collected.set(file, remote.startsWith('/') ? remote : `/${remote}`);
     } else {
       collectMediaPaths(item, collected);
     }
@@ -102,29 +130,37 @@ function collectMediaPaths(value, collected = new Map()) {
   return collected;
 }
 
+function tmdbFetchUrl(remotePath, size = 'w342') {
+  const clean = remotePath.replace(/^\/+/, '').replace(/^t\/p\/[^/]+\//, '');
+  return `https://image.tmdb.org/t/p/${size}/${clean}`;
+}
+
 async function materializeMedia(file, remotePath, availableFiles) {
   const destinationPath = resolve(mediaDestination, file);
   if (availableFiles.has(file)) {
     await cp(resolve(mediaSource, file), destinationPath);
-    return;
+    return 'seed';
   }
 
   const cachePath = resolve(mediaCache, file);
   try {
     await access(cachePath);
     await cp(cachePath, destinationPath);
-    return;
+    return 'cache';
   } catch {
-    // A cold checkout fills the build cache from TMDB's public image CDN.
+    // cold cache → TMDB CDN
   }
 
-  const response = await fetch(`https://image.tmdb.org/t/p/w185${remotePath}`);
+  const response = await fetch(tmdbFetchUrl(remotePath));
   if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) {
-    throw new Error(`Could not cache fixture media ${file}: HTTP ${response.status}`);
+    // Soft-fail: leave path unlocalized rather than aborting the whole fixture.
+    console.warn(`[smt] skip media ${file}: HTTP ${response.status}`);
+    return 'missing';
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   await writeFile(cachePath, bytes);
   await writeFile(destinationPath, bytes);
+  return 'download';
 }
 
 try {
@@ -145,34 +181,42 @@ try {
     throw new Error(`Missing share-card media: ${missingShareCardMedia.join(', ')}`);
   }
 
-  const reviewMedia = collectMediaPaths([
-    fixture.summary.details.review_analysis.reviews ?? [],
-    fixture.summary.details.review_analysis.top_liked_reviews ?? [],
-  ]);
+  // Full tree: films, people, reviews, share-card seeds, nested film lists, etc.
+  const allMedia = collectMediaPaths(fixture);
   for (const file of requiredShareCardMedia) {
-    reviewMedia.set(file, `/${file}`);
+    if (!allMedia.has(file)) allMedia.set(file, `/${file}`);
   }
-  const fixtureMediaFiles = new Set(reviewMedia.keys());
-  const localizedFixture = localizeFixtureMedia(fixture, fixtureMediaFiles);
 
   await mkdir(destinationDir, { recursive: true });
   await rm(mediaDestination, { force: true, recursive: true });
   await mkdir(mediaDestination, { recursive: true });
   await mkdir(mediaCache, { recursive: true });
-  const mediaEntries = [...reviewMedia.entries()].sort(([left], [right]) => left.localeCompare(right));
+
+  const mediaEntries = [...allMedia.entries()].sort(([left], [right]) => left.localeCompare(right));
+  const counts = { seed: 0, cache: 0, download: 0, missing: 0 };
+  const presentFiles = new Set();
   for (let index = 0; index < mediaEntries.length; index += 12) {
-    await Promise.all(
-      mediaEntries
-        .slice(index, index + 12)
-        .map(([file, remotePath]) => materializeMedia(file, remotePath, mediaFiles)),
+    const batch = mediaEntries.slice(index, index + 12);
+    const results = await Promise.all(
+      batch.map(async ([file, remotePath]) => {
+        const status = await materializeMedia(file, remotePath, mediaFiles);
+        return { file, status };
+      }),
     );
+    for (const { file, status } of results) {
+      counts[status] += 1;
+      if (status !== 'missing') presentFiles.add(file);
+    }
   }
+
+  const localizedFixture = localizeFixtureMedia(fixture, presentFiles);
   await writeFile(destination, `${JSON.stringify(localizedFixture, null, 2)}\n`);
   console.log(
-    `[smt] Prepared Semih's local fixture with ${fixtureMediaFiles.size} local media files and ${restoredReviewPosters} review poster references.`,
+    `[smt] Prepared fixture: ${presentFiles.size}/${allMedia.size} local media ` +
+      `(seed=${counts.seed} cache=${counts.cache} download=${counts.download} missing=${counts.missing}); ` +
+      `${restoredReviewPosters} review posters restored.`,
   );
 } catch (error) {
-  await rm(destinationDir, { force: true, recursive: true });
   const detail = error instanceof Error ? error.message : String(error);
   console.error(`[smt] Could not prepare the local fixture: ${detail}`);
   process.exit(1);

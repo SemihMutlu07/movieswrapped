@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { insertFeedback } from '@/lib/supabase/feedback';
 import { trackEvent } from '@/lib/analytics';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 
 interface FeedbackFabProps {
   sessionId: string;
@@ -57,13 +58,11 @@ const FeedbackFab = forwardRef<FeedbackFabRef, FeedbackFabProps>(({ sessionId },
     setShowSuccess(false);
   }, [isSubmitting]);
 
-  // Body scroll lock + autofocus
+  useBodyScrollLock(isOpen);
+
   useEffect(() => {
     if (!isOpen) return;
     textareaRef.current?.focus();
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
   }, [isOpen]);
 
   // Keyboard shortcuts
@@ -170,7 +169,7 @@ const FeedbackFab = forwardRef<FeedbackFabRef, FeedbackFabProps>(({ sessionId },
       {/* Modal */}
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[var(--mw-modal-z,200)] flex items-center justify-center p-4">
             <motion.div
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               initial={{ opacity: 0 }}

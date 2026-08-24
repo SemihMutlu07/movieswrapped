@@ -1,59 +1,13 @@
-import { getRuntimeHours } from '@/containers/results/results-model';
 import type { StatsData } from '@/containers/results/sections/types';
-import { getTmdbImageUrl } from '@/lib/analytics';
-import type { ShareCardInput, ShareOrientation, ShareVariant, SharePersonStat } from '@/components/share/types';
+import { buildShareCardFromStats } from '@/components/share/viewModel';
+import type { ShareCardInput, ShareOrientation, ShareVariant } from '@/components/share/types';
 
 /**
- * One-time heavy StatsData -> light finale view-model. Mirrors the mapping in
- * ResultsPage.shareCardData so the story finale renders the same share card
- * without re-walking the full payload on every frame.
+ * Story finale adapter — same Stats → ShareCard mapping as Results.
+ * Kept as a named export so story tests and StoryFinaleCard stay stable.
  */
-
 export function buildStoryShareCard(stats: StatsData): ShareCardInput {
-  const topActors: SharePersonStat[] = (stats.top_actors ?? []).slice(0, 5).map((person) => ({
-    name: person.name,
-    headshotUrl: getTmdbImageUrl(person.profile_path) ?? '',
-    count: person.count,
-  }));
-  const actorNames = new Set(topActors.map((actor) => actor.name));
-  const topDirectors: SharePersonStat[] = (stats.top_directors ?? [])
-    .slice(0, 5)
-    .map((person) => ({
-      name: person.name,
-      headshotUrl: getTmdbImageUrl(person.profile_path) ?? '',
-      count: person.count,
-    }))
-    .filter((director) => !actorNames.has(director.name));
-
-  const runtimeHours = getRuntimeHours(stats);
-  const filmSource = stats.favorite_films?.length ? stats.favorite_films : (stats.rated_films ?? []);
-  const topFilms = filmSource.slice(0, 5).map((film) => ({
-    title: film.title,
-    year: film.year ? String(film.year) : '',
-    posterPath: film.poster_path && film.poster_path.length > 0 ? film.poster_path : null,
-  }));
-
-  return {
-    year: new Date().getFullYear(),
-    writtenReviews: stats.review_analysis?.reviews_with_text ?? 0,
-    genres: (stats.top_genres ?? []).slice(0, 5).map(({ name }) => name),
-    onScreenCrush: topActors[0] ?? { name: '', headshotUrl: '', count: 0 },
-    favoriteDirector: topDirectors[0] ?? null,
-    watchedFilms: stats.total_films || 0,
-    spentDays: Math.round(runtimeHours / 24),
-    spentHours: Math.round(runtimeHours),
-    timePercent: 0,
-    cinemaScale: stats.sinefil_meter?.score ?? 0,
-    personaLabel: stats.cinematic_persona?.persona ?? '',
-    minutesAverage: Math.round(stats.average_runtime || 0),
-    mostCommonRating: stats.most_common_rating ?? 3.5,
-    peakDecade: stats.favorite_decade?.name ?? '2020s',
-    peakDecadeCount: stats.favorite_decade?.count ?? 0,
-    topActors,
-    topDirectors,
-    topFilms,
-    username: stats.scraped_username || undefined,
-  };
+  return buildShareCardFromStats(stats);
 }
 
 /** Fixed DOM footprint of each orientation's share card, for finale scaling. */

@@ -8,6 +8,7 @@ each test resets it.
 Run from backend/ directory:
     pytest tests/test_worker.py
 """
+import json
 import pytest
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, patch
@@ -81,16 +82,17 @@ def test_requeue_stale_claims_recovers_dead_worker_jobs():
     task_manager._tasks.clear()
 
 
-def test_watchlist_jobs_use_capacity_owner_and_stale_requeue(monkeypatch):
+def test_watchlist_jobs_accept_multiple_per_owner_and_stale_requeue():
+    """Always-run queue: multiple jobs per owner are accepted without rejection;
+    a claimed-then-abandoned job is still re-queued when the lease goes stale."""
     from datetime import datetime, timedelta, timezone
 
     task_manager._tasks.clear()
     task_manager._last_worker_heartbeat = None  # worker offline -> lease reclaimable
     task_manager._worker_heartbeats.clear()
-    monkeypatch.setattr(task_manager, "MAX_ACTIVE_PER_OWNER", 1)
     tid = task_manager.create_watchlist_compare_job(["one", "two"], owner_key="owner")
-    with pytest.raises(RuntimeError, match="queue_full"):
-        task_manager.create_date_night_job(["one", "three"], owner_key="owner")
+    second_id = task_manager.create_date_night_job(["one", "three"], owner_key="owner")
+    assert second_id != tid
     job = task_manager.claim_next_worker_job(worker_id="worker-a")
     assert job.task_id == tid
     job.claimed_at = datetime.now(timezone.utc) - timedelta(seconds=task_manager.STALE_CLAIM_SECONDS + 1)
@@ -469,7 +471,6 @@ async def test_raw_watchlist_timeout_releases_capacity_and_late_complete_is_dupl
 
     await _beat(client)
     monkeypatch.setattr(watchlist, "RAW_HELPER_TIMEOUT_SECONDS", 0)
-    monkeypatch.setattr(task_manager, "MAX_ACTIVE_PER_OWNER", 1)
 
     response = await client.post(
         "/api/watchlist-enrich", json={"usernames": ["one", "two"]}
@@ -748,6 +749,28 @@ async def test_scrape_profile_offline_when_heartbeat_stale(client: AsyncClient):
     r = await client.post("/api/scrape-profile", json={"username": "semihmutsuz"})
     assert r.status_code == 503
     assert r.json()["detail"]["error_code"] == "desktop_worker_offline"
+
+
+@pytest.mark.asyncio
+async def test_scrape_profile_always_accepts_jobs(client: AsyncClient):
+    """Always-run queue: concurrent scrape requests are all accepted (202),
+    never rejected with queue_full."""
+    await _beat(client)
+    first = await client.post("/api/scrape-profile", json={"username": "one"})
+    second = await client.post("/api/scrape-profile", json={"username": "two"})
+    third = await client.post("/api/scrape-profile", json={"username": "three"})
+    assert first.status_code == second.status_code == third.status_code == 202
+    scrape_jobs = [t for t in task_manager._tasks.values() if t.kind == "scrape"]
+    assert len(scrape_jobs) == 3
+
+
+def test_queue_accepts_beyond_legacy_capacity_limits():
+    """The old MAX_TASKS/MAX_ACTIVE_PER_OWNER rejection is gone: creating many
+    tasks for the same owner never raises."""
+    task_manager._tasks.clear()
+    ids = [task_manager.create_task_state("same-owner") for _ in range(30)]
+    assert len(ids) == 30 and len(set(ids)) == 30
+    task_manager._tasks.clear()
 
 
 @pytest.mark.asyncio

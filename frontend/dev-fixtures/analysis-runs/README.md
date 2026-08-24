@@ -2,18 +2,21 @@
 
 `semihmutsuz.json` is the development payload loaded by `/smt`.
 
-`semihmutsuz-share-card-media.json` is the deterministic local ShareModal media
-contract. It records exactly:
+It is a full analysis snapshot (same shape as an `analysis_runs` row summary):
+stats live in `summary.details`. **Image binaries are not stored in Supabase** —
+only TMDB path strings (`/abc.jpg`) are. `prepare-smt-fixture.mjs` downloads
+those assets into `public/demo/smt-media/` and rewrites every
+`poster_path` / `profile_path` it can resolve to `/demo/smt-media/<file>` so
+local Story + Results work offline without a backend or live TMDB.
 
-- two selected portraits: Woody Allen and Martin Scorsese;
-- the first ten `rated_films` posters. The live card currently renders the first
-  five; the next five are saved for rapid layout iteration.
+`semihmutsuz-share-card-media.json` is the deterministic ShareModal media
+contract (2 portraits + 10 posters). Seed files live in `semihmutsuz-media/`.
 
-`scripts/prepare-smt-fixture.mjs` validates that contract and copies only those
-12 files into the ignored `public/.dev/` directory. Matching `poster_path` and
-`profile_path` values are rewritten to local URLs. The script performs no
-downloads, so the visual fixture does not depend on the network, backend, or
-desktop worker.
+## Refresh workflow
 
-When the fixture ranking changes, update the JSON and the corresponding media
-files together. A data-only fixture is not considered visually complete.
+1. Run a scrape locally (or copy a good `backend/runs/semihmutsuz-*.json`).
+2. Convert/replace `semihmutsuz.json` so `summary.details` is the run `stats`.
+3. `cd frontend && node scripts/prepare-smt-fixture.mjs`
+4. Commit `dev-fixtures/…` + `public/demo/smt-fixture.json` + `public/demo/smt-media/`.
+
+`npm run dev:frontend` runs the prepare script via `predev:frontend`.

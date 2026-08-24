@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   compareReviewsByLikes,
+  reviewCharLength,
   reviewWordCount,
   selectLongestReview,
 } from './reviews';
 
 describe('review selection', () => {
-  it('selects the actual longest text by words instead of likes or URL length', () => {
+  it('selects the actual longest text by characters instead of likes or URL length', () => {
     const reviews = [
       {
         title: 'Most Liked',
@@ -26,6 +27,7 @@ describe('review selection', () => {
 
     expect(reviewWordCount(reviews[0])).toBe(2);
     expect(reviewWordCount(reviews[1])).toBe(8);
+    expect(reviewCharLength(reviews[0])).toBeLessThan(reviewCharLength(reviews[1]));
     expect(selectLongestReview(reviews)?.title).toBe('En Uzun');
     expect([...reviews].sort(compareReviewsByLikes)[0]?.title).toBe('Most Liked');
   });
@@ -48,5 +50,15 @@ describe('review selection', () => {
     ];
 
     expect(selectLongestReview(reviews)?.title).toBe('Readable');
+  });
+
+  it('prefers more characters when word counts are equal', () => {
+    const reviews = [
+      { title: 'Short Tokens', year: '2024', text: 'aa bb' },
+      { title: 'Long Tokens', year: '2024', text: 'aaaa bbbb' },
+    ];
+
+    expect(reviewWordCount(reviews[0])).toBe(reviewWordCount(reviews[1]));
+    expect(selectLongestReview(reviews)?.title).toBe('Long Tokens');
   });
 });

@@ -73,10 +73,6 @@ def _safe_extract_letterboxd_zip(upload, request_dir: Path) -> None:
                     destination.write(chunk)
 
 
-def _queue_full() -> HTTPException:
-    return HTTPException(status_code=503, detail={"error_code": "queue_full", "message": "The analysis queue is full. Please try again later."})
-
-
 def _find_csv_files(directory: Path) -> dict:
     csv_found: dict = {}
     for root, _dirs, files in os.walk(directory):
@@ -199,11 +195,7 @@ async def analyze_data(request: Request, files: List[UploadFile] = File(...)):
             if detected_username:
                 break
 
-    try:
-        task_id = task_manager.create_task_state(client_key(request))
-    except RuntimeError as exc:
-        shutil.rmtree(request_dir, ignore_errors=True)
-        raise _queue_full() from exc
+    task_id = task_manager.create_task_state(client_key(request))
     session = request.app.state.aiohttp_session
     asyncio.create_task(_run_analysis(task_id, session, csv_files, request_dir, detected_username))
 
@@ -286,14 +278,11 @@ async def scrape_profile(request: Request):
                     "message": "The desktop scraper is offline right now. Upload your Letterboxd export for a full Wrapped, or try again shortly.",
                 },
             )
-        try:
-            task_id = task_manager.create_scrape_job(
-                username,
-                owner_key=client_key(request),
-                options={"analysis_period": analysis_period},
-            )
-        except RuntimeError as exc:
-            raise _queue_full() from exc
+        task_id = task_manager.create_scrape_job(
+            username,
+            owner_key=client_key(request),
+            options={"analysis_period": analysis_period},
+        )
         logger.info("Queued scrape job %s for @%s", task_id, username)
         task = task_manager.get_task_state(task_id)
         return JSONResponse(status_code=202, content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending"})

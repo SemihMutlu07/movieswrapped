@@ -5,6 +5,7 @@ import { PersonCard } from './DirectorsGrid';
 
 vi.mock('@/lib/analytics', () => ({
   getProfileUrl: (path: string) => `https://image.tmdb.org/t/p/w342/${path.replace(/^\/+/, '')}`,
+  getDirectTmdbImageUrl: (path: string, size = 'w342') => `https://image.tmdb.org/t/p/${size}/${path.replace(/^\/+/, '')}`,
   trackEvent: vi.fn(),
   trackConsentedEvent: vi.fn(),
 }));

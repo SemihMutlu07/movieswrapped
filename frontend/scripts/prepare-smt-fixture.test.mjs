@@ -21,11 +21,9 @@ const yearKey = (value) => {
 describe('prepare-smt-fixture', () => {
   it('restores poster paths for every written review with matching film metadata', async () => {
     // Assert against the committed demo fixture + media directly. We do NOT
-    // spawn prepare-smt-fixture.mjs: that script rm's and re-materializes ~380
-    // posters from image.tmdb.org, so on a cold CI cache it makes hundreds of
-    // live network calls and blows past the 5s test timeout. public/demo is the
-    // artifact that ships, so validating it is deterministic, offline, and
-    // catches the real regression (a refreshed fixture losing poster coverage).
+    // spawn prepare-smt-fixture.mjs: that script re-materializes hundreds of
+    // posters from image.tmdb.org on a cold cache. public/demo is the shipped
+    // offline artifact, so validating it is deterministic and network-free.
     const fixture = JSON.parse(await readFile(output, 'utf8'));
     const mediaFiles = new Set(await readdir(mediaOutput));
     const details = fixture.summary.details;
@@ -50,5 +48,32 @@ describe('prepare-smt-fixture', () => {
     expect(reviews.find((review) => review.title === 'Blow-Up')?.poster_path).toBeTruthy();
     expect(reviews.find((review) => review.title === 'The Silence of the Lambs')?.poster_path).toBeTruthy();
     expect(reviews.find((review) => review.title === 'The Life of Chuck')?.poster_path).toBeTruthy();
+  });
+
+  it('keeps nearly all film posters and director portraits on local /demo paths', async () => {
+    const fixture = JSON.parse(await readFile(output, 'utf8'));
+    const mediaFiles = new Set(await readdir(mediaOutput));
+    const details = fixture.summary.details;
+
+    const films = details.all_films ?? [];
+    const filmsWithPoster = films.filter((film) => typeof film.poster_path === 'string' && film.poster_path);
+    expect(films.length).toBeGreaterThan(650);
+    expect(filmsWithPoster.length / films.length).toBeGreaterThan(0.95);
+    for (const film of filmsWithPoster) {
+      expect(film.poster_path).toMatch(/^\/demo\/smt-media\/[^/]+$/);
+      expect(mediaFiles.has(basename(film.poster_path))).toBe(true);
+    }
+
+    const directors = details.top_directors ?? [];
+    const directorsWithPortrait = directors.filter(
+      (person) => typeof person.profile_path === 'string' && person.profile_path,
+    );
+    expect(directorsWithPortrait.length).toBe(directors.length);
+    for (const person of directorsWithPortrait) {
+      expect(person.profile_path).toMatch(/^\/demo\/smt-media\/[^/]+$/);
+      expect(mediaFiles.has(basename(person.profile_path))).toBe(true);
+    }
+
+    expect(fixture.username).toBe('semihmutsuz');
   });
 });

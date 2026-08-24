@@ -29,9 +29,15 @@ export function resolveExportBackground(el: HTMLElement, fallback: string): stri
   return fallback;
 }
 
+/**
+ * Deterministic share export sizes.
+ * DOM size matches card design; pixelRatio sharpens without unbounded DPR.
+ * Horizontal: 1200×675 @2 → 2400×1350
+ * Story: 675×1200 @2 → 1350×2400
+ */
 export const SHARE_EXPORT_CONFIG = {
-  horizontal: { domWidth: 1200, domHeight: 675, outputWidth: 1200, outputHeight: 675, pixelRatio: 1 },
-  vertical: { domWidth: 675, domHeight: 1200, outputWidth: 1080, outputHeight: 1920, pixelRatio: 1.6 },
+  horizontal: { domWidth: 1200, domHeight: 675, outputWidth: 2400, outputHeight: 1350, pixelRatio: 2 },
+  vertical: { domWidth: 675, domHeight: 1200, outputWidth: 1350, outputHeight: 2400, pixelRatio: 2 },
 } as const;
 
 export async function readPngDimensions(blob: Blob): Promise<{ width: number; height: number } | null> {

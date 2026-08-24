@@ -110,6 +110,12 @@ _TURKISH_CHARS = set("ığüşöçİĞÜŞÖÇ")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 # URLs are noise for readable review metrics, regardless of scheme casing.
 _URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
+# Bare share links pasted without a scheme (common on Letterboxd reviews).
+_BARE_SHARE_URL_RE = re.compile(
+    r"(?<![/\w@])(?:prnt\.sc/\S+|open\.spotify\.com/\S+|letterboxd\.com/\S+|"
+    r"eksisozluk\.com/\S+|twitter\.com/\S+|x\.com/\S+)",
+    re.IGNORECASE,
+)
 # Legacy tokenization keeps its curated language behavior for word clouds.
 _WORD_RE = re.compile(r"[a-zA-ZğüşıöçĞÜŞİÖÇ']+(?:'[a-zA-ZğüşıöçĞÜŞİÖÇ]+)?")
 
@@ -124,7 +130,8 @@ def _strip_html(text: str) -> str:
 
 def _strip_urls(text: str) -> str:
     """Remove URLs from review text."""
-    return _URL_RE.sub(" ", text)
+    without_schemes = _URL_RE.sub(" ", text)
+    return _BARE_SHARE_URL_RE.sub(" ", without_schemes)
 
 
 def _clean_readable_text(text: str) -> str:
@@ -159,6 +166,12 @@ def _count_readable_words(text: str) -> int:
 def _word_count(text: str) -> int:
     """Count readable Unicode words without treating pasted URLs as prose."""
     return _count_readable_words(_clean_readable_text(text))
+
+
+def _char_length(text: str) -> int:
+    """Count readable characters after stripping markup/URLs and squeezing whitespace."""
+    normalized = re.sub(r"\s+", " ", _clean_readable_text(text)).strip()
+    return len(normalized)
 
 
 def _tokenize(text: str) -> list[str]:
@@ -209,6 +222,65 @@ def _year_key(year: Any) -> Optional[str]:
         return None
 
 
+def _review_sort_key(review: dict) -> tuple:
+    """Deterministic longest-review ordering: characters desc, then title/year/text."""
+    text = str(review.get("text") or review.get("text_preview") or "")
+    normalized = str(review.get("normalized_text") or _clean_readable_text(text))
+    char_length = int(review.get("char_length") if review.get("char_length") is not None else _char_length(text))
+    return (
+        -char_length,
+        _title_key(review.get("title")),
+        str(review.get("year") or ""),
+        normalized,
+        str(review.get("review_path") or ""),
+    )
+
+
+def _select_longest_review_entry(reviews: list[dict]) -> Optional[dict]:
+    """Pick the review with the highest readable character length."""
+    candidates: list[dict] = []
+    for review in reviews:
+        text = review.get("text") or review.get("text_preview") or ""
+        if not str(text).strip() and not review.get("normalized_text"):
+            continue
+        candidates.append(review)
+    if not candidates:
+        return None
+    position = min(range(len(candidates)), key=lambda index: _review_sort_key(candidates[index]))
+    return candidates[position]
+
+
+def _longest_review_summary(review: dict) -> dict:
+    text = str(review.get("text") or review.get("text_preview") or "")
+    char_length = int(
+        review.get("char_length") if review.get("char_length") is not None else _char_length(text)
+    )
+    summary = {
+        "title": str(review.get("title", "")),
+        "year": str(review.get("year", "")),
+        "length": char_length,
+        "unit": "characters",
+    }
+    review_path = review.get("review_path")
+    if isinstance(review_path, str) and review_path:
+        summary["review_path"] = review_path
+    return summary
+
+
+def recompute_longest_review(review_analysis: Dict[str, Any]) -> None:
+    """Refresh longest_review from enriched review rows (scrape path)."""
+    picked = _select_longest_review_entry(review_analysis.get("reviews") or [])
+    if picked:
+        review_analysis["longest_review"] = _longest_review_summary(picked)
+
+
+def _apply_review_text_fields(review: dict, text: str) -> None:
+    review["text"] = text
+    review["normalized_text"] = _clean_readable_text(text)
+    review["char_length"] = _char_length(text)
+    review["word_count"] = _word_count(text)
+
+
 def enrich_scraped_reviews(
     review_analysis: Dict[str, Any],
     scraped_reviews: list[dict],
@@ -219,15 +291,29 @@ def enrich_scraped_reviews(
     Mutates, for every entry in review_analysis['reviews'] and
     ['top_liked_reviews']: poster_path (matched from all_films by normalized
     title+year — no new TMDB call), likers, likers_complete, review_path,
-    char_length, word_count. An unmatched review keeps an empty, complete liker
-    set (there is nothing to crawl) and a blank poster_path.
+    normalized_text, char_length, word_count, and syncs `text` from the scrape.
+    Recomputes longest_review from the enriched rows. An unmatched review keeps
+    an empty, complete liker set (there is nothing to crawl) and a blank poster_path.
     """
-    scraped_by_ty: dict = {}
-    scraped_by_t: dict = {}
+    scraped_by_ty: dict[tuple, list] = {}
+    scraped_by_t: dict[str, list] = {}
     for r in scraped_reviews:
         t = _title_key(r.get("title"))
-        scraped_by_ty.setdefault((t, _year_key(r.get("year"))), r)
-        scraped_by_t.setdefault(t, r)
+        scraped_by_ty.setdefault((t, _year_key(r.get("year"))), []).append(r)
+        scraped_by_t.setdefault(t, []).append(r)
+
+    def _pick_scraped(title_key: str, year_key: Optional[str]) -> Optional[dict]:
+        keyed = scraped_by_ty.get((title_key, year_key)) or []
+        if len(keyed) == 1:
+            return keyed[0]
+        if len(keyed) > 1:
+            return max(keyed, key=lambda row: _word_count(str(row.get("review_text") or "")))
+        titled = scraped_by_t.get(title_key) or []
+        if len(titled) == 1:
+            return titled[0]
+        if len(titled) > 1:
+            return max(titled, key=lambda row: _word_count(str(row.get("review_text") or "")))
+        return None
 
     poster_by_ty: dict = {}
     poster_by_t: dict = {}
@@ -242,10 +328,18 @@ def enrich_scraped_reviews(
     def _enrich(review: dict) -> None:
         t = _title_key(review.get("title"))
         y = _year_key(review.get("year"))
-        scraped = scraped_by_ty.get((t, y)) or scraped_by_t.get(t)
-        text = (scraped.get("review_text") if scraped else None) or review.get("text") or review.get("text_preview") or ""
-        review["char_length"] = len(text)
-        review["word_count"] = _word_count(text)
+        scraped = _pick_scraped(t, y)
+        existing = str(review.get("text") or review.get("text_preview") or "")
+        scraped_text = str(scraped.get("review_text") or "") if scraped else ""
+        if scraped_text and (
+            not existing
+            or len(scraped_text) > len(existing)
+            or _word_count(scraped_text) > _word_count(existing)
+        ):
+            text = scraped_text
+        else:
+            text = existing or scraped_text
+        _apply_review_text_fields(review, text)
         if scraped:
             review["review_path"] = scraped.get("review_path", "")
             review["likers"] = scraped.get("likers", [])
@@ -259,7 +353,9 @@ def enrich_scraped_reviews(
         _enrich(review)
     for review in review_analysis.get("top_liked_reviews", []):
         _enrich(review)
+    recompute_longest_review(review_analysis)
     return review_analysis
+
 
 
 def compute_review_metrics(reviews_df: pd.DataFrame) -> Dict[str, Any]:
@@ -324,8 +420,8 @@ def compute_review_metrics(reviews_df: pd.DataFrame) -> Dict[str, Any]:
 
     # --- Tokenize all review text ---
     with_text["tokens"] = with_text["review"].apply(_tokenize)
-    with_text["char_length"] = with_text["review"].apply(len)
     with_text["readable_text"] = with_text["review"].apply(_clean_readable_text)
+    with_text["char_length"] = with_text["review"].apply(_char_length)
     with_text["word_count"] = with_text["review"].apply(_word_count)
     with_text["language"] = with_text["review"].apply(_guess_language)
 
@@ -409,31 +505,30 @@ def compute_review_metrics(reviews_df: pd.DataFrame) -> Dict[str, Any]:
 
 
     # --- Longest / shortest ---
-    # Word count is the product contract. Title, year, readable text, and date
-    # make ties deterministic without allowing likes, URL length, or HTML to win.
-    longest_position = min(
-        range(len(with_text)),
-        key=lambda position: (
-            -int(with_text.iloc[position]["word_count"]),
-            _title_key(with_text.iloc[position].get("title")),
-            str(with_text.iloc[position].get("year") or ""),
-            str(with_text.iloc[position].get("readable_text") or ""),
-            str(with_text.iloc[position].get("date") or ""),
-        ),
+    # Character count is the product contract. Title, year, and readable text make
+    # ties deterministic without allowing likes, URL length, or HTML to win.
+    longest_review = None
+    longest_row = _select_longest_review_entry(
+        [
+            {
+                "title": row.get("title"),
+                "year": row.get("year"),
+                "text": row.get("review"),
+                "word_count": int(row["word_count"]),
+                "normalized_text": str(row.get("readable_text") or ""),
+                "review_path": str(row.get("slug") or ""),
+            }
+            for _, row in with_text.iterrows()
+        ]
     )
+    if longest_row:
+        longest_review = _longest_review_summary(longest_row)
+
     shortest_positions = [
         position
         for position in range(len(with_text))
         if int(with_text.iloc[position]["char_length"]) > 0
     ]
-
-    row = with_text.iloc[longest_position]
-    longest_review = {
-        "title": str(row.get("title", "")),
-        "year": str(row.get("year", "")),
-        "length": int(row["word_count"]),
-        "unit": "words",
-    }
     if shortest_positions:
         shortest_position = min(
             shortest_positions,
@@ -474,14 +569,17 @@ def compute_review_metrics(reviews_df: pd.DataFrame) -> Dict[str, Any]:
     # --- Individual reviews for frontend filtering ---
     reviews_list: list[dict] = []
     for _, row in with_text.iterrows():
+        raw_text = str(row.get("review", ""))
         reviews_list.append({
             "title": str(row.get("title", "")),
             "year": int(float(row.get("year", 0))) if pd.notna(row.get("year")) and str(row.get("year", "")).replace(".", "", 1).isdigit() else None,
-            "text": str(row.get("review", "")),
+            "text": raw_text,
+            "normalized_text": str(row.get("readable_text") or _clean_readable_text(raw_text)),
             "likes": int(row.get("like_count", 0)) if pd.notna(row.get("like_count")) else 0,
             "rating": float(row["rating"]) if "rating" in row and pd.notna(row.get("rating")) else None,
             "char_length": int(row["char_length"]),
             "word_count": int(row["word_count"]),
+            "review_path": str(row.get("slug") or ""),
         })
 
     # --- Top liked reviews + total likes (scraped HTML path only) ---

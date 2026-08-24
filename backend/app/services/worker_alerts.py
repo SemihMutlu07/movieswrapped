@@ -121,27 +121,28 @@ async def _run_health_monitor() -> None:
         try:
             await _ping_dead_mans_switch()
 
-            # Recovery ping first (cooldown-independent, fires once per outage).
-            recovery = _recovery_message()
-            if recovery:
-                ok = await send_alert(recovery)
-                if ok:
-                    logger.info("Sent ntfy recovery ping: %s", recovery)
-                else:
-                    # Keep the flag set so the recovery ping retries next tick.
-                    _offline_alert_sent = True
-
-            for condition, message in _condition_messages():
-                if not _cooldown_ok(condition):
-                    continue
-                ok = await send_alert(message)
-                if ok:
-                    _mark_sent(condition)
-                    if condition == CONDITION_NO_WORKER:
+            if settings.ntfy_topic:
+                # Recovery ping first (cooldown-independent, fires once per outage).
+                recovery = _recovery_message()
+                if recovery:
+                    ok = await send_alert(recovery)
+                    if ok:
+                        logger.info("Sent ntfy recovery ping: %s", recovery)
+                    else:
+                        # Keep the flag set so the recovery ping retries next tick.
                         _offline_alert_sent = True
-                    logger.info("Sent ntfy alert [%s]: %s", condition, message)
-                else:
-                    logger.warning("ntfy alert [%s] not sent (send failed) — will retry after cooldown", condition)
+
+                for condition, message in _condition_messages():
+                    if not _cooldown_ok(condition):
+                        continue
+                    ok = await send_alert(message)
+                    if ok:
+                        _mark_sent(condition)
+                        if condition == CONDITION_NO_WORKER:
+                            _offline_alert_sent = True
+                        logger.info("Sent ntfy alert [%s]: %s", condition, message)
+                    else:
+                        logger.warning("ntfy alert [%s] not sent (send failed) — will retry after cooldown", condition)
         except Exception as exc:
             logger.debug("Health monitor tick error (non-fatal): %s", exc)
 

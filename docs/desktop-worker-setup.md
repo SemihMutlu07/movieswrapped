@@ -15,19 +15,19 @@ Bu kılavuz, Render üzerinde çalışan bulut backend sunucusunun (datacenter I
 ## 🚀 Adım Adım Kurulum
 
 ### Adım 1: Repo Kurulumu ve Güncelleme
-Masaüstünüzde PowerShell veya Windows Terminal açıp aşağıdaki komutlarla projeyi çekin ve `desktop_server` branch'ine geçiş yapın:
+Masaüstünüzde PowerShell veya Windows Terminal açıp aşağıdaki komutlarla projeyi çekin ve `main` branch'ine geçiş yapın:
 
 ```powershell
 cd $HOME\Desktop
 # Eğer repo daha önce klonlanmadıysa:
 git clone https://github.com/SemihMutlu07/letterboxd_wrapped.git
 cd letterboxd_wrapped
-git checkout desktop_server
+git checkout main
 
 # Eğer zaten klonlanmış durumdaysa:
 git fetch origin
-git checkout desktop_server
-git pull origin desktop_server
+git checkout main
+git pull origin main
 ```
 
 ---
@@ -88,15 +88,19 @@ python -m app.worker.desktop_scrape_worker
 * Terminal loglarında `Desktop scrape worker starting — backend=https://wrapped-backend.onrender.com...` görünmelidir.
 * Dashboard'da heartbeat yaşı güncel kalmalı ve worker `Live` görünmelidir.
 * Eğer `401` hatası alıyorsanız, Render'daki `WORKER_TOKEN` ile yerel `.env` içindeki değer uyuşmuyor demektir.
-* Eğer `404` alıyorsanız, Render backend'inize `desktop_server` branch'indeki kodlar henüz başarıyla deploy edilmemiştir.
+* Eğer `404` alıyorsanız, Render backend'inize `main` branch'indeki kodlar henüz başarıyla deploy edilmemiştir.
 
 ### Adım 5.1: Admin Dashboard'dan Canlılık Kontrolü
 
 Backend çalışırken şu sayfadan desktop worker durumunu kontrol edin:
 
 ```text
-https://wrapped-backend.onrender.com/admin/dashboard?key=ADMIN_SECRETINIZ
+https://wrapped-backend.onrender.com/admin/dashboard
 ```
+
+`ADMIN_SECRET` değerini giriş formuna girin. (Güvenlik notu: dashboard artık
+URL'deki `?key=` parametresiyle kimlik doğrulamıyor; query parametreli eski
+linkler temizlenip login form'una yönlendirilir.)
 
 Dashboard'daki **Desktop Worker** sekmesi şunları gösterir:
 
@@ -125,17 +129,17 @@ transport `direct_cloudscraper`, scrape isteği HTTP 202, poll sonucu `done` ve
 
 ---
 
-### Adım 6: Çalıştırma Betiği (BAT) Oluşturma
-Çift tıklayarak kolayca başlatabilmek için masaüstünüzde `start_letterboxd_worker.bat` adında bir dosya oluşturup içine şunları yazın:
+### Adım 6: Çalıştırma Betiği
+Repo içinde hazır bir başlatıcı var; masaüstünde ayrı bir `.bat` yazmanıza
+gerek yok:
 
 ```bat
-@echo off
-set PYTHONUTF8=1
-cd /d "%USERPROFILE%\Desktop\letterboxd_wrapped\backend"
-call .venv\Scripts\activate.bat
-python -m app.worker.desktop_scrape_worker
-pause
+backend\start-worker.bat
 ```
+
+Bu betik `start-worker-supervisor.ps1`'i çalıştırır: worker çökerse otomatik
+yeniden başlatır, tek-instance mutex ile çift başlatmayı engeller ve logları
+`worker-supervisor.log` / `worker.log` altına yazar.
 
 ---
 
@@ -147,7 +151,7 @@ Sistemin kesintisiz çalışması için bilgisayar açıldığında bu betiği o
 3. **Name (Ad):** `Letterboxd Desktop Worker`
 4. **Trigger (Tetikleyici):** *When I log on* (Oturum açtığımda).
 5. **Action (Eylem):** *Start a program*.
-6. **Program/Script:** `C:\Users\semih\Desktop\start_letterboxd_worker.bat` (Oluşturduğunuz bat dosyasının tam yolunu seçin).
+6. **Program/Script:** repodaki `C:\...\letterboxd_wrapped\backend\start-worker.bat` dosyasının tam yolunu seçin.
 7. Görev oluştuktan sonra listeden bulup sağ tıklayın ve **Properties (Özellikler)** penceresini açın:
    * **General (Genel) Sekmesi:** *"Run only when user is logged on"* ve *"Run with highest privileges"* kutucuklarını işaretleyin.
    * **Settings (Ayarlar) Sekmesi:** *"If the task fails, restart every: 1 minute"* ve *"Attempt to restart up to: 3 times"* seçeneklerini açın.

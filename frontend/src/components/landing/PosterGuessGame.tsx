@@ -165,10 +165,10 @@ export function PosterGuessGame({
   }
 
   return (
-    <div className="rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4">
-      <div className="mb-3 flex items-center justify-between text-xs uppercase tracking-wide text-orange-300/80">
-        <span>{t('landing.poster.title')}</span>
-        <span className="relative inline-block">
+    <div className="min-w-0 max-w-full rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4">
+      <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs uppercase tracking-wide text-orange-300/80">
+        <span className="min-w-0 text-left break-words">{t('landing.poster.title')}</span>
+        <span className="relative inline-block shrink-0">
           <span
             className={`inline-block ${justScored ? 'animate-[score-pop_1.1s_ease-out]' : ''}`}
           >
@@ -191,7 +191,7 @@ export function PosterGuessGame({
       </div>
 
       <div className="mb-4 flex justify-center">
-        <div className="relative h-[240px] w-[160px] sm:h-[330px] sm:w-[220px] overflow-hidden rounded-lg border border-slate-600 bg-slate-900/60">
+        <div className="relative aspect-[2/3] w-[min(160px,100%)] overflow-hidden rounded-lg border border-slate-600 bg-slate-900/60 sm:w-[min(220px,100%)]">
           {!error && (
             <canvas
               ref={canvasRef}
@@ -217,8 +217,8 @@ export function PosterGuessGame({
           {movie.title}
         </p>
       ) : (
-        <div className="relative">
-          <form onSubmit={handleSubmit} className="flex gap-2">
+        <div className="relative min-w-0">
+          <form onSubmit={handleSubmit} className="flex min-w-0 gap-2">
             <input
               ref={inputRef}
               id="film-guess"
@@ -254,7 +254,7 @@ export function PosterGuessGame({
             />
             <button
               type="submit"
-              className="shrink-0 rounded-lg bg-orange-500/90 px-4 py-2 text-sm font-medium text-white transition hover:bg-orange-500"
+              className="shrink-0 whitespace-nowrap rounded-lg bg-orange-500/90 px-3 py-2 text-sm font-medium text-white transition hover:bg-orange-500 sm:px-4"
             >
               {t('landing.poster.guess')}
             </button>
@@ -290,7 +290,7 @@ export function PosterGuessGame({
         <div className="mt-2 text-center">
           <p className="text-xs text-orange-300/80">{t('landing.poster.wrong')}</p>
           {hint && (
-            <p className="mt-1 font-mono text-sm tracking-widest text-orange-200/90">{hint}</p>
+            <p className="mt-1 max-w-full break-words font-mono text-sm tracking-widest text-orange-200/90">{hint}</p>
           )}
         </div>
       )}

@@ -2,23 +2,17 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
-import { catalogs, type MessageKey } from './catalogs';
+import { type MessageKey } from './catalogs';
+import { createTranslator, type Translator } from './createTranslator';
 import type { Locale } from './locales';
+import type { MessageValues, PluralForms } from './interpolate';
 
-type I18nValue = {
-  locale: Locale;
-  t: (key: MessageKey) => string;
-  formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string;
-};
+export type I18nValue = Translator;
 
 const I18nContext = createContext<I18nValue | null>(null);
 
 export function I18nProvider({ locale, children }: { locale: Locale; children: ReactNode }) {
-  const value = useMemo<I18nValue>(() => ({
-    locale,
-    t: (key) => catalogs[locale][key],
-    formatNumber: (number, options) => new Intl.NumberFormat(locale, options).format(number),
-  }), [locale]);
+  const value = useMemo(() => createTranslator(locale), [locale]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
@@ -29,3 +23,4 @@ export function useI18n(): I18nValue {
   return value;
 }
 
+export type { MessageKey, MessageValues, PluralForms };

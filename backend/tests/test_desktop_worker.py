@@ -184,3 +184,50 @@ async def test_find_film_job_skips_watched_scrape_when_intersection_empty(tmp_pa
     mock_grid.assert_not_awaited()
     payload = mock_post.await_args_list[-1].args[3]
     assert payload["watched"] == {"alice": [], "bob": []}
+
+
+class _FakeHeartbeatResponse:
+    def __init__(self, status: int) -> None:
+        self.status = status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeHeartbeatSession:
+    """Rejects every heartbeat with the given status; fails fast if the loop
+    polls more times than sleeps (the old busy-loop regression)."""
+
+    def __init__(self, status: int, max_calls: int) -> None:
+        self.status = status
+        self.max_calls = max_calls
+        self.calls = 0
+
+    def post(self, *args, **kwargs):
+        self.calls += 1
+        if self.calls > self.max_calls:
+            raise RuntimeError("heartbeat retried without sleeping between attempts")
+        return _FakeHeartbeatResponse(self.status)
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_backs_off_on_rejected_status(monkeypatch):
+    """A non-200 heartbeat must back off (sleep between retries), not busy-loop."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay):
+        sleeps.append(delay)
+        if len(sleeps) >= 3:
+            raise KeyboardInterrupt  # deterministic loop exit
+
+    monkeypatch.setattr(worker.asyncio, "sleep", fake_sleep)
+    session = _FakeHeartbeatSession(status=503, max_calls=3)
+
+    with pytest.raises(KeyboardInterrupt):
+        await worker._heartbeat_loop(session, _cfg())
+
+    # Each rejection doubles the wait before the next sleep: 30 -> 60 -> 120.
+    assert sleeps == [60.0, 120.0, 240.0]

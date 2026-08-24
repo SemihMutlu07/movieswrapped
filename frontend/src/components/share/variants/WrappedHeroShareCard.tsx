@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { Heart, User, Star } from 'lucide-react';
 import { getTmdbImageUrl } from '@/lib/analytics';
 import type { ShareCardData, ShareOrientation } from '../types';
+import { useShareLabels } from '../useShareLabels';
 
 type Props = {
   data: ShareCardData;
@@ -32,10 +33,12 @@ function Portrait({
   countLabel,
   imageUrl,
   fallback,
+  unknownName,
 }: {
   label: string;
   name: string;
   countLabel: string;
+  unknownName?: string;
   imageUrl?: string;
   fallback: 'heart' | 'user';
 }) {
@@ -71,7 +74,7 @@ function Portrait({
         )}
       </div>
       <div className="mt-2 text-[17px] font-black leading-tight truncate" style={{ color: NAVY }}>
-        {name || 'Unknown'}
+        {name?.trim() ? name : (unknownName ?? name)}
       </div>
       <div className="text-[11px]" style={{ color: BLUE }}>
         {countLabel}
@@ -113,36 +116,39 @@ function StatTile({
 
 const WrappedHeroShareCard = React.forwardRef<HTMLDivElement, Props>(
   function WrappedHeroShareCard({ data, className = '', orientation = 'horizontal' }, ref) {
+    const labels = useShareLabels();
     const isVertical = orientation === 'vertical';
     const crushUrl = useMemo(() => normalizeTmdb(data.onScreenCrush.headshotUrl), [data.onScreenCrush.headshotUrl]);
     const directorUrl = useMemo(() => normalizeTmdb(data.favoriteDirector.headshotUrl), [data.favoriteDirector.headshotUrl]);
 
     const stats = (
       <div className="grid grid-cols-2 gap-3">
-        <StatTile label="Days Spent" value={data.spentDays} unit="days" />
-        <StatTile label="Cinema Scale" value={data.cinemaScale.toFixed(0)} unit="/ 100" />
+        <StatTile label={labels.daysSpent} value={data.spentDays} unit={labels.daysUnit} />
+        <StatTile label={labels.scale} value={data.cinemaScale.toFixed(0)} unit={labels.scaleOutOf} />
         <StatTile
-          label="Top Rating"
+          label={labels.topRating}
           value={data.mostCommonRating}
           unit={<Star size={12} fill={RED} stroke={RED} style={{ display: 'inline', marginBottom: -1 }} />}
         />
-        <StatTile label="Peak Decade" value={data.peakDecade} unit={`${data.peakDecadeCount} films`} />
+        <StatTile label={labels.peakDecade} value={data.peakDecade} unit={labels.filmsCount(data.peakDecadeCount)} />
       </div>
     );
 
     const portraits = (
       <div className="flex gap-4">
         <Portrait
-          label="On-Screen Crush"
+          label={labels.onScreenCrush}
           name={data.onScreenCrush.name}
-          countLabel={`${data.onScreenCrush.count} films together`}
+          countLabel={labels.personFilmsTogether(data.onScreenCrush.count)}
+          unknownName={labels.unknown}
           imageUrl={crushUrl}
           fallback="heart"
         />
         <Portrait
-          label="Favorite Director"
+          label={labels.favoriteDirector}
           name={data.favoriteDirector.name}
-          countLabel={`${data.favoriteDirector.count} films directed`}
+          countLabel={labels.personFilmsDirected(data.favoriteDirector.count)}
+          unknownName={labels.directorUnavailable}
           imageUrl={directorUrl}
           fallback="user"
         />
@@ -159,10 +165,10 @@ const WrappedHeroShareCard = React.forwardRef<HTMLDivElement, Props>(
         >
           <div className="px-10 pt-10 pb-2">
             <div className="uppercase tracking-[0.24em] text-[13px] font-bold" style={{ color: RED }}>
-              Year In Film
+              {labels.yearInFilm}
             </div>
             <h1 className="mt-1 text-[36px] font-black leading-none" style={{ color: NAVY }}>
-              Letterboxd Wrapped
+              {labels.letterboxdWrapped}
             </h1>
           </div>
 
@@ -174,7 +180,7 @@ const WrappedHeroShareCard = React.forwardRef<HTMLDivElement, Props>(
               {data.watchedFilms.toLocaleString()}
             </div>
             <div className="uppercase tracking-[0.22em] text-[15px] font-bold mt-1" style={{ color: NAVY }}>
-              Films Watched
+              {labels.filmsWatched}
               {data.username ? (
                 <span className="ml-3 font-medium normal-case tracking-normal" style={{ color: BLUE }}>
                   @{data.username}
@@ -207,7 +213,7 @@ const WrappedHeroShareCard = React.forwardRef<HTMLDivElement, Props>(
         <div className="col-span-7 flex flex-col justify-between px-10 py-9">
           <div>
             <div className="uppercase tracking-[0.24em] text-[12px] font-bold" style={{ color: RED }}>
-              Year In Film
+              {labels.yearInFilm}
             </div>
             <div
               className="text-[104px] font-black leading-none tabular-nums mt-2"
@@ -216,7 +222,7 @@ const WrappedHeroShareCard = React.forwardRef<HTMLDivElement, Props>(
               {data.watchedFilms.toLocaleString()}
             </div>
             <div className="uppercase tracking-[0.2em] text-[14px] font-bold mt-2" style={{ color: NAVY }}>
-              Films Watched
+              {labels.filmsWatched}
               {data.username ? (
                 <span className="ml-3 font-medium normal-case tracking-normal" style={{ color: BLUE }}>
                   @{data.username}

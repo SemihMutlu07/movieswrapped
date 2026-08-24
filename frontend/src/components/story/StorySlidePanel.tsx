@@ -7,6 +7,13 @@ import type { StatsData } from '@/containers/results/sections/types';
 import { useI18n } from '@/i18n/I18nProvider';
 
 import type { Slide } from './types';
+import { DirectorSlideBody } from './director/DirectorSlideBody';
+import { ActorSlideBody } from './actor/ActorSlideBody';
+import { ReviewSlideBody } from './review/ReviewSlideBody';
+import { FinaleSlideBody } from './finale/FinaleSlideBody';
+import { MOTION_DURATION, MOTION_EASE } from './motion/motionTokens';
+import { useStoryMotion } from './motion/StoryMotionContext';
+import { Hint } from './SlideTypography';
 import { MobileMediaRail } from './visuals/MobileMediaRail';
 
 type StorySlidePanelProps = {
@@ -16,30 +23,68 @@ type StorySlidePanelProps = {
   showTapHint: boolean;
 };
 
+function SlideCopy({ slide }: { slide: Slide }) {
+  if (slide.finaleSequence) return <FinaleSlideBody />;
+  if (slide.directorSequence) return <DirectorSlideBody />;
+  if (slide.actorSequence) return <ActorSlideBody />;
+  if (slide.reviewSequence) return <ReviewSlideBody />;
+  return slide.body;
+}
+
 export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlidePanelProps) {
   const { t } = useI18n();
+  const { reduce } = useStoryMotion();
+  const isPerson = slide.visual === 'person' || slide.visual === 'director';
 
   return (
-    <div className="relative z-20 grid min-h-screen place-items-center px-4 pb-24 pt-16 text-center md:place-items-center md:px-10 md:py-14 md:text-left">
+    <div
+      data-testid="story-slide-stage"
+      data-story-last={isLast ? 'true' : 'false'}
+      className="relative z-20 flex h-full min-h-0 min-w-0 w-full overflow-x-clip px-3 md:px-10 md:py-6"
+    >
       <AnimatePresence mode="wait">
         <motion.div
           key={slide.key}
-          initial={{ opacity: 0, y: 28, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -22, scale: 1.01 }}
-          transition={{ duration: 0.45, ease: 'easeOut' }}
-          className="w-full max-w-xl justify-self-center rounded-[24px] border border-white/10 bg-black/55 px-4 py-5 shadow-2xl shadow-black/40 backdrop-blur-md sm:px-5 sm:py-6 md:ml-[8vw] md:justify-self-start md:rounded-[28px] md:bg-black/42 md:px-8 md:py-8"
+          initial={reduce ? false : { opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10 }}
+          transition={{
+            duration: reduce ? 0 : MOTION_DURATION.panelEnter,
+            ease: MOTION_EASE.snap,
+          }}
+          className={`@container flex h-full max-h-full min-h-0 min-w-0 w-full flex-col ${
+            isLast
+              ? 'mx-auto max-w-md md:ml-[5vw] md:max-w-2xl'
+              : `mx-auto max-w-xl rounded-[24px] border border-white/10 bg-black/55 px-[clamp(1.05rem,4.5vw,1.75rem)] py-[clamp(1rem,3svh,1.85rem)] text-center shadow-2xl shadow-black/40 backdrop-blur-md md:mx-0 md:h-auto md:my-auto md:rounded-[28px] md:bg-black/42 md:px-8 md:py-8 md:text-left ${
+                  isPerson ? 'md:ml-[6vw] md:max-w-lg' : 'md:ml-[8vw]'
+                }`
+          }`}
         >
           {isLast ? (
-            <StoryFinaleCard stats={stats} />
+            <>
+              <div className="flex min-h-0 min-w-0 flex-[1.85] items-center justify-center py-1">
+                <StoryFinaleCard stats={stats} />
+              </div>
+              <div className="min-w-0 shrink-0 text-center md:mt-3 md:text-left">
+                <SlideCopy slide={slide} />
+              </div>
+            </>
           ) : (
-            <MobileMediaRail media={slide.media ?? []} accent={slide.accent ?? '#f59e0b'} />
-          )}
-          {slide.body}
-          {!isLast && showTapHint && (
-            <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.2em] text-amber-300/80">
-              {t('story.tapToContinue')}
-            </p>
+            <>
+              <div className="min-w-0 shrink-0">
+                <MobileMediaRail media={slide.media ?? []} accent={slide.accent ?? '#f59e0b'} />
+              </div>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <div className="min-w-0">
+                  <SlideCopy slide={slide} />
+                </div>
+                {showTapHint && (
+                  <Hint className="mt-auto pt-4 text-amber-300/80 md:mt-5 md:pt-0">
+                    {t('story.tapToContinue')}
+                  </Hint>
+                )}
+              </div>
+            </>
           )}
         </motion.div>
       </AnimatePresence>

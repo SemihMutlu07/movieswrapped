@@ -77,3 +77,13 @@ Thumbs.db
 prototype_backup_DO_NOT_TOUCH/
 .deepsec/
 .foglamp/
+
+# agent / tooling scratch (do not re-commit)
+.agent/
+.claude/
+.cursor/
+_screenshots/
+SCRATCHPAD.md
+CHECKPOINT-*.md
+TECH_DEBT_AUDIT.md
+/grep

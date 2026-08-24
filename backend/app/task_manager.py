@@ -91,18 +91,11 @@ _last_supervisor_status: Dict[str, Any] = {}
 _supervisor_log_tail: list[str] = []
 
 
-MAX_TASKS = 25
-MAX_ACTIVE_PER_OWNER = 2
-
-
-def _ensure_queue_capacity(owner_key: Optional[str]) -> None:
-    active = [t for t in _tasks.values() if t.status in ("pending", "running")]
-    if len(active) >= MAX_TASKS or (owner_key and sum(t.owner_key == owner_key for t in active) >= MAX_ACTIVE_PER_OWNER):
-        raise RuntimeError("queue_full")
-
-
+# ponytail: always-run queue — jobs are never rejected for capacity. The
+# in-memory dict grows only with live traffic and cleanup_loop evicts terminal
+# tasks after 1 hour, so memory stays bounded by throughput. Upgrade path if
+# abuse ever matters: per-owner rate limiting at the route layer.
 def create_task_state(owner_key: Optional[str] = None) -> str:
-    _ensure_queue_capacity(owner_key)
     task_id = str(uuid.uuid4())
     _tasks[task_id] = TaskState(task_id=task_id, owner_key=owner_key)
     return task_id
@@ -115,7 +108,6 @@ def create_scrape_job(
     options: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Queue a username scrape job for the desktop worker to claim."""
-    _ensure_queue_capacity(owner_key)
     task_id = str(uuid.uuid4())
     task = TaskState(
         task_id=task_id,
@@ -135,7 +127,6 @@ def create_scrape_job(
 
 def create_watchlist_compare_job(usernames: list, owner_key: Optional[str] = None, options: Optional[Dict[str, Any]] = None) -> str:
     """Queue a watchlist comparison job for the desktop worker to claim."""
-    _ensure_queue_capacity(owner_key)
     task_id = str(uuid.uuid4())
     task = TaskState(
         task_id=task_id,
@@ -155,7 +146,6 @@ def create_watchlist_compare_job(usernames: list, owner_key: Optional[str] = Non
 
 def create_date_night_job(usernames: list, owner_key: Optional[str] = None, options: Optional[Dict[str, Any]] = None) -> str:
     """Queue a date-night scrape job for the desktop worker to claim."""
-    _ensure_queue_capacity(owner_key)
     task_id = str(uuid.uuid4())
     task = TaskState(
         task_id=task_id,
@@ -175,7 +165,6 @@ def create_date_night_job(usernames: list, owner_key: Optional[str] = None, opti
 
 def create_find_film_job(usernames: list, owner_key: Optional[str] = None, options: Optional[Dict[str, Any]] = None) -> str:
     """Queue a group find-film scrape job for the desktop worker to claim."""
-    _ensure_queue_capacity(owner_key)
     task_id = str(uuid.uuid4())
     task = TaskState(
         task_id=task_id,

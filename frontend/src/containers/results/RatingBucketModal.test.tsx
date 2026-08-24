@@ -32,7 +32,7 @@ describe('RatingBucketModal', () => {
         />
       </I18nProvider>
     );
-    const posters = screen.getAllByAltText(/poster/i);
+    const posters = await screen.findAllByAltText(/poster/i);
     expect(posters.length).toBe(12);
     await userEvent.click(screen.getByRole('button', { name: /Show more films/i }));
     expect(screen.getAllByAltText(/poster/i).length).toBe(24);

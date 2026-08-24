@@ -1,22 +1,24 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, RefreshCw, X, MessageSquare } from 'lucide-react';
+import { AlertTriangle, RefreshCw, X, MessageSquare, Upload } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nProvider';
-import type { NormalizedError } from '@/lib/errors';
+import { needsZipFallback, type NormalizedError } from '@/lib/errors';
 
 interface ErrorBannerProps {
   error: NormalizedError;
   onDismiss: () => void;
   onRetry?: () => void;
+  onUpload?: () => void;
   onReport?: () => void;
 }
 
-export default function ErrorBanner({ error, onDismiss, onRetry, onReport }: ErrorBannerProps) {
+export default function ErrorBanner({ error, onDismiss, onRetry, onUpload, onReport }: ErrorBannerProps) {
   const { locale } = useI18n();
   const copy = locale === 'tr'
-    ? { dismiss: 'Hatayı kapat', retry: 'Tekrar dene', report: 'Sorunu bildir' }
-    : { dismiss: 'Dismiss error', retry: 'Try again', report: 'Report issue' };
+    ? { dismiss: 'Hatayı kapat', retry: 'Tekrar dene', report: 'Sorunu bildir', upload: 'Export ZIP yükle' }
+    : { dismiss: 'Dismiss error', retry: 'Try again', report: 'Report issue', upload: 'Upload export ZIP' };
+  const zipFirst = Boolean(onUpload && needsZipFallback(error.reason));
   return (
     <div className="mx-auto max-w-xl rounded-2xl border border-red-700/50 bg-slate-800/90 p-4 sm:p-5">
       <div className="flex items-start gap-3">
@@ -43,6 +45,16 @@ export default function ErrorBanner({ error, onDismiss, onRetry, onReport }: Err
           )}
 
           <div className="mt-3 flex flex-wrap gap-2">
+            {zipFirst && onUpload && (
+              <button
+                onClick={onUpload}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={{ backgroundColor: '#ff7f00', color: '#1b1c1e' }}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {copy.upload}
+              </button>
+            )}
             {onRetry && (
               <button
                 onClick={onRetry}

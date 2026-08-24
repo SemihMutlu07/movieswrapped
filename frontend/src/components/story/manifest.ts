@@ -37,6 +37,7 @@ export const SLIDE_MANIFEST: readonly SlideManifestEntry[] = [
   },
   { key: 'genre', tier: 'core', interaction: 'auto-min', isReady: (s) => Boolean(s.favorite_genre?.name) },
   { key: 'director', tier: 'enrichment', interaction: 'manual', isReady: (s) => Boolean(s.most_watched_director?.name) },
+  { key: 'actor', tier: 'enrichment', interaction: 'manual', isReady: (s) => Boolean(s.top_actors?.[0]?.name) },
   { key: 'taste', tier: 'core', interaction: 'auto-min', isReady: (s) => s.average_rating != null },
   {
     key: 'rating-personality',

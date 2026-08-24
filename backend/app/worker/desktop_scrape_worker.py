@@ -292,10 +292,10 @@ async def _heartbeat_loop(session: aiohttp.ClientSession, cfg: WorkerConfig) -> 
                 if r.status != 200:
                     logger.warning("Heartbeat rejected: HTTP %s", r.status)
                     delay = min(delay * 2, HEARTBEAT_MAX_BACKOFF)
-                    continue
-                if delay != HEARTBEAT_INTERVAL:
-                    logger.info("Heartbeat accepted again — resetting to %ss interval", HEARTBEAT_INTERVAL)
-                delay = HEARTBEAT_INTERVAL
+                else:
+                    if delay != HEARTBEAT_INTERVAL:
+                        logger.info("Heartbeat accepted again — resetting to %ss interval", HEARTBEAT_INTERVAL)
+                    delay = HEARTBEAT_INTERVAL
         except Exception as exc:
             logger.warning("Heartbeat failed: %s", exc)
             delay = min(delay * 2, HEARTBEAT_MAX_BACKOFF)

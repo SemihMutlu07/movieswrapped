@@ -224,7 +224,7 @@ export default function ThemeWrapper({ children }: { children: ReactNode }) {
   return (
     <div
       data-theme={theme}
-      className={`relative min-h-screen transition-colors duration-500 ${
+      className={`relative min-h-dvh transition-colors duration-500 ${
         theme === 'current' ? 'bg-[#1e252d] text-white' :
         theme === 'vhs' ? 'bg-[#1a1410] text-[#f0e6d8]' :
         theme === 'apple' ? 'bg-[#FBFAF7] text-[#1D1D1F]' :

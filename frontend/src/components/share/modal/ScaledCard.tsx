@@ -29,6 +29,7 @@ export function ScaledCard({ target, pageW, pageH, children }: ScaledCardProps) 
           top: 0,
           left: 0,
         }}
+        data-scaled-preview="true"
       >
         {children}
       </div>

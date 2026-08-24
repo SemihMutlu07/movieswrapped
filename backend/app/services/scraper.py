@@ -180,6 +180,50 @@ def _normalize_poster_url(url: str) -> str:
         return "https://letterboxd.com" + url
     return url
 
+
+PREVIEW_ITEM_LIMIT = 8
+
+
+def _safe_preview_poster(url: str) -> Optional[str]:
+    """Keep only https Letterboxd CDN posters for the live scrape preview."""
+    normalized = _normalize_poster_url(url).strip()
+    parsed = urlparse(normalized)
+    hostname = (parsed.hostname or "").lower()
+    if parsed.scheme != "https":
+        return None
+    if hostname == "letterboxd.com" or hostname.endswith(".letterboxd.com"):
+        return normalized
+    if hostname == "ltrbxd.com" or hostname.endswith(".ltrbxd.com"):
+        return normalized
+    return None
+
+
+def preview_items(films: list[dict], limit: int = PREVIEW_ITEM_LIMIT) -> list[dict[str, str]]:
+    """Tiny overwrite-safe sample for the wait story. Counts and titles only — no review text."""
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for film in films:
+        title = str(film.get("title") or "").strip()
+        if not title:
+            continue
+        key = title.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        item: dict[str, str] = {"title": title}
+        year = str(film.get("year") or "").strip()
+        if year:
+            item["year"] = year
+        poster = film.get("poster_url")
+        if isinstance(poster, str) and poster.strip():
+            safe = _safe_preview_poster(poster)
+            if safe:
+                item["poster_url"] = safe
+        out.append(item)
+        if len(out) >= limit:
+            break
+    return out
+
 def _parse_grid_items(soup: BeautifulSoup) -> list[dict]:
     """Parse film grid items from Letterboxd grid pages.
 
@@ -397,7 +441,12 @@ def _sync_scrape_films_grid(
             s.close()
 
     logger.info("Grid scrape complete for %s: %d films", username, len(all_films))
-    _trace(trace_callback, "grid_done", "Grid scrape completed", {"films": len(all_films)})
+    _trace(
+        trace_callback,
+        "grid_done",
+        "Grid scrape completed",
+        {"films": len(all_films), "sample": preview_items(all_films)},
+    )
     return all_films
 
 
@@ -569,7 +618,12 @@ def _sync_scrape_diary(
             s.close()
 
     logger.info("Diary scrape complete for %s: %d films", username, len(all_films))
-    _trace(trace_callback, "diary_done", "Diary scrape completed", {"films": len(all_films)})
+    _trace(
+        trace_callback,
+        "diary_done",
+        "Diary scrape completed",
+        {"films": len(all_films), "sample": preview_items(all_films)},
+    )
     return all_films
 
 
@@ -677,6 +731,53 @@ def _parse_review_cards(soup: BeautifulSoup) -> list[dict]:
     return reviews
 
 
+def _review_listing_looks_truncated(review_text: str) -> bool:
+    """Heuristic: Letterboxd review listings often clip long bodies."""
+    text = (review_text or "").strip()
+    if not text:
+        return False
+    if text.endswith("…") or text.endswith("..."):
+        return True
+    if len(text) >= 700:
+        return True
+    return False
+
+
+def _parse_review_detail_body(soup: BeautifulSoup) -> str:
+    """Extract full review prose from a single-review page."""
+    body = soup.select_one(".js-review-body, .body-text, .review")
+    if not body:
+        return ""
+    return body.get_text(separator=" ", strip=True)
+
+
+def _hydrate_truncated_review_texts(
+    reviews: list[dict],
+    session: "cloudscraper.CloudScraper",
+) -> None:
+    """Replace truncated listing excerpts with full text from review permalinks."""
+    for review in reviews:
+        excerpt = str(review.get("review_text") or "")
+        review_path = str(review.get("review_path") or "").strip()
+        if not review_path or not _review_listing_looks_truncated(excerpt):
+            continue
+        url = review_path if review_path.startswith("http") else f"{BASE_URL}{review_path}"
+        try:
+            r = _fetch(session, url, timeout=10)
+        except Exception as exc:  # pragma: no cover - network defensive
+            logger.debug("Full review fetch failed for %s: %s", review_path, exc)
+            continue
+        if r.status_code != 200 or _is_cloudflare_block(r.text):
+            continue
+        full_text = _parse_review_detail_body(BeautifulSoup(r.text, "html.parser"))
+        if full_text and (
+            len(full_text) > len(excerpt)
+            or _review_listing_looks_truncated(excerpt) and not _review_listing_looks_truncated(full_text)
+        ):
+            review["review_text"] = full_text
+        time.sleep(PAGE_DELAY)
+
+
 def _sync_scrape_reviews(
     username: str,
     max_pages: int,
@@ -722,6 +823,7 @@ def _sync_scrape_reviews(
             )
             if not reviews:
                 break
+            _hydrate_truncated_review_texts(reviews, s)
             all_reviews.extend(reviews)
             time.sleep(PAGE_DELAY)
 

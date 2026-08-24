@@ -19,20 +19,21 @@ import PageViewTracker from './PageViewTracker';
 describe('PageViewTracker consent gate', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
   it('keeps analytics off when no explicit consent decision exists', () => {
     render(<PageViewTracker />);
 
-    expect(sessionStorage.getItem('consent_decision')).toBeNull();
+    expect(localStorage.getItem('consent_decision')).toBeNull();
     expect(posthogMocks.initPostHog).not.toHaveBeenCalled();
     expect(posthogMocks.flushQueue).not.toHaveBeenCalled();
     expect(posthogMocks.captureEvent).not.toHaveBeenCalled();
   });
 
-  it('initializes, flushes, and captures after explicit acceptance', () => {
-    sessionStorage.setItem('consent_decision', 'accept');
+  it('initializes, flushes, and captures after explicit persisted acceptance', () => {
+    localStorage.setItem('consent_decision', 'accept');
 
     render(<PageViewTracker />);
 
@@ -45,7 +46,7 @@ describe('PageViewTracker consent gate', () => {
   });
 
   it('keeps analytics off after an explicit decline', () => {
-    sessionStorage.setItem('consent_decision', 'decline');
+    localStorage.setItem('consent_decision', 'decline');
 
     render(<PageViewTracker />);
 

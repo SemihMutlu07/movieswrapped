@@ -2,7 +2,7 @@
 
 > Durable reference so we **never re-derive** how the desktop server works.
 > Paths relative to repo root.
-> Last verified: 2026-08-11.
+> Last verified: 2026-08-22.
 
 ## 1. Mental model (read this first)
 
@@ -58,7 +58,8 @@ heartbeat loop → poll **`/api/worker/next`** every 5s, **one job at a time** �
 exit `POST /api/worker/shutdown`.
 
 - **Heartbeat:** every **30s** (`POST /api/worker/heartbeat`); enqueue online =
-  age ≤ **60s**.
+  age ≤ **60s**. On a rejected/failed heartbeat the wait doubles up to
+  `WORKER_HEARTBEAT_MAX_BACKOFF` (default **300s**) and resets on success.
 - **Protocol version:** claim returns **409 worker_version_mismatch** if the
   worker's `worker_protocol_version` ≠ backend's (default **4**). Bump both sides
   together when control-plane payloads change.
@@ -79,6 +80,8 @@ exit `POST /api/worker/shutdown`.
 | `WORKER_BACKEND_URL` | — (required) | Backend base URL to poll |
 | `WORKER_TOKEN` | — (required) | Shared secret → `X-Worker-Token` |
 | `WORKER_ID` | `desktop-<hostname>` | Stable identity bound to claims |
+| `WORKER_VERSION` | `1.0.0` | Human-facing worker version in heartbeat metadata |
+| `WORKER_HEARTBEAT_MAX_BACKOFF` | 300s | Cap for heartbeat retry backoff when the backend is failing |
 | `TMDB_API_KEY` | "" (required to work) | TMDB enrichment in analysis |
 | `WORKER_SELF_TEST_ON_START` | **off** | Real scrape smoke test on boot |
 | `WORKER_SELF_TEST_USERNAME` | `semihmutsuz` | Self-test target |

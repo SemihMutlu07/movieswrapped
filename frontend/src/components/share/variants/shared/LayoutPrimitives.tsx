@@ -52,6 +52,8 @@ export function PersonPanel({
   person,
   label,
   countLabel,
+  countText,
+  unknownName,
   className = '',
   mediaClassName = 'w-[112px] rounded-2xl',
   labelClassName = 'text-[12px] font-bold uppercase tracking-[0.16em] opacity-65',
@@ -61,20 +63,24 @@ export function PersonPanel({
   person: SharePersonStat;
   label: string;
   countLabel: string;
+  countText?: string;
+  unknownName?: string;
   className?: string;
   mediaClassName?: string;
   labelClassName?: string;
   nameClassName?: string;
   countClassName?: string;
 }) {
+  const displayName = person.name?.trim() ? person.name : (unknownName ?? person.name);
+
   return (
     <section className={classes('grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-5', className)}>
       <PortraitFrame person={person} className={mediaClassName} />
       <div className="min-w-0 [overflow-wrap:anywhere]">
         <p className={labelClassName}>{label}</p>
-        <p className={classes('mt-1', nameClassName)}>{person.name}</p>
+        <p className={classes('mt-1 line-clamp-2', nameClassName)}>{displayName}</p>
         <p className={classes('mt-1 tabular-nums', countClassName)}>
-          {person.count} {countLabel}
+          {countText ?? `${person.count} ${countLabel}`}
         </p>
       </div>
     </section>
@@ -117,7 +123,14 @@ export function GenresLine({ genres, className = '' }: { genres: string[]; class
 
 export function Username({ username, className = '' }: { username?: string; className?: string }) {
   if (!username) return null;
-  return <span className={classes('min-w-0 break-all [overflow-wrap:anywhere]', className)}>@{username}</span>;
+  return (
+    <span
+      className={classes('min-w-0 break-all [overflow-wrap:anywhere] line-clamp-2', className)}
+      title={`@${username}`}
+    >
+      @{username}
+    </span>
+  );
 }
 
 export function Brand({ className = '' }: { className?: string }) {

@@ -46,7 +46,7 @@ describe('PersonFilmsModal', () => {
         films={buildFilms(20)}
       />
     );
-    const posters = screen.getAllByAltText(/poster/i);
+    const posters = await screen.findAllByAltText(/poster/i);
     expect(posters.length).toBe(9);
     await userEvent.click(screen.getByRole('button', { name: /Show more films/i }));
     expect(screen.getAllByAltText(/poster/i).length).toBe(18);
@@ -65,7 +65,7 @@ describe('LangModal', () => {
         films={buildFilms(20).map((f) => ({ title: f.title, year: Number(f.year) || undefined, poster_path: f.poster_path, your_rating: f.user_rating ?? null }))}
       />
     );
-    const posters = screen.getAllByAltText(/poster/i);
+    const posters = await screen.findAllByAltText(/poster/i);
     expect(posters.length).toBe(12);
     await userEvent.click(screen.getByRole('button', { name: /Show more films/i }));
     expect(screen.getAllByAltText(/poster/i).length).toBe(20);

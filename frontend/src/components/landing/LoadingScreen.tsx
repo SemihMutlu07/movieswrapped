@@ -92,56 +92,60 @@ export default function LoadingScreen({
     : t('landing.loading.elapsed').replace('{time}', formatElapsed(elapsed, t)).replace('{source}', t('landing.loading.source.exports'));
 
   return (
-    <div className="min-h-dvh overflow-y-auto bg-slate-900 text-white flex flex-col items-center justify-start px-4 py-5 sm:justify-center sm:py-8">
+    <div className="flex min-h-dvh w-full min-w-0 flex-col items-center justify-start overflow-x-hidden overflow-y-auto bg-slate-900 px-4 pt-[var(--mw-top-chrome-reserve)] pb-5 text-white sm:justify-center sm:px-6 sm:pb-8">
       {/* Keep the rotating prompt in one place, above the loading container. */}
       {isScrape && (
-        <div className="mt-1 mb-4 max-w-xl text-center">
+        <div className="mb-4 w-full min-w-0 max-w-xl px-1 text-center">
           <p
             key={funMessageIndex}
-            className="text-lg md:text-xl font-semibold italic leading-snug tracking-tight text-white/80 transition-opacity duration-500"
+            className="text-pretty break-words text-lg font-semibold italic leading-snug tracking-tight text-white/80 transition-opacity duration-500 md:text-xl"
           >
             {t(FUN_MESSAGE_KEYS[funMessageIndex])}
           </p>
         </div>
       )}
 
-      <div className="relative w-full max-w-xl text-center rounded-3xl border border-slate-700/70 bg-slate-800/55 p-5 md:p-6 backdrop-blur-sm">
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className="group absolute right-4 top-4 flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white/85 shadow-sm shadow-black/20 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/15 hover:text-white hover:shadow-rose-500/15 active:scale-[0.96]"
-          >
-            <X className="h-3.5 w-3.5 transition-transform duration-200 group-hover:rotate-90" />
-            {t('landing.loading.cancel')}
-          </button>
-        )}
+      <div className="w-full min-w-0 max-w-xl text-center rounded-3xl border border-slate-700/70 bg-slate-800/55 p-5 md:p-6 backdrop-blur-sm">
+        <header className="mb-3 flex min-w-0 flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:gap-y-1">
+          <h1 className="min-w-0 text-balance break-words text-2xl font-black tracking-tight md:text-3xl">
+            {displayTitle}
+          </h1>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="group inline-flex min-h-9 shrink-0 items-center gap-1.5 self-end rounded-lg border border-white/15 bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white/85 shadow-sm shadow-black/20 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/15 hover:text-white hover:shadow-rose-500/15 active:scale-[0.96] sm:self-start"
+            >
+              <X className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:rotate-90" />
+              <span className="whitespace-nowrap">{t('landing.loading.cancel')}</span>
+            </button>
+          )}
+        </header>
+        {!isScrape && <p className="mb-2 min-w-0 text-pretty break-words text-sm text-slate-300">{displayMessage}</p>}
 
-        <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-1.5">{displayTitle}</h1>
-        {!isScrape && <p className="text-sm text-slate-300 mb-2">{displayMessage}</p>}
-
-        {/* Live film count — one line, pops on every increase */}
+        {/* Live film count — wraps cleanly; number pops on every increase */}
         {isScrape && liveFilms > 0 && (
-          <p className="mb-2 text-2xl font-black tabular-nums text-orange-300">
+          <p className="mb-2 flex min-w-0 flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 text-2xl font-black tabular-nums text-orange-300">
             <span key={liveFilms} className="inline-block animate-[score-pop_1.1s_ease-out]">
               {formatNumber(liveFilms)}
-            </span>{' '}
+            </span>
             <span className="text-sm font-medium text-slate-400">{t('landing.loading.filmsFound')}</span>
           </p>
         )}
 
-        {/* Status — two lines: elapsed/almost-there, then trouble hint if it's taking a while */}
-        <div className="mb-4 space-y-1">
+        {/* Status — elapsed/almost-there, then trouble hint if it's taking a while */}
+        <div className="mb-4 min-w-0 space-y-1">
           {queued ? (
-            <p className="text-xs text-amber-300/90 animate-pulse">
+            <p className="text-pretty break-words text-xs leading-relaxed text-amber-300/90 animate-pulse">
               {t('landing.loading.queued')}
             </p>
           ) : (
             <>
-              <p className="text-xs text-orange-300 font-medium">
+              <p className="text-pretty break-words text-xs font-medium leading-relaxed text-orange-300">
                 {remaining <= 0 ? t('landing.loading.almostThere') : displayDetail}
               </p>
               {elapsed > typical && (
-                <p className="text-xs text-amber-300/90 animate-pulse">
+                <p className="text-pretty break-words text-xs leading-relaxed text-amber-300/90 animate-pulse">
                   {t('landing.loading.slow')}
                 </p>
               )}
@@ -150,19 +154,19 @@ export default function LoadingScreen({
         </div>
 
         {isScrape && posterGame && (
-          <div className="mb-5">
+          <div className="mb-5 min-w-0">
             <PosterGuessGame {...posterGame} />
           </div>
         )}
 
         {/* Progress + remaining time */}
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between text-sm font-medium">
-            <span className="text-slate-300">{t('landing.loading.typical')}</span>
-            <span className="text-slate-200">{formatElapsed(typical, t)}</span>
+        <div className="mt-4 min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm font-medium">
+            <span className="min-w-0 text-left text-slate-300">{t('landing.loading.typical')}</span>
+            <span className="shrink-0 tabular-nums text-slate-200">{formatElapsed(typical, t)}</span>
           </div>
           <div
-            className="h-2 rounded-full bg-slate-700/80 overflow-hidden"
+            className="h-2 overflow-hidden rounded-full bg-slate-700/80"
             role="progressbar"
             aria-label={t('landing.loading.progress')}
             aria-valuemin={0}
@@ -175,9 +179,9 @@ export default function LoadingScreen({
             />
           </div>
           {remaining > 0 && (
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-500">{t('landing.loading.remaining')}</span>
-              <span className="text-orange-300 font-medium">{formatElapsed(remaining, t)}</span>
+            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
+              <span className="min-w-0 text-left text-slate-500">{t('landing.loading.remaining')}</span>
+              <span className="shrink-0 font-medium tabular-nums text-orange-300">{formatElapsed(remaining, t)}</span>
             </div>
           )}
         </div>
