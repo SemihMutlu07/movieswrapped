@@ -51,7 +51,7 @@ interface DirectorCard {
   films?: PersonFilm[];
 }
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 4;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
