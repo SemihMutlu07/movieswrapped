@@ -69,7 +69,11 @@ function Test-Ceiling {
             # RestartCount/RestartInterval brings the supervisor back within a minute,
             # and the supervisor starts a fresh worker.
             taskkill.exe /PID $proc.ProcessId /T /F | Out-Null
-            $killed++
+            if ($LASTEXITCODE -eq 0) {
+                $killed++
+            } else {
+                Write-WatchdogLog ("taskkill FAILED pid={0} exit={1}; not counted as killed" -f $proc.ProcessId, $LASTEXITCODE)
+            }
         } elseif ($mb -gt ($CeilingMB * 0.5)) {
             # Early warning, so a slow leak leaves a trail before it ever trips the ceiling.
             Write-WatchdogLog ("WARN {0} pid={1} workingSet={2}MB is over half the {3}MB ceiling" -f $Label, $proc.ProcessId, $mb, $CeilingMB)

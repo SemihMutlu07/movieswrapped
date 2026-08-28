@@ -23,7 +23,7 @@ $ErrorActionPreference = "Stop"
 # this line because it is correct hygiene, not because it fixes anything.
 $ProgressPreference = "SilentlyContinue"
 
-$SupervisorVersion = "2026-06-28"
+$SupervisorVersion = "2026-08-28"
 $SupervisorStartedAt = (Get-Date).ToUniversalTime().ToString("o")
 $SupervisorLog = Join-Path $BackendDir "worker-supervisor.log"
 $WorkerLog = Join-Path $BackendDir "worker.log"
@@ -59,7 +59,16 @@ function Write-SupervisorLog {
 # the OS and released automatically if this process dies, so there's no stale-lock
 # cleanup to worry about.
 $InstanceMutex = New-Object System.Threading.Mutex($false, "Global\LetterboxdDesktopWorkerSupervisor")
-if (-not $InstanceMutex.WaitOne([TimeSpan]::Zero)) {
+$instanceAcquired = $false
+try {
+    $instanceAcquired = $InstanceMutex.WaitOne([TimeSpan]::Zero)
+} catch [System.Threading.AbandonedMutexException] {
+    # Watchdog taskkill (/T /F) can abandon the mutex; the next start must take
+    # over instead of aborting under $ErrorActionPreference = "Stop".
+    Write-SupervisorLog "previous instance left an abandoned mutex (watchdog kill?); taking over"
+    $instanceAcquired = $true
+}
+if (-not $instanceAcquired) {
     Write-SupervisorLog "another supervisor instance is already running; exiting"
     exit 0
 }
