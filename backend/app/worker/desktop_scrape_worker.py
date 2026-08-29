@@ -77,6 +77,27 @@ OUTBOX_DIR = Path(os.getenv("WORKER_OUTBOX_DIR", ".worker_outbox"))
 PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 
+def _write_worker_status(state: str, job: str = "") -> None:
+    """Best-effort status dump for the pi worker-status widget.
+
+    Writes {state, job, updated_at} to $WORKER_STATUS_FILE (default
+    ~/.pi/worker-status.json). Never raises — the widget shows no-signal
+    or stale when this file is missing/outdated; scraping must not break.
+    """
+    try:
+        path = Path(os.getenv("WORKER_STATUS_FILE") or Path.home() / ".pi" / "worker-status.json")
+        payload: dict[str, Any] = {
+            "state": state,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if job:
+            payload["job"] = job
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+    except OSError:
+        logger.debug("worker status dump failed", exc_info=True)
+
+
 def _set_windows_wakelock(enable: bool) -> None:
     """Keep Windows from idle-sleeping while the worker runs.
 
@@ -675,6 +696,7 @@ async def run() -> None:
         cfg.base_url,
         POLL_INTERVAL,
     )
+    _write_worker_status("running")
 
     # Set process-wide default ThreadPoolExecutor limit to prevent connection spikes from concurrent scraping threads.
     # ponytail: limit thread count to 10 to keep concurrent scraping connections minimal.
@@ -709,6 +731,7 @@ async def run() -> None:
 
                 # Process one job at a time (V1 — no concurrency).
                 await _flush_outbox(session, cfg)
+                _write_worker_status("running", job=str(job.get("kind") or "job"))
                 _ACTIVE_JOBS += 1
                 try:
                     if job.get("kind") == "watchlist":
@@ -717,11 +740,13 @@ async def run() -> None:
                         await _process_job(session, cfg, job)
                 finally:
                     _ACTIVE_JOBS -= 1
+                    _write_worker_status("idle")
         finally:
             heartbeat.cancel()
             with suppress(asyncio.CancelledError):
                 await heartbeat
             await _report_lifecycle(session, cfg, "shutdown", {"reason": "worker_stopped"})
+            _write_worker_status("idle")
             _set_windows_wakelock(False)
 
 
@@ -730,3 +755,6 @@ if __name__ == "__main__":
         asyncio.run(run())
     except KeyboardInterrupt:
         logger.info("Desktop scrape worker stopped.")
+    except Exception:
+        _write_worker_status("failed")
+        raise
