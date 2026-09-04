@@ -58,10 +58,10 @@ export default function HeroStats({
                   loading="eager"
                   decoding="async"
                   fetchPriority="high"
-                  className="h-24 w-24 md:h-28 md:w-28 rounded-full object-cover ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500"
+                  className="h-28 w-28 md:h-36 md:w-36 rounded-full object-cover ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500"
                 />
               ) : (
-                <span className="grid h-24 w-24 md:h-28 md:w-28 place-items-center rounded-full bg-slate-700 text-3xl font-bold text-white ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500">
+                <span className="grid h-28 w-28 md:h-36 md:w-36 place-items-center rounded-full bg-slate-700 text-3xl font-bold text-white ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500">
                   {username.charAt(0).toUpperCase()}
                 </span>
               )}
@@ -89,7 +89,7 @@ export default function HeroStats({
             </span>
             <div className="text-3xl md:text-4xl font-black mb-2" style={{ color: '#ff7f00' }}>{timePct}</div>
             <div className="text-xs md:text-sm uppercase tracking-wider opacity-80 font-medium" style={{ color: '#ff7f00' }}>
-              of your waking time spent on films
+              of your waking day spent on films
             </div>
             {timeInfoOpen && (
               <div
