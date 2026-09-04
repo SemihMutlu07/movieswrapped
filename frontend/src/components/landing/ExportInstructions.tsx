@@ -1,8 +1,10 @@
 'use client';
 import React, { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useI18n } from '@/i18n/I18nProvider';
+
+export const LETTERBOXD_DATA_SETTINGS_URL = 'https://letterboxd.com/settings/data/';
 
 export default function ExportInstructions() {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,7 +12,19 @@ export default function ExportInstructions() {
 
   return (
     <section className="mx-auto w-full max-w-2xl text-left">
-      <div className="rounded-2xl border border-slate-700/60 bg-slate-800/40 px-4 sm:px-6 py-3 sm:py-4">
+      <a
+        href={LETTERBOXD_DATA_SETTINGS_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#00e054] px-5 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-[#2ee36a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00e054]/60"
+      >
+        <ExternalLink className="h-4 w-4" aria-hidden="true" />
+        {t('landing.export.open')}
+      </a>
+      <p className="mt-3 text-center text-xs leading-relaxed text-white/50 sm:text-sm">
+        {t('landing.export.hint')}
+      </p>
+      <div className="mt-4 rounded-2xl border border-slate-700/60 bg-slate-800/40 px-4 sm:px-6 py-3 sm:py-4">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="w-full flex justify-between items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50 hover:opacity-80 transition-opacity"
@@ -34,6 +48,7 @@ export default function ExportInstructions() {
                   <li>{t('landing.export.step1.before')} <strong className="text-orange-400">{t('landing.export.step1.profile')}</strong> &rarr; <strong className="text-orange-400">{t('landing.export.step1.settings')}</strong></li>
                   <li>{t('landing.export.step2.before')} <strong className="text-orange-400">{t('landing.export.step2.data')}</strong> {t('landing.export.step2.after')}</li>
                   <li>{t('landing.export.step3.before')} <strong className="text-orange-400">{t('landing.export.step3.action')}</strong></li>
+                  <li>{t('landing.export.confirm.before')} <strong className="text-orange-400">{t('landing.export.confirm.action')}</strong></li>
                   <li>{t('landing.export.step4.before')} <strong className="text-orange-400">{t('landing.export.step4.file')}</strong> {t('landing.export.step4.after')}</li>
                   <li>{t('landing.export.step5')}</li>
                 </ol>
