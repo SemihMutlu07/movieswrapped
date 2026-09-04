@@ -53,11 +53,11 @@ function scaledWordSize(count: number, max: number): string {
 
 export default function ReviewAnalysisSection({ stats }: Props) {
   const { t } = useI18n();
-  const [selectedWord, setSelectedWord] = useState<string | null>(null);
-  const [reviewSort, setReviewSort] = useState<ReviewSort>('likes');
-  const [reviewPage, setReviewPage] = useState(1);
-
   const ra = stats.review_analysis;
+  const hasLikesData = ra?.reviews_with_likes_data != null;
+  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [reviewSort, setReviewSort] = useState<ReviewSort>(hasLikesData ? 'likes' : 'length');
+  const [reviewPage, setReviewPage] = useState(1);
 
   const topWords = useMemo(() => (ra?.word_frequency ?? []).slice(0, 12), [ra?.word_frequency]);
   const topWordsMax = topWords[0]?.count ?? 0;
@@ -239,7 +239,7 @@ export default function ReviewAnalysisSection({ stats }: Props) {
             </div>
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {filteredReviews.slice(0, 6).map((review, idx) => (
-                <FilteredReviewCard key={`${review.title}-${review.year}-${idx}`} review={review} />
+                <FilteredReviewCard key={`${review.title}-${review.year}-${idx}`} review={review} showLikes={hasLikesData} />
               ))}
             </ul>
             {filteredReviews.length > 6 && (
@@ -343,12 +343,15 @@ export default function ReviewAnalysisSection({ stats }: Props) {
               <div>
                 <p className="text-xs uppercase tracking-widest text-orange-300">{t('results.reviews.all')}</p>
                 <p className="mt-1 text-xs text-slate-300">
-                  Sort without extra scraping — likes come from the review listing page.
+                  {hasLikesData
+                    ? 'Sort by likes, length, or unliked long reviews.'
+                    : 'Sorted by length. Like counts are not in the Letterboxd export.'}
                   {hiddenLinkOnlyCount > 0
                     ? ` ${hiddenLinkOnlyCount} link-only review${hiddenLinkOnlyCount === 1 ? '' : 's'} hidden.`
                     : ''}
                 </p>
               </div>
+              {hasLikesData ? (
               <div className="grid w-full grid-cols-3 rounded-xl border border-slate-700/60 bg-slate-900/60 p-0.5 sm:flex sm:w-auto sm:rounded-full">
                 <ReviewSortButton
                   active={reviewSort === 'likes'}
@@ -369,10 +372,11 @@ export default function ReviewAnalysisSection({ stats }: Props) {
                   Hidden gems
                 </ReviewSortButton>
               </div>
+              ) : null}
             </div>
             <ul className="mt-4 grid grid-cols-1 gap-3">
               {paginatedSortedReviews.map((review, idx) => (
-                <FullReviewCard key={`${review.title}-${review.year}-${idx}`} review={review} />
+                <FullReviewCard key={`${review.title}-${review.year}-${idx}`} review={review} showLikes={hasLikesData} />
               ))}
             </ul>
             {hasMoreReviews && (
@@ -506,7 +510,7 @@ function LikerRow({
 }
 
 /** A single word-filtered review. Long text collapses to 3 lines with a Read more toggle. */
-function FilteredReviewCard({ review }: { review: ReviewItem }) {
+function FilteredReviewCard({ review, showLikes = false }: { review: ReviewItem; showLikes?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const text = review.text ?? '';
   // ponytail: char-length proxy for "needs a toggle"; line-clamp-3 ≈ ~200 chars
@@ -516,7 +520,9 @@ function FilteredReviewCard({ review }: { review: ReviewItem }) {
     <li className="rounded-lg bg-slate-800/50 p-3 hover:bg-slate-800/80 transition-colors">
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <p className="font-semibold text-orange-100 text-sm truncate">{review.title}</p>
-        <span className="shrink-0 text-xs font-mono text-slate-400">♥ {review.likes || 0}</span>
+        {showLikes ? (
+          <span className="shrink-0 text-xs font-mono text-slate-400">♥ {review.likes || 0}</span>
+        ) : null}
       </div>
       <p className="text-xs text-slate-400 mb-2">{review.year || '—'}</p>
       <p className={`text-xs text-slate-300 leading-relaxed ${expanded ? 'whitespace-pre-line' : 'line-clamp-3'}`}>
@@ -558,7 +564,7 @@ function ReviewSortButton({
   );
 }
 
-function FullReviewCard({ review }: { review: ReviewItem }) {
+function FullReviewCard({ review, showLikes = false }: { review: ReviewItem; showLikes?: boolean }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const text = review.text ?? '';
@@ -591,11 +597,13 @@ function FullReviewCard({ review }: { review: ReviewItem }) {
                 {wordLabel ? ` · ${wordLabel}` : ''}
               </p>
             </div>
+            {showLikes ? (
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${
               likes > 0 ? 'bg-orange-500/20 text-orange-300' : 'bg-slate-800 text-slate-400'
             }`}>
               {likes > 0 ? `♥ ${likes}` : t('results.reviews.notLiked')}
             </span>
+            ) : null}
           </header>
           <p className={`mt-3 text-sm leading-relaxed text-slate-200 ${expanded ? 'whitespace-pre-line' : 'line-clamp-4'}`}>
             {text}

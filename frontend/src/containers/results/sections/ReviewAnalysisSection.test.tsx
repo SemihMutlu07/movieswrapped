@@ -48,6 +48,8 @@ function renderSection(
       bigram_frequency: [],
       avg_length_by_rating: {},
       language_mix: {},
+      reviews_with_likes_data: reviews.length,
+      total_review_likes: reviews.reduce((sum, review) => sum + (review.likes ?? 0), 0),
       reviews,
     },
     ...(reviewOverrides as Partial<StatsData>),
@@ -115,6 +117,32 @@ describe('ReviewAnalysisSection', () => {
     expect(screen.getByText('Many Words (2024)')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
     expect(screen.getByText('words on your longest review')).toBeInTheDocument();
+  });
+
+  it('hides like-based sort when the export has no like counts', () => {
+    const reviews = buildReviews(4);
+    renderSection({
+      review_analysis: {
+        total_reviews: 4,
+        reviews_with_text: 4,
+        review_rate: 1,
+        total_words_written: 40,
+        avg_review_length_words: 10,
+        unique_words_used: 20,
+        vocab_richness: 0.5,
+        word_frequency: [],
+        bigram_frequency: [],
+        avg_length_by_rating: {},
+        language_mix: {},
+        reviews_with_likes_data: null,
+        total_review_likes: null,
+        reviews,
+      },
+    }, [], reviews);
+
+    expect(screen.queryByRole('button', { name: /Most liked/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Hidden gems/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Like counts are not in the Letterboxd export/i)).toBeInTheDocument();
   });
 
   it('shows the backend longest-review summary when detailed reviews are unavailable', () => {

@@ -44,7 +44,7 @@ export type ReviewSequenceData = {
   year?: string | number | null;
   charLength: number;
   totalWordsWritten?: number | null;
-  likes: number;
+  likes: number | null;
   heroPoster: StoryMedia | null;
   streamPosters: StoryMedia[];
 };

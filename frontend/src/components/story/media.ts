@@ -528,7 +528,7 @@ export function buildReviewSequence(
     year: longest.year ?? heroFilm?.year,
     charLength: reviewCharLength(longest),
     totalWordsWritten: stats.review_analysis?.total_words_written,
-    likes: longest.likes ?? 0,
+    likes: stats.review_analysis?.reviews_with_likes_data != null ? (longest.likes ?? 0) : null,
     heroPoster,
     streamPosters,
   };

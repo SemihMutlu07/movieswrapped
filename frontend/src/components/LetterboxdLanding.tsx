@@ -3,7 +3,7 @@
 import JSZip from 'jszip';
 import { useRouter } from 'next/navigation';
 import React, { useState, useCallback, useEffect } from 'react';
-import { X, UserRound, Sparkles, PartyPopper, ChevronDown } from 'lucide-react';
+import { X, Upload, Sparkles, PartyPopper, ChevronDown } from 'lucide-react';
 import { analyzeFiles, parseLetterboxdUsername, testBackend, isLetterboxdExportFilename, fileLooksLikeZip } from '@/lib/api';
 import { persistStats } from '@/lib/stats-storage';
 import { startAnalysis, finishAnalysis, buildSummaryForPersistence } from '@/lib/supabase/analysis_runs';
@@ -344,7 +344,7 @@ export default function LetterboxdLanding() {
 
           <section aria-label={t('landing.howItWorks.label')} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
-              { icon: UserRound, title: t('landing.howItWorks.enter.title'), desc: t('landing.howItWorks.enter.description'), color: '#ff8000' },
+              { icon: Upload, title: t('landing.howItWorks.enter.title'), desc: t('landing.howItWorks.enter.description'), color: '#ff8000' },
               { icon: Sparkles, title: t('landing.howItWorks.analyze.title'), desc: t('landing.howItWorks.analyze.description'), color: '#00e054' },
               { icon: PartyPopper, title: t('landing.howItWorks.wrapped.title'), desc: t('landing.howItWorks.wrapped.description'), color: '#40bcf4' },
             ].map(({ icon: Icon, title, desc, color }) => (

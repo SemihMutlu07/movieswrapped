@@ -102,7 +102,7 @@ describe('LetterboxdLanding persistence consent gate', () => {
 
     expect(screen.getByRole('heading', { name: 'Frequently asked questions' })).toBeInTheDocument();
     expect(screen.getByText('What is Movies Wrapped?')).toBeInTheDocument();
-    expect(screen.getByText('How do I find my Letterboxd username?')).toBeInTheDocument();
+    expect(screen.getByText('How do I get my Letterboxd export?')).toBeInTheDocument();
     expect(screen.getByText('Is my data stored?')).toBeInTheDocument();
     expect(screen.getByText('How long does it take?')).toBeInTheDocument();
     expect(screen.getByText('Is it free?')).toBeInTheDocument();

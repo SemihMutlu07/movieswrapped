@@ -34,7 +34,9 @@ export function ReviewSlideBody() {
       {showInsight && (
         <EmphasisLine instant={instant}>
           <Sub className="text-stone-400">
-            {likes === 0
+          {likes == null
+            ? null
+            : likes === 0
               ? t('story.slide.review.zeroLikes')
               : likes === 1
                 ? t('story.slide.review.likes_one', { count: formatNumber(likes) })
