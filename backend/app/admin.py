@@ -1,6 +1,6 @@
 """
 Admin dashboard for MoviesWrapped.
-Reads from backend/runs/ + watchlist_runs/ + date_night_runs/ JSON logs.
+Reads from backend/runs/ JSON logs (or Supabase ops_runs when configured).
 Auth: signed HttpOnly session cookie for browsers; Bearer secret for automation.
 ADMIN_SECRET env var is mandatory — no hardcoded default.
 """
@@ -21,9 +21,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app import supabase_ops, task_manager
-from app.config import backend_git_sha, settings
-from app.services import dashboard_settings
+from app import supabase_ops
+from app.config import settings
 from app.services.run_log import RUNS_DIR
 
 logger = logging.getLogger("letterboxd_wrapped.admin")
@@ -31,8 +30,8 @@ logger = logging.getLogger("letterboxd_wrapped.admin")
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
+
 def _admin_secret() -> str:
-    """Lazy-load ADMIN_SECRET from env var with a safe setup failure."""
     secret = os.environ.get("ADMIN_SECRET")
     if not secret:
         raise HTTPException(
@@ -45,18 +44,10 @@ def _admin_secret() -> str:
     return secret
 
 
-WATCHLIST_RUNS_DIR = Path("watchlist_runs")
-DATE_NIGHT_RUNS_DIR = Path("date_night_runs")
-
-# Analysis-run cap, shared by the initial dashboard render and the JS poll
-# endpoint (these MUST match, else the table shrinks on the first poll).
 ANALYSIS_RUNS_LIMIT = 100
-# Watchlist / date-night keep their own smaller cap.
-SIDE_RUNS_LIMIT = 50
 
 
 def _clamp_analysis_limit(limit: int) -> int:
-    """Keep the requested analysis limit within 1..ANALYSIS_RUNS_LIMIT."""
     return max(1, min(limit, ANALYSIS_RUNS_LIMIT))
 
 
@@ -66,10 +57,7 @@ def _num(value: Any) -> float | None:
 
 def _annotate_analysis_run(data: dict[str, Any]) -> None:
     timings = {
-        "queue": _num(data.get("queue_wait_seconds")),
-        "scrape": _num(data.get("scrape_seconds")),
         "analysis": _num(data.get("analysis_seconds")),
-        "postback": _num(data.get("postback_seconds")),
     }
     known_timings = {key: value for key, value in timings.items() if value is not None}
     if known_timings:
@@ -82,20 +70,16 @@ def _annotate_analysis_run(data: dict[str, Any]) -> None:
 
     total_films = _num(data.get("total_films"))
     duration = _num(data.get("duration_seconds"))
-    scrape = _num(data.get("scrape_seconds"))
     analysis = _num(data.get("analysis_seconds"))
     if total_films and total_films > 0:
         if duration is not None:
             data["duration_seconds_per_film"] = round(duration / total_films, 3)
-        if scrape is not None:
-            data["scrape_seconds_per_film"] = round(scrape / total_films, 3)
         if analysis is not None:
             data["analysis_seconds_per_film"] = round(analysis / total_films, 3)
 
 
 def _require_admin(request: Request) -> None:
     secret = _admin_secret()
-    # Primary: Authorization: Bearer <token>
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         if secrets.compare_digest(auth_header[7:], secret):
@@ -107,7 +91,6 @@ def _require_admin(request: Request) -> None:
             if not origin or not secrets.compare_digest(origin, expected):
                 raise HTTPException(status_code=403, detail="Invalid request origin")
         return
-    # Legacy: x-admin-key header
     if secrets.compare_digest(request.headers.get("x-admin-key", ""), secret):
         return
     raise HTTPException(status_code=403, detail="Forbidden")
@@ -150,63 +133,6 @@ def _load_json_dir(directory: Path, limit: int = 100) -> list[dict[str, Any]]:
     return items
 
 
-def _list_params(limit: int) -> dict[str, str]:
-    return {"select": "created_at,payload", "order": "created_at.desc", "limit": str(limit)}
-
-
-def _payload_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Extract `payload` dicts and stamp _mtime (watchlist / date-night lists)."""
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        data = row.get("payload")
-        if isinstance(data, dict):
-            data["_mtime"] = row.get("created_at")
-            items.append(data)
-    return items
-
-
-async def _load_runs_supabase(limit: int = 50) -> list[dict[str, Any]]:
-    """Read analysis runs from Supabase ops_runs (durable across Render restarts)."""
-    rows = await supabase_ops.select(
-        "ops_runs", {"select": "id,created_at,payload", "order": "created_at.desc", "limit": str(limit)}
-    )
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        data = row.get("payload")
-        if not isinstance(data, dict):
-            continue
-        data["_mtime"] = row.get("created_at")
-        data["_filename"] = row.get("id")  # detail-view link key (UUID, path-safe)
-        _annotate_analysis_run(data)
-        items.append(data)
-    return items
-
-
-async def _load_run_supabase(run_id: str) -> dict[str, Any] | None:
-    """Fetch a single analysis run payload from ops_runs by id (UUID)."""
-    rows = await supabase_ops.select(
-        "ops_runs", {"id": f"eq.{run_id}", "select": "created_at,payload", "limit": "1"}
-    )
-    if not rows:
-        return None
-    data = rows[0].get("payload")
-    if not isinstance(data, dict):
-        return None
-    data["_mtime"] = rows[0].get("created_at")
-    _annotate_analysis_run(data)
-    return data
-
-
-async def _load_watchlist_runs_supabase(limit: int = 50) -> list[dict[str, Any]]:
-    """Read watchlist comparison runs from Supabase ops_watchlist_runs."""
-    return _payload_rows(await supabase_ops.select("ops_watchlist_runs", _list_params(limit)))
-
-
-async def _load_date_night_runs_supabase(limit: int = 50) -> list[dict[str, Any]]:
-    """Read date night recommendation runs from Supabase ops_date_night_runs."""
-    return _payload_rows(await supabase_ops.select("ops_date_night_runs", _list_params(limit)))
-
-
 def _incident(
     incident_type: str,
     message: str,
@@ -226,31 +152,9 @@ def _incident(
     }
 
 
-async def _load_operational_incidents(worker_status: dict[str, Any], limit: int = 50) -> list[dict[str, Any]]:
-    """Build a safe incident feed from live state, durable events and reports."""
+async def _load_operational_incidents(limit: int = 50) -> list[dict[str, Any]]:
+    """Build a safe incident feed from durable events and frontend reports."""
     incidents: list[dict[str, Any]] = []
-    if settings.desktop_worker_enabled and not worker_status.get("online"):
-        incidents.append(_incident("worker_offline", "Worker is offline", source="desktop_worker"))
-    version = worker_status.get("version") or {}
-    if version.get("mismatch"):
-        incidents.append(
-            _incident(
-                "worker_protocol_mismatch",
-                "Worker protocol mismatch",
-                source="desktop_worker",
-                detail=f"expected {version.get('expected_protocol_version', '—')}, worker {version.get('worker_protocol_version', '—')}",
-            )
-        )
-    for failure in worker_status.get("recent_failures") or []:
-        incidents.append(
-            _incident(
-                "worker_job_failed",
-                str(failure.get("message") or "Worker job failed"),
-                created_at=failure.get("completed_at") or failure.get("updated_at"),
-                source="desktop_worker",
-                detail=failure.get("error_stage") or failure.get("error_type"),
-            )
-        )
 
     if settings.supabase_enabled:
         rows = await supabase_ops.select(
@@ -295,14 +199,6 @@ async def _load_operational_incidents(worker_status: dict[str, Any], limit: int 
 
 
 def _group_runs_by_username(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Group runs by case-insensitive username across the whole list.
-
-    Non-consecutive runs by the same user collapse into one group (unlike
-    _mark_consecutive_dupes). Runs with no username stay ungrouped — one group
-    each, never linked. Groups keep the order of their newest run (runs arrive
-    newest-first, so a group's first-seen run is its newest). Summary cards must
-    still count raw runs, not these groups.
-    """
     groups: list[dict[str, Any]] = []
     index: dict[str, dict[str, Any]] = {}
     for run in runs:
@@ -315,7 +211,7 @@ def _group_runs_by_username(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "run_count": 0,
                 "success_count": 0,
                 "fail_count": 0,
-                "latest": run,  # newest-first input → first seen is the newest
+                "latest": run,
                 "children": [],
             }
             groups.append(group)
@@ -328,6 +224,36 @@ def _group_runs_by_username(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             group["fail_count"] += 1
         group["children"].append(run)
     return groups
+
+
+async def _load_runs_supabase(limit: int = 50) -> list[dict[str, Any]]:
+    rows = await supabase_ops.select(
+        "ops_runs", {"select": "id,created_at,payload", "order": "created_at.desc", "limit": str(limit)}
+    )
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        data = row.get("payload")
+        if not isinstance(data, dict):
+            continue
+        data["_mtime"] = row.get("created_at")
+        data["_filename"] = row.get("id")
+        _annotate_analysis_run(data)
+        items.append(data)
+    return items
+
+
+async def _load_run_supabase(run_id: str) -> dict[str, Any] | None:
+    rows = await supabase_ops.select(
+        "ops_runs", {"id": f"eq.{run_id}", "select": "created_at,payload", "limit": "1"}
+    )
+    if not rows:
+        return None
+    data = rows[0].get("payload")
+    if not isinstance(data, dict):
+        return None
+    data["_mtime"] = rows[0].get("created_at")
+    _annotate_analysis_run(data)
+    return data
 
 
 async def _load_analysis_runs(limit: int = ANALYSIS_RUNS_LIMIT) -> list[dict[str, Any]]:
@@ -354,43 +280,16 @@ async def admin_session(request: Request):
 
 
 async def _admin_page_guard(request: Request) -> HTMLResponse | None:
-    """Shared login/redirect boilerplate for every /admin/* page route.
-
-    Returns a response to short-circuit with, or None to continue rendering.
-    """
-    _admin_secret()  # Keep a missing secret as an explicit setup error.
+    _admin_secret()
     if "key" in request.query_params:
-        # Scrub a legacy query-key URL from the browser without authenticating
-        # it. The clean page request will render the POST-only login form.
         return RedirectResponse(request.url.path, status_code=303)
     try:
         _require_admin(request)
     except HTTPException as exc:
         if exc.status_code != 403:
             raise
-        # Never authenticate from a query parameter: upstream access logs see
-        # the original URL before this application can redirect or scrub it.
         return templates.TemplateResponse("admin_login.html", {"request": request})
-    await dashboard_settings.load_worker_control_state()
     return None
-
-
-async def _load_side_runs() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    if settings.supabase_enabled:
-        watchlist_runs = await _load_watchlist_runs_supabase(limit=SIDE_RUNS_LIMIT)
-        date_night_runs = await _load_date_night_runs_supabase(limit=SIDE_RUNS_LIMIT)
-    else:
-        watchlist_runs = _load_json_dir(WATCHLIST_RUNS_DIR, limit=SIDE_RUNS_LIMIT)
-        date_night_runs = _load_json_dir(DATE_NIGHT_RUNS_DIR, limit=SIDE_RUNS_LIMIT)
-    return watchlist_runs, date_night_runs
-
-
-def _worker_status_context() -> dict[str, Any]:
-    return task_manager.get_worker_status(
-        settings.worker_heartbeat_max_age_seconds,
-        expected_protocol_version=settings.worker_protocol_version,
-        backend_git_sha=backend_git_sha(),
-    )
 
 
 @router.get("/admin/dashboard", response_class=HTMLResponse)
@@ -399,18 +298,12 @@ async def admin_dashboard(request: Request, limit: int = ANALYSIS_RUNS_LIMIT):
     if guard is not None:
         return guard
     runs = await _load_analysis_runs(limit=limit)
-    watchlist_runs, date_night_runs = await _load_side_runs()
-    worker_status = _worker_status_context()
-    incidents = await _load_operational_incidents(worker_status)
+    incidents = await _load_operational_incidents()
     return templates.TemplateResponse(
         "admin_overview.html",
         {
             "request": request,
             "runs_count": len(runs),
-            "watchlist_count": len(watchlist_runs),
-            "date_night_count": len(date_night_runs),
-            "worker_status": worker_status,
-            "worker_enabled": settings.desktop_worker_enabled,
             "incidents": incidents,
             "active_page": "dashboard",
             "key": "",
@@ -424,75 +317,13 @@ async def admin_analysis(request: Request, limit: int = ANALYSIS_RUNS_LIMIT):
     if guard is not None:
         return guard
     runs = await _load_analysis_runs(limit=limit)
-    worker_status = _worker_status_context()
     return templates.TemplateResponse(
         "admin_analysis.html",
         {
             "request": request,
             "runs": runs,
             "run_groups": _group_runs_by_username(runs),
-            "worker_status": worker_status,
-            "worker_enabled": settings.desktop_worker_enabled,
             "active_page": "analysis",
-            "key": "",
-        },
-    )
-
-
-@router.get("/admin/worker", response_class=HTMLResponse)
-async def admin_worker(request: Request):
-    guard = await _admin_page_guard(request)
-    if guard is not None:
-        return guard
-    worker_status = _worker_status_context()
-    return templates.TemplateResponse(
-        "admin_worker.html",
-        {
-            "request": request,
-            "worker_status": worker_status,
-            "worker_enabled": settings.desktop_worker_enabled,
-            "settings_store": dashboard_settings.settings_store_status(),
-            "active_page": "worker",
-            "key": "",
-        },
-    )
-
-
-@router.get("/admin/compare", response_class=HTMLResponse)
-async def admin_compare(request: Request):
-    guard = await _admin_page_guard(request)
-    if guard is not None:
-        return guard
-    watchlist_runs, _ = await _load_side_runs()
-    worker_status = _worker_status_context()
-    return templates.TemplateResponse(
-        "admin_compare.html",
-        {
-            "request": request,
-            "watchlist_runs": watchlist_runs,
-            "worker_status": worker_status,
-            "worker_enabled": settings.desktop_worker_enabled,
-            "active_page": "compare",
-            "key": "",
-        },
-    )
-
-
-@router.get("/admin/date-night", response_class=HTMLResponse)
-async def admin_date_night(request: Request):
-    guard = await _admin_page_guard(request)
-    if guard is not None:
-        return guard
-    _, date_night_runs = await _load_side_runs()
-    worker_status = _worker_status_context()
-    return templates.TemplateResponse(
-        "admin_date_night.html",
-        {
-            "request": request,
-            "date_night_runs": date_night_runs,
-            "worker_status": worker_status,
-            "worker_enabled": settings.desktop_worker_enabled,
-            "active_page": "date_night",
             "key": "",
         },
     )
@@ -519,72 +350,9 @@ async def admin_run_detail(request: Request, filename: str):
 
 @router.get("/admin/api/runs")
 async def admin_api_runs(request: Request, limit: int = ANALYSIS_RUNS_LIMIT):
-    """JSON API for the admin dashboard."""
     _require_admin(request)
-    if settings.supabase_enabled:
-        watchlist_runs = await _load_watchlist_runs_supabase(SIDE_RUNS_LIMIT)
-        date_night_runs = await _load_date_night_runs_supabase(SIDE_RUNS_LIMIT)
-    else:
-        watchlist_runs = _load_json_dir(WATCHLIST_RUNS_DIR, SIDE_RUNS_LIMIT)
-        date_night_runs = _load_json_dir(DATE_NIGHT_RUNS_DIR, SIDE_RUNS_LIMIT)
     runs = await _load_analysis_runs(limit)
     return {
         "runs": runs,
         "run_groups": _group_runs_by_username(runs),
-        "watchlist_runs": watchlist_runs,
-        "date_night_runs": date_night_runs,
-    }
-
-
-@router.get("/admin/api/worker")
-async def admin_api_worker(request: Request):
-    """JSON API for desktop worker dashboard status."""
-    _require_admin(request)
-    await dashboard_settings.load_worker_control_state()
-    return {
-        "enabled": settings.desktop_worker_enabled,
-        "settings_store": dashboard_settings.settings_store_status(),
-        "status": task_manager.get_worker_status(
-            settings.worker_heartbeat_max_age_seconds,
-            expected_protocol_version=settings.worker_protocol_version,
-            backend_git_sha=backend_git_sha(),
-        ),
-    }
-
-
-@router.post("/admin/api/worker/control")
-async def admin_api_worker_control(request: Request):
-    """Set desired worker state. Pause blocks new jobs/claims; it does not kill active work."""
-    _require_admin(request)
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    if not isinstance(body, dict):
-        raise HTTPException(status_code=400, detail={"error_code": "invalid_body", "message": "Body must be an object."})
-    try:
-        control = task_manager.set_worker_desired_state(str(body.get("desired_state") or ""))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail={"error_code": "invalid_desired_state", "message": str(exc)}) from exc
-    store = await dashboard_settings.save_worker_control_state()
-    return {"ok": True, "control": control, "settings_store": store}
-
-
-@router.post("/admin/api/worker/restart")
-async def admin_api_worker_restart(request: Request):
-    """Request a supervisor-managed child restart by bumping the restart token."""
-    _require_admin(request)
-    control = task_manager.request_worker_restart()
-    store = await dashboard_settings.save_worker_control_state()
-    return {"ok": True, "control": control, "settings_store": store}
-
-
-@router.get("/admin/api/settings")
-async def admin_api_settings(request: Request):
-    """JSON API for durable admin/dashboard settings."""
-    _require_admin(request)
-    await dashboard_settings.load_worker_control_state()
-    return {
-        "settings_store": dashboard_settings.settings_store_status(),
-        "worker_control": task_manager.get_worker_control_state(),
     }

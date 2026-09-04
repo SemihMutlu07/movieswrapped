@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  cleanRouteUsername,
-  isValidRouteUsername,
-  resultPath,
-  watchlistPath,
-} from '@/lib/routes';
+import { cleanRouteUsername, isValidRouteUsername, resultPath, storyPath } from '@/lib/routes';
 
 describe('route helpers', () => {
   it('normalizes and validates usernames', () => {
@@ -20,9 +15,9 @@ describe('route helpers', () => {
     expect(resultPath('bad-name')).toBe('/results');
   });
 
-  it('builds canonical watchlist routes', () => {
-    expect(watchlistPath('alice', 'bob')).toBe('/watchlist?a=alice&b=bob');
-    expect(watchlistPath('alice', 'bob', 'en')).toBe('/en/watchlist?a=alice&b=bob');
-    expect(watchlistPath('alice', 'alice')).toBe('/watchlist');
+  it('builds canonical story routes', () => {
+    expect(storyPath('semihmutsuz')).toBe('/story?u=semihmutsuz');
+    expect(storyPath('semihmutsuz', 'en')).toBe('/en/story?u=semihmutsuz');
+    expect(storyPath('bad-name')).toBe('/story');
   });
 });

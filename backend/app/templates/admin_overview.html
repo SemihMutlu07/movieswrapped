@@ -5,7 +5,7 @@
       <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
         <div>
           <h2 id="incidents-title" class="text-sm font-bold text-white">Operational Incidents</h2>
-          <p class="text-[10px] text-slate-500 mt-0.5">Worker health, backend failures and frontend diagnostic reports</p>
+          <p class="text-[10px] text-slate-500 mt-0.5">Backend failures and frontend diagnostic reports</p>
         </div>
         {% if incidents %}
         <span class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">{{ incidents|length }} active/recent</span>
@@ -28,25 +28,15 @@
       {% endif %}
     </section>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-2 gap-3">
       <a href="/admin/analysis" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-orange-400/40 transition-colors">
         <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Analysis Runs</p>
         <p class="text-2xl font-black text-white">{{ runs_count }}</p>
       </a>
-      <a href="/admin/worker" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-orange-400/40 transition-colors">
-        <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Desktop Worker</p>
-        <p class="text-2xl font-black {% if worker_enabled and worker_status.online %}text-emerald-400{% elif worker_enabled %}text-red-400{% else %}text-slate-600{% endif %}">
-          {% if worker_enabled and worker_status.online %}Live{% elif worker_enabled %}Offline{% else %}Disabled{% endif %}
-        </p>
-      </a>
-      <a href="/admin/compare" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-orange-400/40 transition-colors">
-        <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Watchlist Compare</p>
-        <p class="text-2xl font-black text-white">{{ watchlist_count }}</p>
-      </a>
-      <a href="/admin/date-night" class="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-orange-400/40 transition-colors">
-        <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Date Night</p>
-        <p class="text-2xl font-black text-white">{{ date_night_count }}</p>
-      </a>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Mode</p>
+        <p class="text-2xl font-black text-emerald-400">CSV Upload</p>
+      </div>
     </div>
 
     <div class="text-center text-[10px] text-slate-600 pt-4 pb-8">

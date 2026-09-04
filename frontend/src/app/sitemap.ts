@@ -9,7 +9,7 @@ export const dynamic = 'force-static';
 
 // Static, indexable pages only. Personal results pages (/results) are
 // excluded — they are user-specific data and must stay out of search indexes.
-const STATIC_PATHS = ['', 'findfilm', 'story', 'watchlist'] as const;
+const STATIC_PATHS = ['', 'story'] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const entries: MetadataRoute.Sitemap = [];

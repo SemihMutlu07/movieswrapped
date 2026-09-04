@@ -7,7 +7,6 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.main import create_app
-from app import task_manager
 
 
 @pytest.fixture
@@ -87,29 +86,16 @@ async def test_admin_reports_setup_error_when_secret_is_missing(client, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_dashboard_renders_durable_and_synthetic_incidents(client, monkeypatch):
+async def test_dashboard_renders_durable_incidents(client, monkeypatch):
     enabled = patch.object(type(settings), "supabase_enabled", new_callable=PropertyMock, return_value=True)
-    worker_enabled = patch.object(type(settings), "desktop_worker_enabled", new_callable=PropertyMock, return_value=True)
     enabled.start()
-    worker_enabled.start()
-    monkeypatch.setattr("app.admin.dashboard_settings.load_worker_control_state", AsyncMock())
     monkeypatch.setattr("app.admin._load_analysis_runs", AsyncMock(return_value=[]))
-    monkeypatch.setattr("app.admin._load_watchlist_runs_supabase", AsyncMock(return_value=[]))
-    monkeypatch.setattr("app.admin._load_date_night_runs_supabase", AsyncMock(return_value=[]))
-    status = task_manager.get_worker_status(
-        settings.worker_heartbeat_max_age_seconds,
-        expected_protocol_version=settings.worker_protocol_version,
-    )
-    status["online"] = False
-    status["version"]["mismatch"] = True
-    status["recent_failures"] = [{"task_id": "abc", "message": "scrape blocked", "error_stage": "scrape"}]
-    monkeypatch.setattr("app.admin.task_manager.get_worker_status", lambda *args, **kwargs: status)
     monkeypatch.setattr(
         "app.admin.supabase_ops.select",
         AsyncMock(return_value=[{
             "created_at": "2026-07-16T10:00:00Z",
             "event_type": "backend_error",
-            "meta": {"path": "/api/watchlist-compare", "message": "internal failure"},
+            "meta": {"path": "/api/analyze", "message": "internal failure"},
         }]),
     )
     try:
@@ -118,29 +104,19 @@ async def test_dashboard_renders_durable_and_synthetic_incidents(client, monkeyp
             headers={"Authorization": "Bearer test-admin-secret"},
         )
     finally:
-        worker_enabled.stop()
         enabled.stop()
 
     assert response.status_code == 200
     assert "Operational Incidents" in response.text
-    assert "Worker is offline" in response.text
-    assert "Worker protocol mismatch" in response.text
     assert "internal failure" in response.text
-    assert "scrape blocked" in response.text
 
 
 @pytest.mark.asyncio
 async def test_incident_loading_degrades_when_ops_table_is_unavailable(client, monkeypatch):
     enabled = patch.object(type(settings), "supabase_enabled", new_callable=PropertyMock, return_value=True)
     enabled.start()
-    monkeypatch.setattr("app.admin.dashboard_settings.load_worker_control_state", AsyncMock())
     monkeypatch.setattr("app.admin._load_analysis_runs", AsyncMock(return_value=[]))
-    monkeypatch.setattr("app.admin._load_watchlist_runs_supabase", AsyncMock(return_value=[]))
-    monkeypatch.setattr("app.admin._load_date_night_runs_supabase", AsyncMock(return_value=[]))
     monkeypatch.setattr("app.admin._load_operational_incidents", AsyncMock(return_value=[]))
-    status = task_manager.get_worker_status(settings.worker_heartbeat_max_age_seconds)
-    status["online"] = True
-    monkeypatch.setattr("app.admin.task_manager.get_worker_status", lambda *args, **kwargs: status)
     try:
         response = await client.get(
             "/admin/dashboard",

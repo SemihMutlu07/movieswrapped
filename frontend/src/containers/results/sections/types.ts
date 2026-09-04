@@ -3,7 +3,6 @@
  * Intentionally a permissive superset so the registry doesn't need to import
  * from the page-level LetterboxdStats type.
  */
-import type { AnalysisPeriodMetadata } from "@/lib/api";
 
 /** One film a director/actor appears in, for the "see their films" modal. */
 export interface PersonFilm {
@@ -53,8 +52,12 @@ export interface StatsData {
     total_days?: number;
     period_description?: string;
   };
-  /** Explicit scrape window selected by the user. */
-  analysis_period?: AnalysisPeriodMetadata;
+  /** Optional window metadata from older runs; ZIP uploads are lifetime. */
+  analysis_period?: {
+    key?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+  };
   /** Same shape, computed over the last 12 months only. Present on scrape-profile results only. */
   last_12_months?: StatsData;
   cinematic_persona?: {

@@ -24,47 +24,6 @@ class Settings(BaseSettings):
     supabase_ops_password: str = ""
     run_retention_days: int = 30
 
-    # Desktop-worker mode: when worker_token is set, /api/scrape-profile queues
-    # jobs for an outbound desktop worker instead of scraping inline. The worker
-    # authenticates with this shared secret via the X-Worker-Token header.
-    worker_token: str = ""
-    worker_token_previous: str = ""
-    # A heartbeat older than this many seconds means the desktop worker is offline.
-    worker_heartbeat_max_age_seconds: int = 60
-    # Increment this when worker/backend control-plane payloads become
-    # incompatible. Older desktop workers will keep heartbeating but will not
-    # receive new jobs until updated.
-    worker_protocol_version: int = 4
-    # Optional startup smoke test for the desktop worker. Keep opt-in because it
-    # performs a real Letterboxd scrape and should not run on every restart by
-    # accident.
-    worker_self_test_on_start: bool = False
-    worker_self_test_username: str = "semihmutsuz"
-
-    # ntfy.sh alerting for worker/queue health. Topic is the public URL suffix
-    # (no account needed); empty topic disables alerting.
-    ntfy_topic: str = ""
-    # Minimum seconds between alerts for the SAME condition (anti-spam).
-    ntfy_cooldown_seconds: int = 1800
-    # How often the health monitor loop checks conditions.
-    health_check_interval_seconds: int = 60
-    # Thresholds: worker offline after this many seconds without a heartbeat,
-    # queue is "stuck" when the oldest job waited this long.
-    worker_offline_after_seconds: int = 300
-    queue_depth_alert_threshold: int = 20
-    queue_stale_after_seconds: int = 900
-    # Shared secret for POST /api/health/test-alert (X-Health-Alert-Secret
-    # header). Empty disables the endpoint.
-    health_alert_secret: str = ""
-    # healthchecks.io ping URL (dead man's switch). Backend pings it every
-    # health_check_interval_seconds so a backend crash is caught by the
-    # external service. Empty disables the ping.
-    healthcheck_url: str = ""
-
-    @property
-    def desktop_worker_enabled(self) -> bool:
-        return bool(self.worker_token)
-
     @property
     def supabase_enabled(self) -> bool:
         return bool(

@@ -31,18 +31,10 @@
         {% for key, href, label in [
           ("dashboard", "/admin/dashboard", "Overview"),
           ("analysis", "/admin/analysis", "Analysis Runs"),
-          ("worker", "/admin/worker", "Desktop Worker"),
-          ("compare", "/admin/compare", "Watchlist Compare"),
-          ("date_night", "/admin/date-night", "Date Night"),
         ] %}
         <a href="{{ href }}" class="block px-3 py-2 rounded-lg text-xs font-semibold border transition-all {{ 'nav-active' if active_page == key else 'nav-inactive' }}">{{ label }}</a>
         {% endfor %}
       </nav>
-      <div class="px-4 py-3 border-t border-slate-800 text-[10px] font-medium">
-        <span id="worker-header-status" class="{% if worker_enabled and worker_status.online %}text-emerald-400{% elif worker_enabled %}text-red-400{% else %}text-slate-500{% endif %}">
-          {% if worker_enabled and worker_status.online %}● Worker live{% elif worker_enabled %}● Worker offline{% else %}● Worker disabled{% endif %}
-        </span>
-      </div>
     </aside>
     <div class="flex-1 min-w-0">
       <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">

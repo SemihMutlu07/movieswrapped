@@ -19,12 +19,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app import task_manager
 from app.task_manager import cleanup_loop
-from app.routes import analyze, feedback, recommend, tmdb, watchlist, worker
+from app.routes import analyze, feedback, tmdb
 from app import admin, supabase_ops
-from app.services.worker_monitor import log_worker_event, start_worker_monitor
-from app.services.worker_alerts import start_health_monitor
 from app.services.run_log import cleanup_expired_runs
 
 logger = logging.getLogger("letterboxd_wrapped")
@@ -33,13 +30,11 @@ logging.basicConfig(
     format="%(levelname)-8s [%(name)s] %(message)s",
 )
 
-# urllib3 DEBUG logs the full URL of every fetch — noisy, and any future
-# query-param secret would leak into stdout. Pin urllib3 at WARNING.
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 warnings.filterwarnings("ignore")
 
-banner = "🎬 LETTERBOXD WRAPPED - High-Speed Backend Edition"
+banner = "🎬 LETTERBOXD WRAPPED - CSV Upload Edition"
 logger.info("=" * 60)
 logger.info(banner)
 logger.info("=" * 60)
@@ -55,16 +50,9 @@ async def lifespan(app: FastAPI):
         connector=aiohttp.TCPConnector(limit_per_host=20)
     )
     asyncio.create_task(supabase_ops.check_expected_schema())
-    loaded = await task_manager.load_pending_tasks()
-    if loaded:
-        logger.info("Reloaded %d pending/running task(s) from Supabase.", loaded)
     _cleanup = asyncio.create_task(cleanup_loop())
-    _monitor = await start_worker_monitor()
-    _alerts = await start_health_monitor()
     logger.info("🚀 FastAPI app startup: aiohttp session created.")
     yield
-    _monitor.cancel()
-    _alerts.cancel()
     _cleanup.cancel()
     await app.state.aiohttp_session.close()
     logger.info("🌙 FastAPI app shutdown: aiohttp session closed.")
@@ -98,25 +86,10 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def catch_unhandled_exceptions(request: Request, call_next):
-        # Catching exceptions here (inside user-middleware) lets CORSMiddleware
-        # wrap the JSONResponse on the way out. @app.exception_handler(Exception)
-        # routes to Starlette's ServerErrorMiddleware which sits OUTSIDE CORS
-        # and would strip the Access-Control-Allow-Origin header.
         try:
             return await call_next(request)
-        except Exception as exc:
+        except Exception:
             logger.error("Unhandled exception on %s %s\n%s", request.method, request.url.path, traceback.format_exc())
-            await log_worker_event(
-                "backend_error",
-                {
-                    "source": "backend",
-                    "severity": "error",
-                    "path": request.url.path,
-                    "method": request.method,
-                    "error_type": type(exc).__name__,
-                    "message": "Unhandled backend exception",
-                },
-            )
             return JSONResponse(
                 status_code=500,
                 content={"error_code": "internal_error", "message": "Something went wrong on the server."},
@@ -126,14 +99,10 @@ def create_app() -> FastAPI:
     app.include_router(analyze.router)
     app.include_router(tmdb.router)
     app.include_router(feedback.router)
-    app.include_router(watchlist.router)
-    app.include_router(recommend.router)
-    app.include_router(worker.router)
-    app.include_router(worker.health_router)
 
     @app.get("/")
     async def root():
-        return {"message": "🎬 Letterboxd Wrapped - High-Speed Backend", "admin": "/admin"}
+        return {"message": "🎬 Letterboxd Wrapped - CSV Upload", "admin": "/admin"}
 
     @app.get("/health")
     async def health_check():
@@ -147,5 +116,4 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
-    # Run from backend/ directory: python -m app.main
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

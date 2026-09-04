@@ -1,13 +1,7 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nProvider } from '@/i18n/I18nProvider';
-
-vi.mock('@/lib/api', () => ({
-  compareWatchlists: vi.fn(),
-  recommendFromCompare: vi.fn(),
-  dateNight: vi.fn(),
-}));
 
 vi.mock('@/lib/analytics', () => ({
   getPosterUrl: (path?: string | null) => path ? `https://image.tmdb.org/t/p/w780/${path.replace(/^\/+/, '')}` : null,
@@ -89,114 +83,6 @@ describe('UploadZone', () => {
     expect(input).not.toBeNull();
     expect(input.accept).toContain('.zip');
     expect(input.accept).toContain('.csv');
-  });
-});
-
-// ---- WatchlistCompare --------------------------------------------------------
-
-import WatchlistCompare from '@/components/watchlist/WatchlistCompare';
-import { compareWatchlists, dateNight, recommendFromCompare } from '@/lib/api';
-
-describe('WatchlistCompare', () => {
-  beforeEach(() => {
-    window.history.pushState(null, '', '/');
-    sessionStorage.clear();
-    vi.clearAllMocks();
-  });
-
-  it('compares two watchlists and renders buckets', async () => {
-    vi.mocked(compareWatchlists).mockResolvedValueOnce({
-      status: 'success',
-      users: ['alice', 'bob'],
-      counts: {
-        first_total: 2,
-        second_total: 2,
-        common: 1,
-        first_only: 1,
-        second_only: 1,
-      },
-      match_score: 50,
-      common: [{ title: 'Aftersun', year: '2022', slug: '/film/aftersun/', poster_path: '/aftersun.jpg' }],
-      first_only: [{ title: 'Heat', year: '1995', slug: '/film/heat-1995/' }],
-      second_only: [{ title: 'Past Lives', year: '2023', slug: '/film/past-lives/' }],
-    });
-
-    render(<I18nProvider locale="en"><WatchlistCompare /></I18nProvider>);
-    await userEvent.type(screen.getByLabelText('First watchlist'), 'alice');
-    await userEvent.type(screen.getByLabelText('Second watchlist'), 'bob');
-    await userEvent.click(screen.getByRole('button', { name: /compare/i }));
-
-    expect(await screen.findByText('50%')).toBeInTheDocument();
-    expect(screen.getByText('Aftersun')).toBeInTheDocument();
-    expect(screen.getByAltText('Aftersun poster')).toHaveAttribute(
-      'src',
-      'https://image.tmdb.org/t/p/w780/aftersun.jpg',
-    );
-    await userEvent.click(screen.getByRole('button', { name: /only @alice/i }));
-    await userEvent.click(screen.getByRole('button', { name: /only @bob/i }));
-    expect(screen.getByText('Heat')).toBeInTheDocument();
-    expect(screen.getByText('Past Lives')).toBeInTheDocument();
-  });
-
-  it('requests a shared recommendation', async () => {
-    vi.mocked(compareWatchlists).mockResolvedValueOnce({
-      status: 'success',
-      users: ['alice', 'bob'],
-      counts: {
-        first_total: 1,
-        second_total: 1,
-        common: 1,
-        first_only: 0,
-        second_only: 0,
-      },
-      match_score: 100,
-      common: [{ title: 'Aftersun', year: '2022', slug: '/film/aftersun/' }],
-      first_only: [],
-      second_only: [],
-    });
-    vi.mocked(recommendFromCompare).mockResolvedValueOnce({
-      recommendation: {
-        title: 'Aftersun',
-        year: '2022',
-        reason: 'Both of you have it on your watchlist.',
-        poster_path: '/p.jpg',
-      },
-      alternatives: [],
-    });
-
-    render(<I18nProvider locale="en"><WatchlistCompare /></I18nProvider>);
-    await userEvent.type(screen.getByLabelText('First watchlist'), 'alice');
-    await userEvent.type(screen.getByLabelText('Second watchlist'), 'bob');
-    await userEvent.click(screen.getByRole('button', { name: /compare/i }));
-    await screen.findByText('Match score');
-    expect(screen.getByRole('button', { name: /pick one/i })).not.toBeDisabled();
-
-    await userEvent.click(screen.getByRole('button', { name: /pick one/i }));
-    expect(await screen.findByText(/Tonight.?.?s pick/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Aftersun').length).toBeGreaterThan(0);
-  });
-});
-
-// ---- DateNight --------------------------------------------------------------
-
-import DateNight from '@/components/watchlist/DateNight';
-
-describe('DateNight', () => {
-  it('announces, scrolls to, and focuses completed results', async () => {
-    vi.mocked(dateNight).mockResolvedValueOnce({
-      mutual_profile: { top_genres: ['Drama'], top_directors: ['Varda'], era_overlap: '1960s' },
-      recommendations: [],
-    });
-    const scrollIntoView = vi.fn();
-    HTMLElement.prototype.scrollIntoView = scrollIntoView;
-    render(<I18nProvider locale="en"><DateNight first="alice" second="bob" /></I18nProvider>);
-
-    await userEvent.click(screen.getByRole('button', { name: /find films/i }));
-
-    const results = await screen.findByRole('region', { name: /date night results/i });
-    await waitFor(() => expect(results).toHaveFocus());
-    expect(results).toHaveAttribute('aria-live', 'polite');
-    expect(scrollIntoView).toHaveBeenCalled();
   });
 });
 

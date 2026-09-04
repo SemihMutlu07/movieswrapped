@@ -88,6 +88,46 @@ async def test_analyze_missing_files(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_analyze_accepts_letterboxd_utc_export_name(client: AsyncClient, zip_with_watched: bytes):
+    """Letterboxd downloads are often named letterboxd-user-YYYY-MM-DD-HH-MM-utc without .zip."""
+    async def fake_run_analysis(*args, **kwargs):
+        return None
+
+    with patch(
+        "app.routes.analyze._run_analysis",
+        side_effect=fake_run_analysis,
+    ):
+        files = {
+            "files": (
+                "letterboxd-semihmutsuz-2026-09-02-03-29-utc",
+                zip_with_watched,
+                "application/zip",
+            )
+        }
+        r = await client.post("/api/analyze", files=files)
+
+    assert r.status_code == 202
+    assert "task_id" in r.json()
+
+
+@pytest.mark.asyncio
+async def test_analyze_accepts_extensionless_zip_named_download(client: AsyncClient, zip_with_watched: bytes):
+    captured: dict = {}
+
+    async def fake_run_analysis(task_id, session, csv_files, request_dir, username=None):
+        captured.update(csv_files)
+
+    with patch("app.routes.analyze._run_analysis", side_effect=fake_run_analysis):
+        response = await client.post(
+            "/api/analyze",
+            files={"files": ("download", zip_with_watched, "application/octet-stream")},
+        )
+
+    assert response.status_code == 202
+    assert "watched.csv" in captured
+
+
+@pytest.mark.asyncio
 async def test_analyze_corrupt_zip(client: AsyncClient):
     """POST /api/analyze with a corrupt ZIP should return 400."""
     files = {"files": ("bad.zip", b"not a zip", "application/zip")}
@@ -146,6 +186,31 @@ async def test_task_id_polling_flow(client: AsyncClient, zip_with_watched: bytes
         assert poll.status_code == 200
         body = poll.json()
         assert body["status"] in ("pending", "running", "done", "failed")
+
+
+@pytest.mark.asyncio
+async def test_analyze_letterboxd_zip_with_deleted_subfolder(client: AsyncClient, minimal_watched_csv: bytes):
+    """Real Letterboxd exports include deleted/ and orphaned/ copies of diary.csv etc."""
+    import io
+    import zipfile
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("watched.csv", minimal_watched_csv)
+        zf.writestr("diary.csv", "Date,Name,Year\n")
+        zf.writestr("deleted/diary.csv", "Date,Name,Year\n")
+        zf.writestr("orphaned/reviews.csv", "Date,Name,Year\n")
+
+    async def fake_run_analysis(*args, **kwargs):
+        return None
+
+    with patch("app.routes.analyze._run_analysis", side_effect=fake_run_analysis):
+        response = await client.post(
+            "/api/analyze",
+            files={"files": ("letterboxd-user-2026-utc.zip", archive.getvalue(), "application/zip")},
+        )
+
+    assert response.status_code == 202
 
 
 @pytest.mark.asyncio
@@ -213,243 +278,3 @@ async def test_parse_username_no_match(client: AsyncClient):
     assert r.status_code == 200
     assert r.json()["username"] is None
 
-
-# ---- watchlist compare -------------------------------------------------------
-
-@pytest.fixture(autouse=True)
-def _reset_watchlist_rate_limiter():
-    from app.routes import watchlist  # noqa: PLC0415
-
-    watchlist._rate_limiter.clear()
-    yield
-    watchlist._rate_limiter.clear()
-
-
-def _done_task(result: dict, kind: str = "watchlist"):
-    """Minimal task stub that looks done to the poll loop."""
-    from types import SimpleNamespace
-    return SimpleNamespace(status="done", result=result, error=None, kind=kind, poll_token="poll-token")
-
-
-def _failed_task(message: str):
-    from types import SimpleNamespace
-    return SimpleNamespace(status="failed", result=None, error=message, kind="watchlist", poll_token="poll-token")
-
-
-def _watchlist_patches(first_wl, second_wl):
-    """Return context managers that simulate a worker completing a watchlist-compare job."""
-    task = _done_task({"first_watchlist": first_wl, "second_watchlist": second_wl})
-    return (
-        patch("app.routes.watchlist.task_manager.is_worker_online", return_value=True),
-        patch("app.routes.watchlist.task_manager.create_watchlist_compare_job", return_value="test-id"),
-        patch("app.routes.watchlist.task_manager.get_task_state", return_value=task),
-        patch("app.routes.watchlist.asyncio.sleep"),
-    )
-
-
-@pytest.mark.asyncio
-async def test_watchlist_compare_success(client: AsyncClient):
-    alice_wl = [
-        {"title": "Aftersun", "year": "2022", "slug": "/film/aftersun/", "poster_url": "https://img/aftersun.jpg"},
-        {"title": "Inception", "year": "2010", "slug": "/film/inception/", "poster_url": ""},
-    ]
-    bob_wl = [
-        {"title": "Aftersun", "year": "2022", "slug": "/film/aftersun/", "poster_url": "https://img/aftersun.jpg"},
-        {"title": "Heat", "year": "1995", "slug": "/film/heat-1995/", "poster_url": ""},
-    ]
-
-    async def fake_enrich_concurrent(session, films, limit=50):
-        # Provide TMDB-like enrichment data so the response includes poster_path,
-        # popularity, vote counts and genres.
-        return [
-            {
-                **film,
-                "poster_path": "/aftersun.jpg",
-                "popularity": 10.0,
-                "vote_average": 7.5,
-                "vote_count": 1000,
-                "genres": ["Drama"],
-            }
-            for film in films
-        ]
-
-    with (
-        patch("app.routes.watchlist.task_manager.is_worker_online", return_value=True),
-        patch("app.routes.watchlist.task_manager.create_watchlist_compare_job", return_value="test-id"),
-        patch("app.routes.watchlist.task_manager.get_task_state", return_value=_done_task({"first_watchlist": alice_wl, "second_watchlist": bob_wl})),
-        patch("app.routes.watchlist.asyncio.sleep"),
-        patch("app.routes.watchlist.enrich_films_concurrent", side_effect=fake_enrich_concurrent),
-    ):
-        r = await client.post("/api/watchlist-compare", json={"usernames": ["alice", "bob"]})
-
-    assert r.status_code == 202
-    body = r.json()
-    assert body == {"task_id": "test-id", "status": "pending", "poll_token": "poll-token"}
-
-
-@pytest.mark.asyncio
-async def test_watchlist_compare_rejects_same_username(client: AsyncClient):
-    r = await client.post("/api/watchlist-compare", json={"usernames": ["alice", "@alice"]})
-    assert r.status_code == 400
-    assert r.json()["detail"]["error_code"] == "same_username"
-
-
-@pytest.mark.asyncio
-async def test_watchlist_compare_rejects_invalid_username(client: AsyncClient):
-    r = await client.post("/api/watchlist-compare", json={"usernames": ["alice", "bad name"]})
-    assert r.status_code == 400
-    assert r.json()["detail"]["error_code"] == "invalid_username"
-
-
-@pytest.mark.asyncio
-async def test_watchlist_compare_worker_offline(client: AsyncClient):
-    with patch("app.routes.watchlist.task_manager.is_worker_online", return_value=False):
-        r = await client.post("/api/watchlist-compare", json={"usernames": ["ghost", "bob"]})
-    assert r.status_code == 503
-    assert r.json()["detail"]["error_code"] == "worker_offline"
-
-
-@pytest.mark.asyncio
-async def test_watchlist_compare_worker_failure(client: AsyncClient):
-    with (
-        patch("app.routes.watchlist.task_manager.is_worker_online", return_value=True),
-        patch("app.routes.watchlist.task_manager.create_watchlist_compare_job", return_value="test-id"),
-        patch("app.routes.watchlist.task_manager.get_task_state", return_value=_failed_task("Scraper service is unreachable.")),
-        patch("app.routes.watchlist.asyncio.sleep"),
-    ):
-        r = await client.post("/api/watchlist-compare", json={"usernames": ["alice", "bob"]})
-    assert r.status_code == 202
-
-
-@pytest.mark.asyncio
-async def test_watchlist_compare_worker_user_not_found(client: AsyncClient):
-    # A worker scrape that raised ValueError("User 'ghost' not found") must map
-    # back to 404 user_not_found, not collapse into a generic 503.
-    with (
-        patch("app.routes.watchlist.task_manager.is_worker_online", return_value=True),
-        patch("app.routes.watchlist.task_manager.create_watchlist_compare_job", return_value="test-id"),
-        patch("app.routes.watchlist.task_manager.get_task_state", return_value=_failed_task("User 'ghost' not found")),
-        patch("app.routes.watchlist.asyncio.sleep"),
-    ):
-        r = await client.post("/api/watchlist-compare", json={"usernames": ["ghost", "bob"]})
-    assert r.status_code == 202
-
-
-@pytest.mark.asyncio
-async def test_recommend_from_compare_highest_rated(client: AsyncClient):
-    common_films = [
-        {"title": "Aftersun", "year": "2022", "slug": "/film/aftersun/"},
-        {"title": "Heat", "year": "1995", "slug": "/film/heat-1995/"},
-    ]
-
-    async def fake_enrich(session, films, limit=30):
-        return [
-            {**film, "vote_average": 7.0 if film["title"] == "Aftersun" else 8.3, "poster_path": "/p.jpg"}
-            for film in films
-        ]
-
-    with (
-        patch("app.routes.watchlist.task_manager.is_worker_online", return_value=True),
-        patch("app.routes.watchlist.task_manager.create_watchlist_compare_job", return_value="test-id"),
-        patch("app.routes.watchlist.task_manager.get_task_state", return_value=_done_task({"first_watchlist": common_films, "second_watchlist": common_films})),
-        patch("app.routes.watchlist.asyncio.sleep"),
-        patch("app.routes.watchlist.enrich_films", side_effect=fake_enrich),
-    ):
-        r = await client.post(
-            "/api/recommend-from-compare",
-            json={"usernames": ["alice", "bob"], "strategy": "highest_rated"},
-        )
-
-    assert r.status_code == 200
-    body = r.json()
-    assert body["recommendation"]["title"] == "Heat"
-    assert body["recommendation"]["reason"] == "Both of you have it on your watchlist."
-
-
-@pytest.mark.asyncio
-async def test_recommend_from_compare_no_overlap(client: AsyncClient):
-    alice_wl = [{"title": "Aftersun", "year": "2022", "slug": "/film/aftersun/"}]
-    bob_wl = [{"title": "Heat", "year": "1995", "slug": "/film/heat-1995/"}]
-
-    with (
-        patch("app.routes.watchlist.task_manager.is_worker_online", return_value=True),
-        patch("app.routes.watchlist.task_manager.create_watchlist_compare_job", return_value="test-id"),
-        patch("app.routes.watchlist.task_manager.get_task_state", return_value=_done_task({"first_watchlist": alice_wl, "second_watchlist": bob_wl})),
-        patch("app.routes.watchlist.asyncio.sleep"),
-    ):
-        r = await client.post("/api/recommend-from-compare", json={"usernames": ["alice", "bob"]})
-
-    assert r.status_code == 404
-    assert r.json()["detail"]["error_code"] == "no_common_watchlist"
-
-
-@pytest.mark.asyncio
-async def test_date_night_success(client: AsyncClient):
-    scraped_data = {
-        "first_diary": [{"title": "Before Sunrise", "year": "1995", "rating": 4.5, "watch_date": "2024-01-01"}],
-        "first_grid": [{"title": "Heat", "year": "1995", "rating": 4.0, "watch_date": ""}],
-        "second_diary": [{"title": "Before Sunrise", "year": "1995", "rating": 4.0, "watch_date": "2024-02-01"}],
-        "second_grid": [],
-        "first_watchlist": [{"title": "Past Lives", "year": "2023", "slug": "/film/past-lives/"}],
-        "second_watchlist": [{"title": "Past Lives", "year": "2023", "slug": "/film/past-lives/"}],
-    }
-
-    with (
-        patch("app.routes.recommend.task_manager.is_worker_online", return_value=True),
-        patch("app.routes.recommend.task_manager.create_date_night_job", return_value="test-id"),
-        patch("app.routes.recommend.task_manager.get_task_state", return_value=_done_task(scraped_data)),
-    ):
-        r = await client.post("/api/date-night", json={"usernames": ["alice", "bob"]})
-
-    assert r.status_code == 202
-    body = r.json()
-    assert body == {"task_id": "test-id", "status": "pending", "poll_token": "poll-token"}
-
-
-# ---- find film -----------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_find_film_rejects_too_few_and_too_many_usernames(client: AsyncClient):
-    r = await client.post("/api/find-film", json={"usernames": ["alice"]})
-    assert r.status_code == 422
-    r = await client.post("/api/find-film", json={"usernames": [f"user{i}" for i in range(7)]})
-    assert r.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_find_film_rejects_invalid_username(client: AsyncClient):
-    r = await client.post("/api/find-film", json={"usernames": ["alice", "bad name"]})
-    assert r.status_code == 400
-    assert r.json()["detail"]["error_code"] == "invalid_username"
-
-
-@pytest.mark.asyncio
-async def test_find_film_rejects_duplicates_that_leave_one_user(client: AsyncClient):
-    r = await client.post("/api/find-film", json={"usernames": ["alice", "@Alice "]})
-    assert r.status_code == 400
-    assert r.json()["detail"]["error_code"] == "duplicate_username"
-
-
-@pytest.mark.asyncio
-async def test_find_film_worker_offline(client: AsyncClient):
-    with patch("app.routes.watchlist.task_manager.is_worker_online", return_value=False):
-        r = await client.post("/api/find-film", json={"usernames": ["alice", "bob", "carol"]})
-    assert r.status_code == 503
-    assert r.json()["detail"]["error_code"] == "worker_offline"
-
-
-@pytest.mark.asyncio
-async def test_find_film_queues_job_and_returns_poll_token(client: AsyncClient):
-    from app import task_manager
-
-    with patch("app.routes.watchlist.task_manager.is_worker_online", return_value=True):
-        r = await client.post("/api/find-film", json={"usernames": ["alice", "@Bob", "carol", "alice"]})
-
-    assert r.status_code == 202
-    body = r.json()
-    assert body["status"] == "pending"
-    task = task_manager.get_task_state(body["task_id"])
-    assert task.job_type == "find_film"
-    assert task.usernames == ["alice", "bob", "carol"]  # normalized, deduped, order kept
-    assert body["poll_token"] == task.poll_token
-    task_manager._tasks.pop(body["task_id"], None)  # don't leak into other tests

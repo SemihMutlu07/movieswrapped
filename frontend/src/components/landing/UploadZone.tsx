@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { FolderOpen, Upload } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nProvider';
+import { fileLooksLikeZip, isLetterboxdExportFilename } from '@/lib/api';
 
 type Props = {
   onFiles: (files: FileList | File[] | null) => void;
@@ -101,7 +102,10 @@ function readDirectoryEntries(entry: FileSystemDirectoryEntryLike): Promise<File
 async function collectDroppedEntryFiles(entry: FileSystemEntryLike, path = ''): Promise<File[]> {
   if (entry.isFile) {
     const file = await readFileEntry(entry as FileSystemFileEntryLike, path);
-    return /\.csv$/i.test(file.name) || /\.zip$/i.test(file.name) ? [file] : [];
+    if (/\.csv$/i.test(file.name) || isLetterboxdExportFilename(file.name) || await fileLooksLikeZip(file)) {
+      return [file];
+    }
+    return [];
   }
 
   if (!entry.isDirectory) return [];
@@ -217,7 +221,7 @@ export default function UploadZone({ onFiles }: Props) {
           id="upload-zone-input"
           type="file"
           multiple
-          accept=".zip,.csv,.CSV"
+          accept=".zip,.csv,.CSV,application/zip,application/x-zip-compressed,application/octet-stream"
           onChange={(e) => onFiles(e.target.files)}
           className="sr-only"
         />

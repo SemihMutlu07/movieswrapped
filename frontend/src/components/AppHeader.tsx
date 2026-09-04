@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bookmark, Film, Sparkles } from 'lucide-react';
+import { Film, Sparkles } from 'lucide-react';
 import { getUsername } from '@/lib/session-id';
 import { resultPath } from '@/lib/routes';
 
@@ -10,11 +10,6 @@ export default function AppHeader() {
   const pathname = usePathname();
   const username = typeof window !== 'undefined' ? getUsername() : null;
   const resultsHref = username ? resultPath(username) : '/results';
-
-  const navItems = [
-    { label: 'Wrapped', href: resultsHref, icon: Sparkles, active: pathname?.startsWith('/results') },
-    { label: 'Watchlist', href: '/watchlist', icon: Bookmark, active: pathname?.startsWith('/watchlist') },
-  ];
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#14181c]/85 backdrop-blur-md transition-all">
@@ -29,25 +24,18 @@ export default function AppHeader() {
         </Link>
 
         <nav aria-label="Main navigation" className="flex items-center gap-1 sm:gap-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                aria-current={item.active ? 'page' : undefined}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all sm:text-sm ${
-                  item.active
-                    ? 'border border-orange-500/30 bg-orange-500/15 text-orange-400'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                }`}
-              >
-                <Icon className={`h-3.5 w-3.5 ${item.active ? 'text-orange-400' : 'text-slate-400'}`} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          <Link
+            href={resultsHref}
+            aria-current={pathname?.startsWith('/results') ? 'page' : undefined}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all sm:text-sm ${
+              pathname?.startsWith('/results')
+                ? 'border border-orange-500/30 bg-orange-500/15 text-orange-400'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className={`h-3.5 w-3.5 ${pathname?.startsWith('/results') ? 'text-orange-400' : 'text-slate-400'}`} />
+            <span>Wrapped</span>
+          </Link>
         </nav>
       </div>
     </header>

@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { I18nProvider } from '@/i18n/I18nProvider';
 
 const apiMocks = vi.hoisted(() => ({
-  scrapeProfile: vi.fn(),
+  analyzeFiles: vi.fn(),
+  parseLetterboxdUsername: vi.fn(),
   testBackend: vi.fn(),
 }));
 
@@ -27,19 +28,19 @@ vi.mock('next/navigation', () => ({
   useRouter: () => routerMocks,
 }));
 
-vi.mock('@/lib/api', () => ({
-  analyzeFiles: vi.fn(),
-  parseLetterboxdUsername: vi.fn(),
-  scrapeProfile: apiMocks.scrapeProfile,
-  testBackend: apiMocks.testBackend,
-  isWorkerFleetEmpty: vi.fn().mockResolvedValue(false),
-  ERROR_CODE_HINTS: {},
-}));
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    analyzeFiles: apiMocks.analyzeFiles,
+    parseLetterboxdUsername: apiMocks.parseLetterboxdUsername,
+    testBackend: apiMocks.testBackend,
+  };
+});
 
 vi.mock('@/lib/supabase/analysis_runs', () => analysisRunMocks);
 vi.mock('@/lib/supabase/sessions', () => sessionMocks);
 vi.mock('@/lib/analytics', () => ({
-  getTmdbImageUrl: vi.fn(() => null),
   trackEvent: vi.fn(),
   trackConsentedEvent: vi.fn(),
   trackFilmStats: vi.fn(),
@@ -52,10 +53,10 @@ describe('LetterboxdLanding persistence consent gate', () => {
     sessionStorage.clear();
     vi.clearAllMocks();
     apiMocks.testBackend.mockResolvedValue(undefined);
-    apiMocks.scrapeProfile.mockResolvedValue({
+    apiMocks.parseLetterboxdUsername.mockResolvedValue({ username: 'alice' });
+    apiMocks.analyzeFiles.mockResolvedValue({
       status: 'success',
       stats: {
-        scraped_username: 'alice',
         total_films: 12,
         favorite_genre: { name: 'Drama', count: 4 },
       },
@@ -65,16 +66,17 @@ describe('LetterboxdLanding persistence consent gate', () => {
     sessionMocks.upsertUserSession.mockResolvedValue(undefined);
   });
 
-  async function submitUsername() {
+  async function uploadExport() {
     const user = userEvent.setup();
     render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
-    await user.type(document.querySelector('input[name="username"]')!, 'alice');
-    await user.click(screen.getByRole('button', { name: /analyze/i }));
-    await waitFor(() => expect(apiMocks.scrapeProfile).toHaveBeenCalled());
+    const file = new File(['Name,Year\nAftersun,2022\n'], 'letterboxd-alice.zip', { type: 'application/zip' });
+    const input = document.getElementById('upload-zone-input') as HTMLInputElement;
+    await user.upload(input, file);
+    await waitFor(() => expect(apiMocks.analyzeFiles).toHaveBeenCalled());
   }
 
   it('does not persist an analysis or user session before explicit acceptance', async () => {
-    await submitUsername();
+    await uploadExport();
 
     expect(analysisRunMocks.startAnalysis).not.toHaveBeenCalled();
     expect(analysisRunMocks.finishAnalysis).not.toHaveBeenCalled();
@@ -84,7 +86,7 @@ describe('LetterboxdLanding persistence consent gate', () => {
   it('persists the analysis and user session after explicit acceptance', async () => {
     sessionStorage.setItem('consent_decision', 'accept');
 
-    await submitUsername();
+    await uploadExport();
 
     await waitFor(() => {
       expect(analysisRunMocks.startAnalysis).toHaveBeenCalledOnce();
@@ -93,17 +95,6 @@ describe('LetterboxdLanding persistence consent gate', () => {
         expect.objectContaining({ username: 'alice', consent: 'accept' }),
       );
     });
-  });
-
-  it('always scrapes lifetime — there is no period selector on the landing page', async () => {
-    await submitUsername();
-
-    expect(apiMocks.scrapeProfile).toHaveBeenCalledWith(
-      'alice',
-      'lifetime',
-      expect.any(AbortSignal),
-      expect.any(Function),
-    );
   });
 
   it('renders the FAQ section with all six questions from the catalog', () => {

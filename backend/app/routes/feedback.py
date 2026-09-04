@@ -10,7 +10,8 @@ from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
-from app.services.worker_monitor import log_worker_event
+from app import supabase_ops
+from app.config import settings
 
 router = APIRouter()
 
@@ -161,11 +162,15 @@ async def submit_report(
     )
     (reports_dir / f"report-{issue_id}.bin").write_bytes(data)
 
-    await log_worker_event("frontend_report", {
-        "source": "frontend",
-        "severity": "warning",
-        "message": "Frontend diagnostic report received",
-        "issue_id": issue_id,
-    })
+    if settings.supabase_enabled:
+        await supabase_ops.insert("ops_worker_events", {
+            "event_type": "frontend_report",
+            "meta": {
+                "source": "frontend",
+                "severity": "warning",
+                "message": "Frontend diagnostic report received",
+                "issue_id": issue_id,
+            },
+        })
 
     return {"ok": True, "issue_id": issue_id}
