@@ -19,4 +19,13 @@ describe('Letterboxd export file detection', () => {
     expect(isLetterboxdExportFilename(file.name)).toBe(true);
     expect(await fileLooksLikeZip(file)).toBe(false);
   });
+
+  it('treats Windows application/x-zip-compressed names as zip', () => {
+    expect(isLetterboxdZipFilename('letterboxd-anlaki-2026-02-13-14-29-utc.zip')).toBe(true);
+  });
+
+  it('does not treat octet-stream CSV as a zip when magic is missing', async () => {
+    const file = new File(['Date,Name,Year\n'], 'watched.csv', { type: 'application/octet-stream' });
+    expect(await fileLooksLikeZip(file)).toBe(false);
+  });
 });

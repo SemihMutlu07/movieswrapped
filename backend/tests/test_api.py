@@ -135,6 +135,80 @@ async def test_analyze_corrupt_zip(client: AsyncClient):
     assert r.status_code == 400
 
 
+@pytest.mark.asyncio
+async def test_analyze_accepts_windows_x_zip_compressed(
+    client: AsyncClient, zip_with_watched: bytes
+):
+    captured: dict = {}
+
+    async def fake_run_analysis(task_id, session, csv_files, request_dir, username=None):
+        captured.update(csv_files)
+
+    with patch("app.routes.analyze._run_analysis", side_effect=fake_run_analysis):
+        response = await client.post(
+            "/api/analyze",
+            files={"files": ("export.zip", zip_with_watched, "application/x-zip-compressed")},
+        )
+
+    assert response.status_code == 202
+    assert "watched.csv" in captured
+
+
+@pytest.mark.asyncio
+async def test_analyze_accepts_unzipped_csv_folder(
+    client: AsyncClient, minimal_watched_csv: bytes
+):
+    captured: dict = {}
+
+    async def fake_run_analysis(task_id, session, csv_files, request_dir, username=None):
+        captured.update(csv_files)
+
+    with patch("app.routes.analyze._run_analysis", side_effect=fake_run_analysis):
+        response = await client.post(
+            "/api/analyze",
+            files=[
+                ("files", ("watched.csv", minimal_watched_csv, "text/csv")),
+                ("files", ("reviews.csv", b"Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date\n", "text/csv")),
+            ],
+        )
+
+    assert response.status_code == 202
+    assert "watched.csv" in captured
+    assert "reviews.csv" in captured
+
+
+@pytest.mark.asyncio
+async def test_analyze_single_csv_octet_stream_is_not_treated_as_zip(
+    client: AsyncClient, minimal_watched_csv: bytes
+):
+    captured: dict = {}
+
+    async def fake_run_analysis(task_id, session, csv_files, request_dir, username=None):
+        captured.update(csv_files)
+
+    with patch("app.routes.analyze._run_analysis", side_effect=fake_run_analysis):
+        response = await client.post(
+            "/api/analyze",
+            files={"files": ("watched.csv", minimal_watched_csv, "application/octet-stream")},
+        )
+
+    assert response.status_code == 202
+    assert "watched.csv" in captured
+
+
+@pytest.mark.asyncio
+async def test_analyze_empty_zip_is_missing_files(client: AsyncClient):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w"):
+        pass
+    response = await client.post(
+        "/api/analyze",
+        files={"files": ("empty.zip", buf.getvalue(), "application/zip")},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["error_code"] == "missing_required_files"
+
+
 # ---- progress polling --------------------------------------------------------
 
 @pytest.mark.asyncio

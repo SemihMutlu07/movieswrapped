@@ -298,7 +298,7 @@ export function ResultsContent({
                   theme === "current" || theme === "vhs" ? "#fff" : "#181614",
               }}
             >
-              Share your Wrapped →
+              {t('results.share.cta')}
             </button>
           </div>
         </div>
@@ -416,7 +416,7 @@ export function ResultsContent({
                   background: theme === "current" ? "#fff" : "var(--theme-bg)",
                 }}
               />
-              Share Your Wrapped
+              {t('results.share.footerTitle')}
             </button>
             <Link
               href={localizePath('/story', locale)}
