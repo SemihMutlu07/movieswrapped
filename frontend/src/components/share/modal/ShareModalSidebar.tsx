@@ -2,25 +2,16 @@
 
 import type { ShareCardInput } from '@/components/share/types';
 
-import { FormatControls } from './FormatControls';
 import { ShareSaveButton } from './ShareSaveButton';
 import { SwapDrawer } from './SwapDrawer';
 import { UsernameToggle } from './UsernameToggle';
-import type { Orientation } from './types';
 
 type ShareModalSidebarProps = {
   cardProps: ShareCardInput;
-  orientation: Orientation;
-  setOrientation: (o: Orientation) => void;
   isSaving: boolean;
-  showSwapTrigger: boolean;
+  showPeople: boolean;
   hasActors: boolean;
   hasDirectors: boolean;
-  swapOpen: boolean;
-  setSwapOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  showSwapHint: boolean;
-  hintFading: boolean;
-  dismissSwapHint: () => void;
   actorIdx: number;
   directorIdx: number;
   setActorIdx: (idx: number) => void;
@@ -33,17 +24,10 @@ type ShareModalSidebarProps = {
 
 export function ShareModalSidebar({
   cardProps,
-  orientation,
-  setOrientation,
   isSaving,
-  showSwapTrigger,
+  showPeople,
   hasActors,
   hasDirectors,
-  swapOpen,
-  setSwapOpen,
-  showSwapHint,
-  hintFading,
-  dismissSwapHint,
   actorIdx,
   directorIdx,
   setActorIdx,
@@ -54,30 +38,19 @@ export function ShareModalSidebar({
   onSave,
 }: ShareModalSidebarProps) {
   return (
-    <div className="relative space-y-3 px-5 pb-6 pt-3 md:w-[300px] md:shrink-0 md:space-y-5 md:overflow-y-auto md:border-l md:border-white/10 md:px-6 md:py-5 lg:w-[340px]">
-      <FormatControls
-        orientation={orientation}
-        setOrientation={setOrientation}
-        isSaving={isSaving}
-        showSwapTrigger={showSwapTrigger}
-        showSwapHint={showSwapHint}
-        hintFading={hintFading}
-        swapOpen={swapOpen}
-        onSwapOpenChange={setSwapOpen}
-        onDismissSwapHint={dismissSwapHint}
-        swapPanel={(
-          <SwapDrawer
-            cardProps={cardProps}
-            hasActors={hasActors}
-            hasDirectors={hasDirectors}
-            actorIdx={actorIdx}
-            directorIdx={directorIdx}
-            isSaving={isSaving}
-            onActorIdxChange={setActorIdx}
-            onDirectorIdxChange={setDirectorIdx}
-          />
-        )}
-      />
+    <div className="relative shrink-0 space-y-3 border-t border-white/8 px-5 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-3 md:w-[300px] md:space-y-5 md:overflow-y-auto md:border-l md:border-t-0 md:border-white/10 md:px-6 md:py-5 lg:w-[320px]">
+      {showPeople && (
+        <SwapDrawer
+          cardProps={cardProps}
+          hasActors={hasActors}
+          hasDirectors={hasDirectors}
+          actorIdx={actorIdx}
+          directorIdx={directorIdx}
+          isSaving={isSaving}
+          onActorIdxChange={setActorIdx}
+          onDirectorIdxChange={setDirectorIdx}
+        />
+      )}
 
       {cardProps.username && (
         <UsernameToggle

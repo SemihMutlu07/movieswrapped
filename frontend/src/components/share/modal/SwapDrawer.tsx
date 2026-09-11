@@ -1,6 +1,6 @@
 'use client';
 
-import type { ShareCardInput } from '@/components/share/types';
+import type { ShareCardInput, SharePersonStat } from '@/components/share/types';
 import { useI18n } from '@/i18n/I18nProvider';
 
 import { lastName } from './lastName';
@@ -16,11 +16,49 @@ type SwapDrawerProps = {
   onDirectorIdxChange: (idx: number) => void;
 };
 
-/** Swap controls body — rendered inside SharePopover near the tune button. */
-function chipClass(active: boolean, tone: 'actor' | 'director') {
-  if (active && tone === 'actor') return 'bg-[#5c2438] text-rose-100';
-  if (active && tone === 'director') return 'bg-[#1d4d5c] text-cyan-100';
-  return 'bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white';
+function chipClass(active: boolean) {
+  return active
+    ? 'bg-orange-400 text-black'
+    : 'bg-white/8 text-slate-300 hover:bg-white/12 hover:text-white';
+}
+
+function PersonChip({
+  person,
+  active,
+  disabled,
+  onSelect,
+}: {
+  person: SharePersonStat;
+  active: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  const label = person.name.trim() || lastName(person.name);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      aria-pressed={active}
+      className={`flex max-w-full items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[11px] font-medium transition-colors ${chipClass(active)}`}
+    >
+      {person.headshotUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={person.headshotUrl}
+          alt=""
+          className="h-6 w-6 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold ${
+          active ? 'bg-black/15' : 'bg-white/10'
+        }`}>
+          {lastName(person.name).slice(0, 1)}
+        </span>
+      )}
+      <span className="truncate">{label}</span>
+    </button>
+  );
 }
 
 export function SwapDrawer({
@@ -35,49 +73,45 @@ export function SwapDrawer({
 }: SwapDrawerProps) {
   const { t } = useI18n();
 
+  if (!hasActors && !hasDirectors) return null;
+
   return (
-    <div
-      data-testid="share-swap-drawer"
-      className="w-full min-w-0 space-y-3 rounded-2xl border border-white/10 bg-[#141414] px-3 py-3 sm:min-w-[16rem] sm:px-4"
-    >
+    <div data-testid="share-swap-drawer" className="min-w-0 space-y-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+        {t('share.people')}
+      </p>
       {hasActors && (
         <fieldset className="min-w-0 space-y-1.5">
-          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             {t('share.actor')}
           </legend>
           <div className="flex flex-wrap gap-1.5">
-            {cardProps.topActors!.slice(0, 3).map((a, i) => (
-              <button
-                key={a.name}
-                type="button"
-                onClick={() => onActorIdxChange(i)}
+            {cardProps.topActors!.map((person, index) => (
+              <PersonChip
+                key={person.name}
+                person={person}
+                active={actorIdx === index}
                 disabled={isSaving}
-                aria-pressed={actorIdx === i}
-                className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${chipClass(actorIdx === i, 'actor')}`}
-              >
-                {lastName(a.name)}
-              </button>
+                onSelect={() => onActorIdxChange(index)}
+              />
             ))}
           </div>
         </fieldset>
       )}
       {hasDirectors && (
         <fieldset className="min-w-0 space-y-1.5">
-          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             {t('share.director')}
           </legend>
           <div className="flex flex-wrap gap-1.5">
-            {cardProps.topDirectors!.slice(0, 3).map((d, i) => (
-              <button
-                key={d.name}
-                type="button"
-                onClick={() => onDirectorIdxChange(i)}
+            {cardProps.topDirectors!.map((person, index) => (
+              <PersonChip
+                key={person.name}
+                person={person}
+                active={directorIdx === index}
                 disabled={isSaving}
-                aria-pressed={directorIdx === i}
-                className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${chipClass(directorIdx === i, 'director')}`}
-              >
-                {lastName(d.name)}
-              </button>
+                onSelect={() => onDirectorIdxChange(index)}
+              />
             ))}
           </div>
         </fieldset>

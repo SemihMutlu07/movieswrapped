@@ -96,21 +96,14 @@ function exportRoot() {
   return root as HTMLElement;
 }
 
-async function openSwapDrawer() {
-  await userEvent.click(screen.getByRole('button', { name: /tune actor/i }));
-  await waitFor(() => {
-    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeTruthy();
-  });
-}
-
 beforeEach(() => {
   vi.mocked(toBlob).mockReset();
   vi.mocked(trackEvent).mockClear();
-  // jsdom returns 0 for clientWidth/Height by default; the modal sizes its rail
+  // jsdom returns 0 for clientWidth/Height by default; the modal sizes its preview
   // off these, so without a mock variants never enter the mount budget.
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 400 });
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 700 });
-  // The rail measures pageW/pageH via getBoundingClientRect (jsdom returns all
+  // The preview measures pageW/pageH via getBoundingClientRect (jsdom returns all
   // zeros). pageW has no clientWidth fallback, so without this the export cards
   // never mount and exportRoot() is null.
   Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
@@ -135,7 +128,7 @@ afterEach(() => {
 });
 
 
-describe('ShareModal customization popover', () => {
+describe('ShareModal layout and controls', () => {
   it('reuses IsolatedModal so page chrome is inert', async () => {
     const chrome = document.createElement('div');
     chrome.textContent = 'page chrome';
@@ -146,121 +139,41 @@ describe('ShareModal customization popover', () => {
     chrome.remove();
   });
 
-  it('renders the customization panel in a body portal anchored to the tune button', async () => {
+  it('keeps format, designs, people, and save visible without a popover', () => {
     renderShareModal();
-    await openSwapDrawer();
+    const format = screen.getByRole('group', { name: /share format/i });
+    const portrait = within(format).getByRole('button', { name: /portrait/i });
+    const landscape = within(format).getByRole('button', { name: /landscape/i });
+    expect(format).toContainElement(portrait);
+    expect(format).toContainElement(landscape);
+    expect(within(format).queryByRole('button', { name: /story/i })).not.toBeInTheDocument();
 
-    const panel = document.querySelector('[data-share-popover-panel="true"]');
-    expect(panel).toBeTruthy();
-    expect(panel?.parentElement).toBe(document.body);
-    expect(within(panel as HTMLElement).getByText('Actor')).toBeInTheDocument();
-  });
+    const designs = screen.getByRole('radiogroup', { name: /card design/i });
+    expect(within(designs).getByRole('radio', { name: /your wrapped/i })).toHaveAttribute('aria-checked', 'true');
+    expect(within(designs).getByRole('radio', { name: /apple clean/i })).toBeInTheDocument();
 
-  it('pins the picker to a bottom sheet on compact viewports', async () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
-
-    renderShareModal();
-    await openSwapDrawer();
-
-    const panel = document.querySelector<HTMLElement>('[data-share-popover-panel="true"]');
-    expect(panel).toBeTruthy();
-    await waitFor(() => {
-      expect(panel).toHaveAttribute('data-share-sheet', 'bottom');
-    });
-    expect(panel!.style.top).toBe('auto');
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
-  });
-
-  it('keeps the popover inside the viewport when the tune button is near the top-right edge', async () => {
-    const tuneRect = {
-      top: 8,
-      left: 1220,
-      right: 1264,
-      bottom: 52,
-      width: 44,
-      height: 44,
-      x: 1220,
-      y: 8,
-      toJSON: () => ({}),
-    } as DOMRect;
-    const defaultRect = {
-      top: 0,
-      left: 0,
-      right: 1280,
-      bottom: 800,
-      width: 1280,
-      height: 800,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    } as DOMRect;
-    const original = HTMLElement.prototype.getBoundingClientRect;
-    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      value: function (this: HTMLElement) {
-        if (this.getAttribute('aria-label') === 'Tune actor and director') return tuneRect;
-        if (this.dataset.sharePopoverPanel === 'true') return original.call(this);
-        return defaultRect;
-      },
-    });
-
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
-
-    renderShareModal();
-    await openSwapDrawer();
-
-    const panel = document.querySelector<HTMLElement>('[data-share-popover-panel="true"]');
-    expect(panel).toBeTruthy();
-
-    await waitFor(() => {
-      expect(panel).toHaveAttribute('data-share-sheet', 'popover');
-      expect(Number.isFinite(Number.parseFloat(panel!.style.top))).toBe(true);
-      expect(Number.isFinite(Number.parseFloat(panel!.style.left))).toBe(true);
-    });
-
-    const top = Number.parseFloat(panel!.style.top);
-    const left = Number.parseFloat(panel!.style.left);
-    expect(top).toBeGreaterThanOrEqual(12);
-    expect(left).toBeGreaterThanOrEqual(12);
-    expect(left + 256).toBeLessThanOrEqual(1280 - 12);
-
-    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      value: original,
-    });
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
-  });
-
-  it('closes the customization popover on Escape without closing the share modal', async () => {
-    const onClose = vi.fn();
-    render(
-      <I18nProvider locale="en"><ShareModal
-        open
-        onClose={onClose}
-        orientation="horizontal"
-        setOrientation={() => {}}
-        cardProps={baseData}
-      /></I18nProvider>,
-    );
-
-    await openSwapDrawer();
-    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeTruthy();
-
-    await userEvent.keyboard('{Escape}');
+    expect(screen.getByTestId('share-swap-drawer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actor One' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Director One' })).toHaveAttribute('aria-pressed', 'true');
     expect(document.querySelector('[data-share-popover-panel="true"]')).toBeNull();
-    expect(screen.getByRole('dialog', { name: 'Share' })).toBeInTheDocument();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /share or save png/i })).toBeInTheDocument();
   });
 
-  it('closes the customization popover when clicking outside', async () => {
+  it('switches the visible card from named design controls', async () => {
     renderShareModal();
-    await openSwapDrawer();
-    expect(document.querySelector('[data-share-popover-panel="true"]')).toBeTruthy();
+    expect(document.querySelector('[data-variant="default"]')).toBeTruthy();
+    await userEvent.click(screen.getByRole('radio', { name: /apple clean/i }));
+    expect(document.querySelector('[data-variant="apple-hig"]')).toBeTruthy();
+    expect(within(exportRoot()).getByText(/films in 2026/i)).toBeInTheDocument();
+  });
 
-    await userEvent.pointer({ keys: '[MouseLeft]', target: document.body });
+  it('does not auto-open a popover or swap the selected people on open', () => {
+    renderShareModal();
     expect(document.querySelector('[data-share-popover-panel="true"]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Actor One' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Actor Two' })).toHaveAttribute('aria-pressed', 'false');
+    expect(within(exportRoot()).getByText('Actor One')).toBeInTheDocument();
+    expect(within(exportRoot()).queryByText('Actor Two')).not.toBeInTheDocument();
   });
 });
 
@@ -271,20 +184,17 @@ describe('ShareModal person swap', () => {
     expect(within(exportRoot()).getByText('Actor One')).toBeInTheDocument();
     expect(within(exportRoot()).getByText('Director One')).toBeInTheDocument();
 
-    await openSwapDrawer();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Two' })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Actor Two' }));
     expect(within(exportRoot()).getByText('Actor Two')).toBeInTheDocument();
 
-    const directorButtons = screen.getAllByRole('button', { name: 'Two' });
-    await userEvent.click(directorButtons[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Director Two' }));
     expect(within(exportRoot()).getByText('Director Two')).toBeInTheDocument();
   });
 
   it('resets stale selected indexes when fresh share data arrives', async () => {
     const { rerender } = renderShareModal();
 
-    await openSwapDrawer();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Two' })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Actor Two' }));
     expect(within(exportRoot()).getByText('Actor Two')).toBeInTheDocument();
 
     const nextData: ShareCardData = {
@@ -350,19 +260,13 @@ describe('share registry and privacy', () => {
     expect(shareVariantsForOrientation('vertical', label)).toHaveLength(3);
   });
 
-  it('keeps format choices and tuning in one ordered control row', () => {
+  it('keeps named designs in the format toolbar', () => {
     renderShareModal();
-    const controls = screen.getByRole('group', { name: /share format and people/i });
-    const story = within(controls).getByRole('button', { name: /story/i }) as HTMLButtonElement;
-    const landscape = within(controls).getByRole('button', { name: /landscape/i }) as HTMLButtonElement;
-    const tune = within(controls).getByRole('button', { name: /tune actor/i }) as HTMLButtonElement;
-
-    expect(controls).toContainElement(story);
-    expect(controls).toContainElement(landscape);
-    expect(controls).toContainElement(tune);
-    const orderedButtons = Array.from(controls.querySelectorAll<HTMLButtonElement>('button'));
-    expect(orderedButtons.indexOf(story)).toBeLessThan(orderedButtons.indexOf(landscape));
-    expect(orderedButtons.indexOf(landscape)).toBeLessThan(orderedButtons.indexOf(tune));
+    const designs = screen.getByRole('radiogroup', { name: /card design/i });
+    expect(within(designs).getByRole('radio', { name: /your wrapped/i })).toBeInTheDocument();
+    expect(within(designs).getByRole('radio', { name: /apple clean/i })).toBeInTheDocument();
+    expect(within(designs).getByRole('radio', { name: /editorial/i })).toBeInTheDocument();
+    expect(within(designs).getByRole('radio', { name: /dashboard/i })).toBeInTheDocument();
   });
 
   it('normalizes a missing director without dropping film slots', () => {
