@@ -1,6 +1,11 @@
 export const SHARE_POPOVER_GAP = 8;
 export const SHARE_POPOVER_VIEWPORT_PADDING = 12;
 export const SHARE_POPOVER_Z_INDEX = 210;
+export const SHARE_SHEET_MAX_PX = 640;
+
+export function isShareSheetViewport(viewportWidth: number): boolean {
+  return viewportWidth < SHARE_SHEET_MAX_PX;
+}
 
 export type SharePopoverPlacement = 'bottom-end' | 'bottom-start' | 'top-end' | 'top-start';
 

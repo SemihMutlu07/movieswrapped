@@ -20,6 +20,10 @@ Only one `analyze_started` event is emitted while an attempt is in flight. `anal
 
 Useful properties include `method`, normalized `reason`, `duration_ms`, safe upload context, and requested analysis period.
 
+`stats_storage_degraded` fires when sessionStorage quota sheds optional fields (`dropped_count`, `dropped_fields` as a comma-separated allowlist: `all_films`, `actors_with_ratings`, `review_analysis`, `rated_films`).
+
+`desktop_required_shown`, `desktop_required_link_copied`, and `desktop_required_shared` fire on real phone user agents (`surface`: `landing`, `story`, or `results`) when the desktop-required notice is shown, the handoff link is copied, or the native share sheet is used.
+
 ## Error tracking
 
 Unhandled browser errors, unhandled promise rejections, and React ErrorBoundary failures are captured after consent. Readable production stack traces still require source maps in the deployment pipeline.

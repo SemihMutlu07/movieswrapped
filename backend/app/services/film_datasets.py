@@ -117,6 +117,11 @@ def build_film_datasets(analysis_df: pd.DataFrame) -> Dict[str, Any]:
                 "average_rating": float(row.get("vote_average", 0)) / 2.0 if pd.notna(row.get("vote_average")) else None,
                 "poster_path": row.get("poster_path") if isinstance(row.get("poster_path"), str) else "",
                 "popularity": float(row.get("popularity", 0)) if pd.notna(row.get("popularity")) else 0.0,
+                "letterboxd_uri": (
+                    str(row.get("letterboxd_uri"))
+                    if pd.notna(row.get("letterboxd_uri")) and str(row.get("letterboxd_uri")).strip()
+                    else None
+                ),
             }
             for _, row in rated_rows.sort_values("rating", ascending=False).iterrows()
         ]
@@ -126,6 +131,12 @@ def build_film_datasets(analysis_df: pd.DataFrame) -> Dict[str, Any]:
     all_films = [
         {
             "title": str(row.get("title") or ""),
+            "letterboxd_title": str(row.get("letterboxd_title") or row.get("title") or ""),
+            "original_title": (
+                str(row.get("original_title"))
+                if pd.notna(row.get("original_title")) and str(row.get("original_title")).strip()
+                else None
+            ),
             "year": _clean_year(row.get("year")),
             "director": row.get("director") if pd.notna(row.get("director")) else None,
             "genres": row.get("genres") if isinstance(row.get("genres"), list) else [],
@@ -138,6 +149,11 @@ def build_film_datasets(analysis_df: pd.DataFrame) -> Dict[str, Any]:
             "cast": row.get("cast") if isinstance(row.get("cast"), list) else [],
             "average_rating": float(row.get("vote_average", 0)) / 2.0 if pd.notna(row.get("vote_average")) else None,
             "popularity": float(row.get("popularity", 0)) if pd.notna(row.get("popularity")) else 0.0,
+            "letterboxd_uri": (
+                str(row.get("letterboxd_uri"))
+                if pd.notna(row.get("letterboxd_uri")) and str(row.get("letterboxd_uri")).strip()
+                else None
+            ),
         }
         for _, row in analysis_df.iterrows()
     ]

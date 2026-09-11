@@ -39,6 +39,7 @@ export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlid
   return (
     <div
       data-testid="story-slide-stage"
+      data-story-key={slide.key}
       data-story-last={isLast ? 'true' : 'false'}
       className="relative z-20 flex h-full min-h-0 min-w-0 w-full overflow-x-clip px-3 md:px-10 md:py-6"
     >
@@ -55,17 +56,17 @@ export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlid
           className={`@container flex h-full max-h-full min-h-0 min-w-0 w-full flex-col ${
             isLast
               ? 'mx-auto max-w-md md:ml-[5vw] md:max-w-2xl'
-              : `mx-auto max-w-xl rounded-[24px] border border-white/10 bg-black/55 px-[clamp(1.05rem,4.5vw,1.75rem)] py-[clamp(1rem,3svh,1.85rem)] text-center shadow-2xl shadow-black/40 backdrop-blur-md md:mx-0 md:h-auto md:my-auto md:rounded-[28px] md:bg-black/42 md:px-8 md:py-8 md:text-left ${
+              : `mx-auto max-w-xl text-center md:mx-0 md:my-auto md:h-auto md:rounded-[28px] md:border md:border-white/10 md:bg-black/42 md:px-8 md:py-8 md:text-left md:shadow-2xl md:shadow-black/40 md:backdrop-blur-md ${
                   isPerson ? 'md:ml-[6vw] md:max-w-lg' : 'md:ml-[8vw]'
                 }`
           }`}
         >
           {isLast ? (
             <>
-              <div className="flex min-h-0 min-w-0 flex-[1.85] items-center justify-center py-1">
+              <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
                 <StoryFinaleCard stats={stats} />
               </div>
-              <div className="min-w-0 shrink-0 text-center md:mt-3 md:text-left">
+              <div className="hidden min-w-0 shrink-0 text-center md:mt-3 md:block md:text-left">
                 <SlideCopy slide={slide} />
               </div>
             </>
@@ -74,12 +75,12 @@ export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlid
               <div className="min-w-0 shrink-0">
                 <MobileMediaRail media={slide.media ?? []} accent={slide.accent ?? '#f59e0b'} />
               </div>
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center">
                 <div className="min-w-0">
                   <SlideCopy slide={slide} />
                 </div>
                 {showTapHint && (
-                  <Hint className="mt-auto pt-4 text-amber-300/80 md:mt-5 md:pt-0">
+                  <Hint className="mt-4 pt-2 text-amber-300/80 md:mt-5 md:pt-0">
                     {t('story.tapToContinue')}
                   </Hint>
                 )}

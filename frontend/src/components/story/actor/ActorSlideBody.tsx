@@ -10,23 +10,29 @@ import { usePersonSlidePhase } from '../person/PersonSlidePhaseContext';
 
 export function ActorSlideBody() {
   const { t, formatNumber } = useI18n();
-  const { phase, reduce, sequence } = usePersonSlidePhase();
+  const { phase, reduce, paused, sequence } = usePersonSlidePhase();
   if (!sequence) return null;
 
-  const instant = reduce;
+  const instant = reduce || paused;
   const showRewatch = showPersonRewatch(phase, reduce) && sequence.rewatch;
 
   return (
     <>
       <RevealLine instant={instant} delay={TEXT_REVEAL.textLabel} ease={MOTION_EASE.warm}>
-        <Label>{t('story.slide.actor.label')}</Label>
+        <Label>
+          {sequence.sameAsDirector
+            ? t('story.slide.actor.alsoDirected.label')
+            : t('story.slide.actor.label')}
+        </Label>
       </RevealLine>
       <RevealLine instant={instant} delay={TEXT_REVEAL.textHeadline} y={16} ease={MOTION_EASE.warm}>
         <Big>{sequence.personName}</Big>
       </RevealLine>
       <RevealLine instant={instant} delay={TEXT_REVEAL.textSub} y={14} duration={0.48} ease={MOTION_EASE.warm}>
         <Sub>
-          {t('story.slide.actor.sub', { count: formatNumber(sequence.filmCount) })}
+          {sequence.sameAsDirector
+            ? t('story.slide.actor.alsoDirected.sub', { count: formatNumber(sequence.filmCount) })
+            : t('story.slide.actor.sub', { count: formatNumber(sequence.filmCount) })}
         </Sub>
       </RevealLine>
       {showRewatch && sequence.rewatch && (

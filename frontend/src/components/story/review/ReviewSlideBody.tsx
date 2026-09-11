@@ -9,10 +9,10 @@ import { useReviewSlidePhase } from './ReviewSlidePhaseContext';
 
 export function ReviewSlideBody() {
   const { t, formatNumber } = useI18n();
-  const { phase, reduce, sequence } = useReviewSlidePhase();
+  const { phase, reduce, paused, sequence } = useReviewSlidePhase();
   if (!sequence) return null;
 
-  const instant = reduce;
+  const instant = reduce || paused;
   const showInsight = showReviewInsight(phase, reduce);
   const likes = sequence.likes;
 

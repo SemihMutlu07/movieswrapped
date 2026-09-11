@@ -9,10 +9,10 @@ import { usePersonSlidePhase } from '../person/PersonSlidePhaseContext';
 
 export function DirectorSlideBody() {
   const { t, formatNumber } = useI18n();
-  const { phase, reduce, sequence } = usePersonSlidePhase();
+  const { phase, reduce, paused, sequence } = usePersonSlidePhase();
   if (!sequence) return null;
 
-  const instant = reduce;
+  const instant = reduce || paused;
   const showRewatch = showPersonRewatch(phase, reduce) && sequence.rewatch;
 
   return (

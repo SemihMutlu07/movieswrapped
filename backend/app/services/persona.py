@@ -125,7 +125,7 @@ def compute_story_analytics(
                     "Respectable commitment."
                 )
             result["most_active_day"] = {
-                "date": date_str,
+                "date": pd.Timestamp(most_active_date).strftime("%Y-%m-%d"),
                 "films": max_films,
                 "story": activity_story,
             }

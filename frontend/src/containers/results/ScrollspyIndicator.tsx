@@ -1,16 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { motion, useReducedMotion, useSpring } from "framer-motion";
+import React, { useCallback, useEffect, useState } from "react";
+import { useReducedMotion } from "framer-motion";
 import { useRafThrottle } from "@/hooks/useRafThrottle";
 import { useI18n } from "@/i18n/I18nProvider";
 import {
   pickActiveSectionId,
   SCROLLSPY_SLOT_PX,
-  SCROLLSPY_THUMB_PX,
-  scrollProgressIndex,
   scrollspyLabelKey,
-  thumbOffsetPx,
 } from "./scrollspy";
 
 function measureSections(ids: string[]) {
@@ -28,29 +25,13 @@ export function ScrollspyIndicator({ sectionIds }: { sectionIds: string[] }) {
   const reduceMotion = useReducedMotion();
   const idsKey = sectionIds.join(",");
   const [activeId, setActiveId] = useState(sectionIds[0] ?? "");
-  const hasJumped = useRef(false);
-  const thumbY = useSpring(0, {
-    stiffness: reduceMotion ? 1000 : 240,
-    damping: reduceMotion ? 80 : 32,
-    mass: reduceMotion ? 0.2 : 0.7,
-    restDelta: 0.04,
-  });
 
   const syncActive = useCallback(() => {
     const ids = idsKey ? idsKey.split(",") : [];
     const spyY = Math.min(140, window.innerHeight * 0.28);
-    const measured = measureSections(ids);
-    const next = pickActiveSectionId(measured, spyY);
+    const next = pickActiveSectionId(measureSections(ids), spyY);
     if (next) setActiveId(next);
-    const target = thumbOffsetPx(scrollProgressIndex(measured, spyY));
-    if (!hasJumped.current) {
-      thumbY.jump(target);
-      hasJumped.current = true;
-      return;
-    }
-    if (reduceMotion) thumbY.jump(target);
-    else thumbY.set(target);
-  }, [idsKey, reduceMotion, thumbY]);
+  }, [idsKey]);
 
   const onScroll = useRafThrottle(syncActive, [syncActive]);
 
@@ -87,11 +68,6 @@ export function ScrollspyIndicator({ sectionIds }: { sectionIds: string[] }) {
       className="pointer-events-none fixed left-[max(0.35rem,env(safe-area-inset-left))] top-1/2 z-30 -translate-y-1/2"
     >
       <div className="relative">
-        <motion.span
-          aria-hidden
-          className="pointer-events-none absolute left-[10px] top-0 z-10 w-1 rounded-full bg-orange-400 will-change-transform"
-          style={{ y: thumbY, height: SCROLLSPY_THUMB_PX }}
-        />
         {sectionIds.map((id) => {
           const active = id === activeId;
           const label = t(scrollspyLabelKey(id));
@@ -106,7 +82,7 @@ export function ScrollspyIndicator({ sectionIds }: { sectionIds: string[] }) {
               >
                 <span
                   className={`block h-2 w-1 rounded-full ${
-                    active ? "bg-white/15" : "bg-white/30 group-hover:bg-white/55"
+                    active ? "bg-orange-400" : "bg-white/30 group-hover:bg-white/55"
                   }`}
                 />
                 <span

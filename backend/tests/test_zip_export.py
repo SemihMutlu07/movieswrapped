@@ -2,6 +2,9 @@
 import io
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
+
+from fastapi import HTTPException
 
 from app.routes.analyze import (
     _find_csv_files,
@@ -61,3 +64,42 @@ def test_username_from_profile_utf8_bom(tmp_path: Path):
     profile = tmp_path / "profile.csv"
     profile.write_bytes("\ufeff".encode("utf-8") + PROFILE.encode("utf-8"))
     assert _username_from_profile({"profile.csv": str(profile)}) == "anlaki"
+
+
+def test_extract_skips_appledouble_sidecar(tmp_path: Path):
+    payload = _zip_bytes({
+        "watched.csv": WATCHED.decode(),
+        "._watched.csv": "this is not watched",
+        "__MACOSX/._reviews.csv": b"junk",
+    })
+    _safe_extract_letterboxd_zip(io.BytesIO(payload), tmp_path)
+    found = _find_csv_files(tmp_path)
+    assert found["watched.csv"].endswith("watched.csv")
+    assert Path(found["watched.csv"]).read_bytes() == WATCHED
+    assert "._watched.csv" not in {Path(p).name for p in found.values()}
+
+
+def test_extract_rejects_encrypted_entry(tmp_path: Path):
+    payload = _zip_bytes({"watched.csv": WATCHED.decode()})
+
+    class EncryptedZip(zipfile.ZipFile):
+        def infolist(self):
+            infos = super().infolist()
+            for info in infos:
+                info.flag_bits |= 0x1
+            return infos
+
+    with patch("app.routes.analyze.zipfile.ZipFile", EncryptedZip):
+        try:
+            _safe_extract_letterboxd_zip(io.BytesIO(payload), tmp_path)
+        except HTTPException as exc:
+            assert exc.status_code == 400
+            assert exc.detail["error_code"] == "unsafe_archive"
+        else:
+            raise AssertionError("encrypted zip must be rejected")
+
+
+def test_empty_zip_finds_no_csv(tmp_path: Path):
+    payload = _zip_bytes({})
+    _safe_extract_letterboxd_zip(io.BytesIO(payload), tmp_path)
+    assert _find_csv_files(tmp_path) == {}

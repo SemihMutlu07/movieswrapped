@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import time
 from collections import deque
@@ -370,19 +371,21 @@ async def find_person_by_film_credit(
     """
     for film in films[:3]:
         year = film.get("year")
-        params: dict = {"query": str(film.get("title", ""))}
-        if year:
-            try:
-                params["year"] = int(year)
-            except (ValueError, TypeError):
-                pass
-        movie = await tmdb_get(session, "search/movie", params)
-        if not movie or not movie.get("results"):
-            # Retry without year constraint
-            movie = await tmdb_get(session, "search/movie", {"query": str(film.get("title", ""))})
-            if not movie or not movie.get("results"):
-                continue
-        tmdb_id = movie["results"][0]["id"]
+        title = str(film.get("title", ""))
+        results = await _search_movie_results(session, title, year)
+        if not results:
+            continue
+        parsed_year = None
+        try:
+            if year is not None and not pd.isna(year):
+                parsed_year = int(year)
+        except (ValueError, TypeError):
+            parsed_year = None
+        tmdb_id = pick_movie_result_id(
+            results, parsed_year, title, film.get("letterboxd_uri"),
+        )
+        if tmdb_id is None:
+            continue
         credits = await tmdb_get(session, f"movie/{tmdb_id}/credits", {})
         if not credits:
             continue
@@ -401,25 +404,156 @@ async def find_person_by_film_credit(
     return None
 
 
+_LETTERBOXD_FILM_SLUG = re.compile(
+    r"letterboxd\.com/(?:[^/]+/)?film/([^/?#]+)",
+    re.IGNORECASE,
+)
+
+
+def _norm_movie_title(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.casefold().split())
+
+
+def _optional_uri(value: object) -> Optional[str]:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def letterboxd_slug_title(uri: object) -> str:
+    """Title tokens from a Letterboxd film URL (`split-2016` → `split`). Empty for boxd.it."""
+    parsed = _optional_uri(uri)
+    if not parsed:
+        return ""
+    match = _LETTERBOXD_FILM_SLUG.search(parsed)
+    if not match:
+        return ""
+    parts = match.group(1).replace("_", "-").split("-")
+    if parts and parts[-1].isdigit() and len(parts[-1]) == 4:
+        parts = parts[:-1]
+    return _norm_movie_title(" ".join(parts))
+
+
+def _title_rank(result: Dict[str, Any], want: str) -> int:
+    """0 = original+display title, 1 = display-only namesake, 2 = original-only, 3 = miss."""
+    if not want:
+        return 0
+    title = _norm_movie_title(result.get("title"))
+    original = _norm_movie_title(result.get("original_title"))
+    if title == want and (original == want or not original):
+        return 0
+    if title == want:
+        return 1
+    if original == want:
+        return 2
+    return 3
+
+
+def _year_rank(result: Dict[str, Any], target: Optional[int]) -> int:
+    if target is None:
+        return 0
+    release = str(result.get("release_date") or "")[:4]
+    try:
+        gap = abs(int(release) - target)
+    except ValueError:
+        return 100
+    # Exact year must not beat a title-matched film one year off (Split 2016/2017).
+    return 0 if gap <= 1 else gap
+
+
+def pick_movie_result_id(
+    results: List[Dict[str, Any]],
+    year: Optional[int] = None,
+    query_title: Optional[str] = None,
+    letterboxd_uri: Optional[str] = None,
+) -> Optional[int]:
+    """Prefer exact title identity; Letterboxd year may be ±1 from TMDB release."""
+    if not results:
+        return None
+    want = _norm_movie_title(query_title) if query_title else ""
+    slug_title = letterboxd_slug_title(letterboxd_uri)
+    has_year = year is not None and not (isinstance(year, float) and pd.isna(year))
+    if not has_year and not want and not slug_title:
+        first = results[0].get("id")
+        return int(first) if first is not None else None
+
+    target = int(year) if has_year else None
+    ranked: list[tuple[int, int, int, float, float, Dict[str, Any]]] = []
+    for result in results:
+        titles = {
+            _norm_movie_title(result.get("title")),
+            _norm_movie_title(result.get("original_title")),
+        }
+        slug_miss = 0 if not slug_title else (0 if slug_title in titles else 1)
+        vote_count = -float(result.get("vote_count") or 0)
+        popularity = -float(result.get("popularity") or 0)
+        ranked.append(
+            (slug_miss, _title_rank(result, want), _year_rank(result, target), vote_count, popularity, result)
+        )
+    ranked.sort(key=lambda item: item[:5])
+    movie_id = ranked[0][5].get("id")
+    return int(movie_id) if movie_id is not None else None
+
+
+def poster_path_from_search_results(
+    results: List[Dict[str, Any]],
+    year: Optional[int] = None,
+    query_title: Optional[str] = None,
+    letterboxd_uri: Optional[str] = None,
+) -> Optional[str]:
+    """Poster path of the same search hit pick_movie_result_id would choose."""
+    movie_id = pick_movie_result_id(results, year, query_title, letterboxd_uri)
+    if movie_id is None:
+        return None
+    for result in results:
+        if result.get("id") == movie_id:
+            path = result.get("poster_path")
+            return path if isinstance(path, str) and path else None
+    return None
+
+
 async def resolve_tmdb_id(
     session: aiohttp.ClientSession,
     title: str,
     year: Optional[int] = None,
+    letterboxd_uri: Optional[str] = None,
 ) -> Optional[int]:
-    """Find TMDB movie ID by title (and optional year)."""
-    query_params: dict = {"query": title, "include_adult": "false"}
-    if year and not pd.isna(year):
-        query_params["year"] = int(year)
+    """Find TMDB movie ID by title (and optional year / Letterboxd film URL)."""
+    movie = await _search_movie_results(session, title, year)
+    if movie is None:
+        return None
+    parsed_year = int(year) if year and not pd.isna(year) else None
+    return pick_movie_result_id(movie, parsed_year, title, letterboxd_uri)
 
+
+async def resolve_movie_poster(
+    session: aiohttp.ClientSession,
+    title: str,
+    year: Optional[int] = None,
+    letterboxd_uri: Optional[str] = None,
+) -> Optional[str]:
+    """Poster path from search/movie — no extra details/credits call."""
+    results = await _search_movie_results(session, title, year)
+    if not results:
+        return None
+    parsed_year = int(year) if year and not pd.isna(year) else None
+    return poster_path_from_search_results(results, parsed_year, title, letterboxd_uri)
+
+
+async def _search_movie_results(
+    session: aiohttp.ClientSession,
+    title: str,
+    year: Optional[int] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    del year  # ranking uses year; TMDB year= filter hides off-by-one hits (Split 2016/2017)
+    query_params: dict = {"query": title, "include_adult": "false"}
     try:
         data = await tmdb_get(session, "search/movie", query_params)
         results = data.get("results", []) if data else []
-
-        if not results and year:
-            data = await tmdb_get(session, "search/movie", {"query": title, "include_adult": "false"})
-            results = data.get("results", []) if data else []
-
-        return results[0]["id"] if results else None
+        return results or []
     except Exception:
         return None
 

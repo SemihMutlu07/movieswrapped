@@ -222,6 +222,113 @@ def _year_key(year: Any) -> Optional[str]:
         return None
 
 
+def _year_int(year: Any) -> Optional[int]:
+    key = _year_key(year)
+    return int(key) if key is not None else None
+
+
+def _review_rows(review_analysis: Dict[str, Any]) -> List[dict]:
+    rows: List[dict] = []
+    for key in ("reviews", "top_liked_reviews"):
+        for review in review_analysis.get(key) or []:
+            if isinstance(review, dict):
+                rows.append(review)
+    return rows
+
+
+def _index_film_posters(all_films: list[dict]) -> tuple[dict, dict]:
+    """Map normalized (title, year) and title-only keys to poster_path.
+
+    Indexes TMDB display title, original_title, and the Letterboxd CSV title
+    so ZIP reviews still match after analysis overwrites `title` with TMDB.
+    """
+    poster_by_ty: dict[tuple[str, Optional[str]], str] = {}
+    poster_by_t: dict[str, str] = {}
+    for film in all_films:
+        path = film.get("poster_path")
+        if not isinstance(path, str) or not path:
+            continue
+        year = _year_key(film.get("year"))
+        for raw in (film.get("letterboxd_title"), film.get("title"), film.get("original_title")):
+            title = _title_key(raw)
+            if not title:
+                continue
+            poster_by_ty.setdefault((title, year), path)
+            poster_by_t.setdefault(title, path)
+    return poster_by_ty, poster_by_t
+
+
+def attach_review_posters(
+    review_analysis: Dict[str, Any],
+    all_films: list[dict],
+) -> Dict[str, Any]:
+    """Copy poster_path from all_films onto review rows. No TMDB calls.
+
+    ZIP analysis never ran enrich_scraped_reviews, so review objects had no
+    poster_path. The story frontend then tried filmByTitle against TMDB-renamed
+    all_films titles and missed. Match Letterboxd title+year first.
+    Does not overwrite a non-empty poster_path already on the review.
+    """
+    poster_by_ty, poster_by_t = _index_film_posters(all_films)
+    for review in _review_rows(review_analysis):
+        existing = review.get("poster_path")
+        if isinstance(existing, str) and existing:
+            continue
+        title = _title_key(review.get("title"))
+        year = _year_key(review.get("year"))
+        review["poster_path"] = poster_by_ty.get((title, year)) or poster_by_t.get(title) or ""
+    return review_analysis
+
+
+def unique_reviews_missing_posters(review_analysis: Dict[str, Any]) -> List[Tuple[str, Optional[int]]]:
+    """Distinct (title, year) pairs whose review rows still have no poster_path."""
+    seen: set[tuple[str, Optional[str]]] = set()
+    missing: List[Tuple[str, Optional[int]]] = []
+    for review in _review_rows(review_analysis):
+        path = review.get("poster_path")
+        if isinstance(path, str) and path:
+            continue
+        title = str(review.get("title") or "").strip()
+        if not title:
+            continue
+        key = (_title_key(title), _year_key(review.get("year")))
+        if key in seen:
+            continue
+        seen.add(key)
+        missing.append((title, _year_int(review.get("year"))))
+    return missing
+
+
+def apply_review_poster_map(
+    review_analysis: Dict[str, Any],
+    poster_by_ty: dict[tuple[str, Optional[str]], str],
+) -> Dict[str, Any]:
+    """Fill blank review poster_path values from a (title_key, year_key) map."""
+    for review in _review_rows(review_analysis):
+        existing = review.get("poster_path")
+        if isinstance(existing, str) and existing:
+            continue
+        title = _title_key(review.get("title"))
+        year = _year_key(review.get("year"))
+        path = poster_by_ty.get((title, year)) or poster_by_ty.get((title, None))
+        if isinstance(path, str) and path:
+            review["poster_path"] = path
+    return review_analysis
+
+
+def apply_fetched_review_posters(
+    review_analysis: Dict[str, Any],
+    fetched: list[tuple[str, Optional[int], str]],
+) -> Dict[str, Any]:
+    """Apply TMDB search posters keyed by the original review title+year."""
+    poster_by_ty: dict[tuple[str, Optional[str]], str] = {}
+    for title, year, path in fetched:
+        if not isinstance(path, str) or not path:
+            continue
+        poster_by_ty[(_title_key(title), _year_key(year))] = path
+    return apply_review_poster_map(review_analysis, poster_by_ty)
+
+
 def _review_sort_key(review: dict) -> tuple:
     """Deterministic longest-review ordering: characters desc, then title/year/text."""
     text = str(review.get("text") or review.get("text_preview") or "")
@@ -289,11 +396,12 @@ def enrich_scraped_reviews(
     """Merge scraped liker identities and poster paths into the review payload.
 
     Mutates, for every entry in review_analysis['reviews'] and
-    ['top_liked_reviews']: poster_path (matched from all_films by normalized
-    title+year — no new TMDB call), likers, likers_complete, review_path,
+    ['top_liked_reviews']: likers, likers_complete, review_path,
     normalized_text, char_length, word_count, and syncs `text` from the scrape.
-    Recomputes longest_review from the enriched rows. An unmatched review keeps
-    an empty, complete liker set (there is nothing to crawl) and a blank poster_path.
+    Poster paths come from attach_review_posters (all_films by Letterboxd/TMDB
+    title+year — no new TMDB call). Recomputes longest_review from the enriched
+    rows. An unmatched review keeps an empty, complete liker set (there is
+    nothing to crawl) and a blank poster_path.
     """
     scraped_by_ty: dict[tuple, list] = {}
     scraped_by_t: dict[str, list] = {}
@@ -314,16 +422,6 @@ def enrich_scraped_reviews(
         if len(titled) > 1:
             return max(titled, key=lambda row: _word_count(str(row.get("review_text") or "")))
         return None
-
-    poster_by_ty: dict = {}
-    poster_by_t: dict = {}
-    for f in all_films:
-        path = f.get("poster_path")
-        if not isinstance(path, str) or not path:
-            continue
-        t = _title_key(f.get("title"))
-        poster_by_ty.setdefault((t, _year_key(f.get("year"))), path)
-        poster_by_t.setdefault(t, path)
 
     def _enrich(review: dict) -> None:
         t = _title_key(review.get("title"))
@@ -347,12 +445,12 @@ def enrich_scraped_reviews(
         else:
             review["likers"] = []
             review["likers_complete"] = True
-        review["poster_path"] = poster_by_ty.get((t, y)) or poster_by_t.get(t) or ""
 
     for review in review_analysis.get("reviews", []):
         _enrich(review)
     for review in review_analysis.get("top_liked_reviews", []):
         _enrich(review)
+    attach_review_posters(review_analysis, all_films)
     recompute_longest_review(review_analysis)
     return review_analysis
 

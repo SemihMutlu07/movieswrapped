@@ -1,23 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-import { loadSmtFixture } from '@/lib/smt-loader';
+import { loadSmtFixture, type SmtDestination } from '@/lib/smt-loader';
 
-export default function SmtPage() {
+function SmtBoot() {
+  const params = useSearchParams();
+  const destination: SmtDestination = params.get('to') === 'results' ? 'results' : 'story';
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const seedResults = async () => {
+    const seed = async () => {
       try {
-        await loadSmtFixture();
+        await loadSmtFixture(fetch, localStorage, (url) => window.location.replace(url), undefined, destination);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : 'Could not load the local fixture.');
       }
     };
-
-    void seedResults();
-  }, []);
+    void seed();
+  }, [destination]);
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#0f0d0b] p-8 text-stone-300">
@@ -25,9 +27,21 @@ export default function SmtPage() {
         {error ? (
           <p className="normal-case tracking-normal text-red-300">{error}</p>
         ) : (
-          <p>Loading Semih&apos;s fixture into the real results page…</p>
+          <p>
+            {destination === 'results'
+              ? 'Loading Semih’s fixture into the results page…'
+              : 'Loading Semih’s fixture into the story…'}
+          </p>
         )}
       </div>
     </main>
+  );
+}
+
+export default function SmtPage() {
+  return (
+    <Suspense fallback={<main className="grid min-h-screen place-items-center bg-[#0f0d0b] text-stone-500">Loading…</main>}>
+      <SmtBoot />
+    </Suspense>
   );
 }

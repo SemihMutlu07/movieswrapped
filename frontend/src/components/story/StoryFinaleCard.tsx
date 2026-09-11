@@ -15,8 +15,8 @@ import { Hint } from './SlideTypography';
 import { buildStoryShareCard, FINALE_CARD_DOM, FINALE_VARIANT, pickFinaleOrientation } from './viewModel';
 
 /**
- * Story finale: the shareable card, chosen portrait on phones and landscape on
- * wider containers, scaled to fit the remaining slide zone after chrome/CTAs.
+ * Story finale: the landscape shareable card, scaled to fit the remaining
+ * slide zone after chrome/CTAs. Story is desktop-only.
  */
 export default function StoryFinaleCard({ stats }: { stats: StatsData }) {
   const reduce = Boolean(useReducedMotion());
@@ -24,7 +24,7 @@ export default function StoryFinaleCard({ stats }: { stats: StatsData }) {
   const { phase, sequence } = useFinaleSlidePhase();
   const frameRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const [orientation, setOrientation] = useState<ShareOrientation>('vertical');
+  const [orientation, setOrientation] = useState<ShareOrientation>(() => pickFinaleOrientation());
 
   const showCard = sequence ? showFinaleCard(phase, reduce) : true;
   const showHint = sequence ? showFinaleCardHint(phase, reduce) : false;

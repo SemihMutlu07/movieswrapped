@@ -4,6 +4,7 @@ import {
   REVIEW_STREAM_POSTER_CAP,
   REVIEW_STREAM_MIN_FILL,
   buildReviewSequence,
+  filmByTitle,
   reviewStreamPosters,
 } from '../media';
 import type { StatsData } from '@/containers/results/sections/types';
@@ -30,6 +31,71 @@ describe('review stream media', () => {
     expect(sequence.heroPoster?.alt).toBe('Memories of Underdevelopment poster');
     expect(sequence.streamPosters.length).toBeLessThanOrEqual(REVIEW_STREAM_POSTER_CAP);
     expect(sequence.streamPosters.every((poster) => poster.url !== sequence.heroPoster?.url)).toBe(true);
+  });
+
+  it('finds the watched film when TMDB renamed the title', () => {
+    const stats = {
+      all_films: [
+        {
+          title: 'Memorias del subdesarrollo',
+          letterboxd_title: 'Memories of Underdevelopment',
+          poster_path: '/mem.jpg',
+        },
+      ],
+    } as unknown as StatsData;
+    expect(filmByTitle(stats, 'Memories of Underdevelopment')?.poster_path).toBe('/mem.jpg');
+  });
+
+  it('does not soft-fill the renamed hero into the review stream', () => {
+    const stats = {
+      review_analysis: {
+        total_words_written: 40,
+        reviews: [
+          {
+            title: 'Memories of Underdevelopment',
+            text: 'a much longer review body by actual character count',
+            poster_path: '/mem.jpg',
+          },
+        ],
+      },
+      all_films: [
+        {
+          title: 'Memorias del subdesarrollo',
+          letterboxd_title: 'Memories of Underdevelopment',
+          poster_path: '/other-hero.jpg',
+          director: 'Gutiérrez Alea',
+          rating: 5,
+        },
+        { title: 'Aftersun', poster_path: '/after.jpg', director: 'Wells', rating: 4 },
+      ],
+    } as unknown as StatsData;
+
+    const sequence = buildReviewSequence(stats)!;
+    expect(sequence.heroPoster?.url).toContain('mem.jpg');
+    expect(sequence.streamPosters.every((poster) => !poster.url.includes('other-hero.jpg'))).toBe(true);
+    expect(sequence.streamPosters.some((poster) => poster.url.includes('after.jpg'))).toBe(true);
+  });
+
+  it('uses review.poster_path when all_films title no longer matches Letterboxd', () => {
+    const stats = {
+      review_analysis: {
+        total_words_written: 40,
+        reviews: [
+          {
+            title: 'Memories of Underdevelopment',
+            text: 'a much longer review body by actual character count',
+            poster_path: '/mem.jpg',
+          },
+        ],
+      },
+      all_films: [
+        { title: 'Memorias del subdesarrollo', poster_path: '/mem.jpg', rating: 5 },
+      ],
+    } as unknown as StatsData;
+
+    const sequence = buildReviewSequence(stats)!;
+    expect(sequence.filmTitle).toBe('Memories of Underdevelopment');
+    expect(sequence.heroPoster?.url).toContain('mem.jpg');
   });
 
   it('caps stream posters and excludes hero URL', () => {

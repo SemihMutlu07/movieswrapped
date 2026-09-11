@@ -79,6 +79,7 @@ interface EnrichedFilm {
   runtime?: number;
   language?: string;
   review_text?: string;
+  letterboxd_uri?: string | null;
 }
 
 type SubTab = 'higher' | 'lower';
@@ -135,6 +136,7 @@ function RatingDeviationInner({ stats }: { stats: StatsWithAverageRating }) {
         director: enrichedData?.director,
         runtime: enrichedData?.runtime,
         language: enrichedData?.language,
+        letterboxd_uri: f.letterboxd_uri ?? enrichedData?.letterboxd_uri,
       }];
     });
     return {
@@ -284,9 +286,6 @@ function FilmPosterCard({
             revealed ? 'translate-y-0' : 'translate-y-full'
           }`}
         >
-          <p className="text-sm font-bold text-white leading-tight line-clamp-3 text-center">
-            {film.title}
-          </p>
           {film.year && (
             <p className="text-xs text-slate-300">{film.year}</p>
           )}

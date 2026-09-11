@@ -48,13 +48,15 @@ export function StoryNavigation({
         type="button"
         aria-label={t('story.previous')}
         onClick={onPrevious}
-        className={`absolute inset-y-0 left-0 w-1/3 cursor-w-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 ${isLast ? 'z-20' : 'z-30'}`}
+        data-story-tap="previous"
+        className={`absolute inset-y-0 left-0 w-1/3 cursor-w-resize appearance-none border-0 bg-transparent outline-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none ${isLast ? 'z-20' : 'z-30'}`}
       />
       <button
         type="button"
         aria-label={t('story.next')}
         onClick={onNext}
-        className={`absolute inset-y-0 right-0 w-2/3 cursor-e-resize focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 ${isLast ? 'z-20' : 'z-30'}`}
+        data-story-tap="next"
+        className={`absolute inset-y-0 right-0 w-2/3 cursor-e-resize appearance-none border-0 bg-transparent outline-none [-webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none ${isLast ? 'z-20' : 'z-30'}`}
       />
 
       {isLast && (
@@ -67,14 +69,6 @@ export function StoryNavigation({
           transition={{ duration: reduce ? 0 : MOTION_DURATION.reveal, ease: MOTION_EASE.snap }}
         >
           <div className="mx-auto flex w-full min-w-0 max-w-md flex-col gap-2 md:max-w-3xl md:flex-row md:flex-wrap md:items-center md:justify-center md:gap-3">
-            <div className="flex min-w-0 gap-2 md:contents">
-              <button type="button" onClick={onPrevious} className={secondaryBtn}>
-                {t('story.back')}
-              </button>
-              <button type="button" onClick={onReplay} className={secondaryBtn}>
-                {t('story.replay')}
-              </button>
-            </div>
             <motion.div
               initial={reduce ? false : { scale: 0.96 }}
               animate={{ scale: 1 }}
@@ -83,7 +77,7 @@ export function StoryNavigation({
                 delay: reduce ? 0 : 0.08,
                 ease: MOTION_EASE.snap,
               }}
-              className="min-w-0 md:flex-none"
+              className="min-w-0 md:order-last md:flex-none"
             >
               <Link
                 href={resultsHref}
@@ -100,6 +94,14 @@ export function StoryNavigation({
                 {openingResults ? t('story.openingResults') : t('story.openResults')}
               </Link>
             </motion.div>
+            <div className="flex min-w-0 gap-2 md:contents">
+              <button type="button" onClick={onPrevious} className={secondaryBtn}>
+                {t('story.back')}
+              </button>
+              <button type="button" onClick={onReplay} className={secondaryBtn}>
+                {t('story.replay')}
+              </button>
+            </div>
           </div>
         </motion.div>
       )}

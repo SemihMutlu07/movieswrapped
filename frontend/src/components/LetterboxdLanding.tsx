@@ -14,10 +14,12 @@ import { trackEvent, trackConsentedEvent, trackFilmStats } from '@/lib/analytics
 import { normalizeError, type NormalizedError } from '@/lib/errors';
 import { useI18n } from '@/i18n/I18nProvider';
 import { FAQ_ITEMS } from '@/i18n/faq';
+import { DesktopRequiredNotice } from '@/components/DesktopRequiredNotice';
 import ErrorBanner from '@/components/ErrorBanner';
 import LoadingScreen from '@/components/landing/LoadingScreen';
 import UploadZone from '@/components/landing/UploadZone';
 import ExportInstructions from '@/components/landing/ExportInstructions';
+import { usePhoneLayout } from '@/hooks/usePhoneLayout';
 
 function localizeLandingError(error: NormalizedError, t: (key: import('@/i18n/catalogs').MessageKey) => string): NormalizedError {
   if (error.title === 'prepare_folder') {
@@ -63,6 +65,7 @@ function localizeLandingError(error: NormalizedError, t: (key: import('@/i18n/ca
 export default function LetterboxdLanding() {
   const router = useRouter();
   const { locale, t } = useI18n();
+  const isPhone = usePhoneLayout();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<NormalizedError | null>(null);
   const [backendOffline, setBackendOffline] = useState(false);
@@ -138,19 +141,23 @@ export default function LetterboxdLanding() {
     trackEvent('analyze_started', { fileCount: files.length, method: 'upload' });
 
     let detectedUsername: string | null = null;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i] as File & { webkitRelativePath?: string };
-      const relativePath = file.webkitRelativePath || '';
-      const pathParts = relativePath ? relativePath.split('/').filter(Boolean) : [];
-      for (const candidate of [file.name, relativePath, pathParts[0] || '']) {
-        if (!candidate) continue;
-        const { username: parsed } = await parseLetterboxdUsername(candidate);
-        if (parsed) {
-          detectedUsername = parsed;
-          break;
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i] as File & { webkitRelativePath?: string };
+        const relativePath = file.webkitRelativePath || '';
+        const pathParts = relativePath ? relativePath.split('/').filter(Boolean) : [];
+        for (const candidate of [file.name, relativePath, pathParts[0] || '']) {
+          if (!candidate) continue;
+          const { username: parsed } = await parseLetterboxdUsername(candidate);
+          if (parsed) {
+            detectedUsername = parsed;
+            break;
+          }
         }
+        if (detectedUsername) break;
       }
-      if (detectedUsername) break;
+    } catch {
+      // ponytail: username is optional; analyzeFiles reports a dead backend
     }
 
     const hasPersistenceConsent = getConsent() === 'accept';
@@ -238,7 +245,13 @@ export default function LetterboxdLanding() {
       const durationMs = performance.now() - startedAt;
 
       if (detectedUsername) setUsername(detectedUsername);
-      persistStats(result.stats);
+      const { dropped } = persistStats(result.stats);
+      if (dropped.length > 0) {
+        trackEvent('stats_storage_degraded', {
+          dropped_count: dropped.length,
+          dropped_fields: dropped.join(','),
+        });
+      }
 
       trackConsentedEvent('analyze_succeeded', { total_films: result.stats.total_films, duration_ms: Math.round(durationMs) });
       trackFilmStats({
@@ -271,7 +284,6 @@ export default function LetterboxdLanding() {
 
       router.push(storyPath(detectedUsername, locale));
     } catch (err) {
-      console.error('[upload] analysis failed:', err);
       const normalized = normalizeError(err);
       if (analysisRun && detectedUsername) {
         try {
@@ -333,9 +345,15 @@ export default function LetterboxdLanding() {
           >
             <ExportInstructions />
             <div className="mt-6">
-              <UploadZone onFiles={handleFiles} />
+              {isPhone ? (
+                <DesktopRequiredNotice surface="landing" />
+              ) : (
+                <>
+                  <UploadZone onFiles={handleFiles} />
+                  <p className="mt-4 text-center text-xs text-white/40">{t('landing.upload.quickPath')}</p>
+                </>
+              )}
             </div>
-            <p className="mt-4 text-center text-xs text-white/40">{t('landing.upload.quickPath')}</p>
           </section>
 
           {translatedError && (
@@ -392,7 +410,7 @@ export default function LetterboxdLanding() {
               style={{ borderWidth: 1, borderColor: 'rgba(255, 127, 0, 0.4)', backgroundColor: 'rgba(255, 127, 0, 0.1)' }}
             >
               <p className="text-xs" style={{ color: '#ff7f00' }}>
-                ⚠ {t('landing.backend.starting')}
+                ⚠ {t('landing.error.backendUnreachable.message')} {t('landing.error.backendUnreachable.action')}
               </p>
             </div>
           )}

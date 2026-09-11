@@ -17,6 +17,8 @@ import { I18nProvider } from '@/i18n/I18nProvider';
 import { createTranslator } from '@/i18n/createTranslator';
 import { readySlideKeys, slideMeta } from '@/components/story/manifest';
 import { buildStoryShareCard, pickFinaleOrientation } from '@/components/story/viewModel';
+import { ActorSlideBody } from '@/components/story/actor/ActorSlideBody';
+import { PersonSlidePhaseProvider } from '@/components/story/person/PersonSlidePhaseContext';
 import { ReviewSlideBody } from '@/components/story/review/ReviewSlideBody';
 import { ReviewSlidePhaseProvider } from '@/components/story/review/ReviewSlidePhaseContext';
 import { FinaleSlideBody } from '@/components/story/finale/FinaleSlideBody';
@@ -65,6 +67,8 @@ describe('StoryPage', () => {
   it('shows the empty state when no stats are stored', async () => {
     renderStory();
     expect(await screen.findByText(/No result data in this session/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back home/i })).toHaveAttribute('href', '/en');
+    expect(screen.queryByTestId('desktop-required-story')).not.toBeInTheDocument();
   });
 
   it('renders the intro slide from stored stats and advances on tap', async () => {
@@ -128,7 +132,7 @@ describe('StoryPage', () => {
       '/en/results?u=semihmutsuz',
     );
     expect(screen.getByText('Back')).toBeInTheDocument();
-    expect(screen.getByLabelText('Pause story')).toBeDisabled();
+    expect(screen.queryByLabelText('Pause story')).not.toBeInTheDocument();
     expect(screen.getByTestId('story-finale-actions')).toBeInTheDocument();
     expect(screen.getByTestId('story-top-chrome')).toBeInTheDocument();
     await userEvent.click(screen.getByText('Back'));
@@ -150,6 +154,17 @@ describe('StoryPage', () => {
 
     await userEvent.click(screen.getByLabelText('Resume story'));
     expect(screen.getByLabelText('Pause story')).toBeInTheDocument();
+  });
+
+  it('lets next skip an auto-min slide while paused', async () => {
+    sessionStorage.setItem('letterboxdStats', JSON.stringify(STATS));
+    renderStory();
+    expect(await screen.findByText('@semihmutsuz')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Pause story'));
+    await userEvent.click(screen.getByLabelText('Next slide'));
+    expect(await screen.findByText('692 films')).toBeInTheDocument();
+    expect(screen.getByLabelText('Resume story')).toBeInTheDocument();
   });
 
   it('renders story media in the mobile slide flow', async () => {
@@ -190,8 +205,46 @@ describe('buildSlides', () => {
     const rhythm = slides.find((slide) => slide.key === 'rhythm');
     render(<>{rhythm!.body}</>);
     expect(screen.getByText('Summer')).toBeInTheDocument();
-    expect(screen.getByText(/August 12 was a four-film marathon/i)).toBeInTheDocument();
+    expect(screen.getByText(/August 12, when you watched 4 films/i)).toBeInTheDocument();
     expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+  });
+
+  it('formats YYYY-MM peak months and uses an before vowel cinema-scale labels', () => {
+    const slides = buildSlides({
+      ...STATS,
+      monthly_viewing_habits: [{ month: '2026-02', count: 23 }],
+      sinefil_meter: { score: 69, type: 'Eclectic Viewer' },
+    } as unknown as StatsData, enI18n);
+    const rhythm = slides.find((slide) => slide.key === 'rhythm');
+    const sinefil = slides.find((slide) => slide.key === 'sinefil');
+    const rhythmView = render(<>{rhythm!.body}</>);
+    expect(rhythmView.container.textContent).toMatch(/February 2026/);
+    expect(rhythmView.container.textContent).not.toMatch(/2026-02/);
+    rhythmView.unmount();
+    const sinefilView = render(<>{sinefil!.body}</>);
+    expect(sinefilView.container.textContent).toMatch(/you're an\s*Eclectic Viewer/);
+    sinefilView.unmount();
+  });
+
+  it('marks the actor slide as a second credit when the director is the same person', () => {
+    const slides = buildSlides({
+      ...STATS,
+      most_watched_director: { name: 'Woody Allen', count: 27 },
+      top_directors: [{ name: 'Woody Allen', count: 27, profile_path: '/w.jpg' }],
+      top_actors: [{ name: 'Woody Allen', count: 21, profile_path: '/w.jpg' }],
+    } as unknown as StatsData, enI18n);
+    const actor = slides.find((slide) => slide.key === 'actor');
+    expect(actor?.actorSequence?.sameAsDirector).toBe(true);
+    expect(actor?.actorSequence?.personName).toBe('Woody Allen');
+    render(
+      <I18nProvider locale="en">
+        <PersonSlidePhaseProvider sequence={actor!.actorSequence!} slideKey="actor" paused>
+          <ActorSlideBody />
+        </PersonSlidePhaseProvider>
+      </I18nProvider>,
+    );
+    expect(screen.getByText(/Same person, other credit/i)).toBeInTheDocument();
+    expect(screen.getByText(/21 films as a performer/i)).toBeInTheDocument();
   });
 
   it('uses only the selected director profile and films in the director visual', () => {
@@ -420,10 +473,11 @@ describe('story readiness + manifest', () => {
     expect(enriched).toEqual(expect.arrayContaining(['genre', 'persona', 'sinefil']));
   });
 
-  it('recovers from a corrupt payload with the empty state instead of crashing', async () => {
+  it('recovers from a corrupt payload with the error state instead of crashing', async () => {
     sessionStorage.setItem('letterboxdStats', '{not json');
     renderStory();
-    expect(await screen.findByText(/No result data in this session/i)).toBeInTheDocument();
+    expect(await screen.findByText(/could not be read/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back home/i })).toBeInTheDocument();
   });
 
   it('picks up stats written after mount (late data / race)', async () => {
@@ -457,7 +511,7 @@ describe('story finale', () => {
     });
   }, LONG_STORY_TIMEOUT_MS);
 
-  it('picks portrait when the container is narrow even if the window is wide', async () => {
+  it('keeps the landscape share card even when the finale frame is narrow', async () => {
     // Wide window, but finale frame reports a phone-width box.
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
     class FakeResizeObserver {
@@ -501,7 +555,7 @@ describe('story finale', () => {
     await waitFor(() => {
       const el = container.querySelector('[data-finale-orientation]');
       expect(el).not.toBeNull();
-      expect(el?.getAttribute('data-finale-orientation')).toBe('vertical');
+      expect(el?.getAttribute('data-finale-orientation')).toBe('horizontal');
     });
 
     vi.unstubAllGlobals();
@@ -509,9 +563,9 @@ describe('story finale', () => {
 });
 
 describe('pickFinaleOrientation', () => {
-  it('uses container width, not an implied window', () => {
-    expect(pickFinaleOrientation(360)).toBe('vertical');
-    expect(pickFinaleOrientation(767)).toBe('vertical');
+  it('is landscape-only because story does not run on a phone', () => {
+    expect(pickFinaleOrientation(360)).toBe('horizontal');
+    expect(pickFinaleOrientation(767)).toBe('horizontal');
     expect(pickFinaleOrientation(768)).toBe('horizontal');
     expect(pickFinaleOrientation(1200)).toBe('horizontal');
   });

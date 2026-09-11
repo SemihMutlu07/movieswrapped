@@ -146,4 +146,22 @@ describe('RatingDeviation outliers', () => {
     expect(screen.getByText(/2018 · Luca Guadagnino/)).toBeInTheDocument();
     expect(screen.queryByText(/Dario Argento/)).toBeNull();
   });
+
+  it('links the film modal to the Letterboxd URI', () => {
+    const rated = [
+      { ...higherFilm('Pick', 5, 3.0), letterboxd_uri: 'https://boxd.it/e2aA' },
+      higherFilm('A', 4.5, 4.0),
+      higherFilm('B', 4, 3.6),
+      higherFilm('C', 5, 4.2),
+      higherFilm('D', 4, 3.8),
+    ];
+    renderWithI18n(<RatingDeviation stats={statsWith(rated)} />);
+    const card = screen.getByText('Pick').closest('.group')!;
+    fireEvent.click(card);
+    fireEvent.click(card.querySelector('button')!);
+    expect(screen.getByRole('link', { name: /open on letterboxd/i })).toHaveAttribute(
+      'href',
+      'https://boxd.it/e2aA',
+    );
+  });
 });

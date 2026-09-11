@@ -9,6 +9,25 @@ describe('i18n catalogs and routing', () => {
     expect(Object.keys(tr).sort()).toEqual(Object.keys(en).sort());
   });
 
+  it('keeps the mobile landing hint on desktop without saying computer', () => {
+    expect(en['landing.desktopHint']).toMatch(/desktop/i);
+    expect(tr['landing.desktopHint']).toMatch(/desktop/i);
+    expect(en['landing.desktopHint']).not.toMatch(/computer/i);
+    expect(tr['landing.desktopHint']).not.toMatch(/bilgisayar/i);
+    for (const key of [
+      'desktopRequired.landing.title',
+      'desktopRequired.landing.body',
+      'desktopRequired.story.title',
+      'desktopRequired.story.body',
+      'desktopRequired.copy',
+      'desktopRequired.copyHome',
+      'desktopRequired.share',
+    ] as const) {
+      expect(en[key]).not.toMatch(/computer/i);
+      expect(tr[key]).not.toMatch(/bilgisayar/i);
+    }
+  });
+
   it('uses Turkish only for Turkish browser locales', () => {
     expect(localeFromLanguage('tr-TR')).toBe('tr');
     expect(localeFromLanguage('en-US')).toBe('en');

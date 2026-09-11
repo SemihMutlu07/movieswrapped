@@ -66,7 +66,34 @@ from app.services.ratings import (
     compute_rating_personality,
     compute_rating_stats,
 )
-from app.services.review_analysis import compute_review_metrics
+from app.services.review_analysis import (
+    apply_fetched_review_posters,
+    attach_review_posters,
+    compute_review_metrics,
+    unique_reviews_missing_posters,
+)
+
+
+async def _fill_missing_review_posters(
+    session: aiohttp.ClientSession,
+    review_analysis: Dict[str, Any],
+) -> None:
+    """TMDB search/movie for review films that were not in watched.csv (or unmatched)."""
+    needed = unique_reviews_missing_posters(review_analysis)
+    if not needed:
+        return
+    from app.services.tmdb_client import resolve_movie_poster
+
+    paths = await asyncio.gather(
+        *[resolve_movie_poster(session, title, year) for title, year in needed]
+    )
+    fetched = [
+        (title, year, path)
+        for (title, year), path in zip(needed, paths)
+        if isinstance(path, str) and path
+    ]
+    if fetched:
+        apply_fetched_review_posters(review_analysis, fetched)
 
 
 async def process_comprehensive_letterboxd_data(
@@ -102,7 +129,7 @@ async def process_comprehensive_letterboxd_data(
     if watched_df.empty:
         raise ValueError("\u274c watched.csv is required for analysis.")
 
-    films_df = watched_df.rename(columns={"Name": "title", "Year": "year"})
+    films_df = watched_df.rename(columns={"Name": "title", "Year": "year", "Letterboxd URI": "letterboxd_uri"})
 
     if not ratings_df.empty:
         ratings_df_renamed = ratings_df[["Name", "Year", "Rating"]].rename(
@@ -110,7 +137,8 @@ async def process_comprehensive_letterboxd_data(
         )
         films_df = pd.merge(films_df, ratings_df_renamed, on=["title", "year"], how="left")
 
-    unique_films = films_df[["title", "year"]].drop_duplicates().reset_index(drop=True)
+    unique_cols = ["title", "year"] + (["letterboxd_uri"] if "letterboxd_uri" in films_df.columns else [])
+    unique_films = films_df[unique_cols].drop_duplicates(subset=["title", "year"]).reset_index(drop=True)
 
     t1 = time.perf_counter()
     total_rows = len(watched_df) + len(ratings_df) + len(diary_df) + len(reviews_df)
@@ -131,7 +159,15 @@ async def process_comprehensive_letterboxd_data(
 
     _collector = _tmdb_current()
 
-    resolve_tasks = [resolve_tmdb_id(session, row["title"], row["year"]) for _, row in unique_films.iterrows()]
+    resolve_tasks = [
+        resolve_tmdb_id(
+            session,
+            row["title"],
+            row["year"],
+            row["letterboxd_uri"] if "letterboxd_uri" in unique_films.columns else None,
+        )
+        for _, row in unique_films.iterrows()
+    ]
     tmdb_match_started = time.perf_counter()
     tmdb_ids = await asyncio.gather(*resolve_tasks)
     if _collector is not None:
@@ -156,9 +192,14 @@ async def process_comprehensive_letterboxd_data(
     _progress("tmdb_metadata", "Metadata collection complete", len(unique_tmdb_ids), len(unique_tmdb_ids))
 
     films_enriched = pd.merge(unique_films, metadata_df, on="tmdb_id", how="left", suffixes=("_csv", "_tmdb"))
-    if "title_tmdb" in films_enriched.columns:
-        films_enriched["title"] = films_enriched["title_tmdb"].fillna(films_enriched["title_csv"])
+    if "title_csv" in films_enriched.columns:
+        films_enriched["letterboxd_title"] = films_enriched["title_csv"]
     else:
+        films_enriched["letterboxd_title"] = films_enriched["title"]
+    if "title_tmdb" in films_enriched.columns:
+        csv_title = films_enriched["title_csv"] if "title_csv" in films_enriched.columns else films_enriched["title"]
+        films_enriched["title"] = films_enriched["title_tmdb"].fillna(csv_title)
+    elif "title_csv" in films_enriched.columns:
         films_enriched["title"] = films_enriched["title_csv"]
     films_enriched.drop(
         columns=[col for col in ["title_csv", "title_tmdb"] if col in films_enriched.columns],
@@ -381,10 +422,15 @@ async def process_comprehensive_letterboxd_data(
     # -----------------------------------------------------------------------
     # 15. TEST LAB DATASETS
     # -----------------------------------------------------------------------
+    ratings_src = (
+        films_df[["title", "year", "rating"]]
+        if "rating" in films_df.columns
+        else films_df[["title", "year"]]
+    ).rename(columns={"title": "letterboxd_title"})
     analysis_df = pd.merge(
         films_enriched,
-        films_df[["title", "year", "rating"]] if "rating" in films_df.columns else films_df[["title", "year"]],
-        on=["title", "year"],
+        ratings_src,
+        on=["letterboxd_title", "year"],
         how="left",
     )
 
@@ -440,6 +486,8 @@ async def process_comprehensive_letterboxd_data(
     # -----------------------------------------------------------------------
     _progress("analyzing", "Analyzing review text...", 10, 11)
     stats["review_analysis"] = compute_review_metrics(reviews_df)
+    attach_review_posters(stats["review_analysis"], stats.get("all_films") or [])
+    await _fill_missing_review_posters(session, stats["review_analysis"])
 
     _progress("analyzing", "Analysis complete!", 11, 11)
 

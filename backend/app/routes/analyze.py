@@ -43,7 +43,7 @@ def _is_zip_bytes(data: bytes) -> bool:
 
 def _is_zip_content_type(content_type: Optional[str]) -> bool:
     lowered = (content_type or "").lower()
-    return "zip" in lowered or "octet-stream" in lowered
+    return "zip" in lowered
 
 
 def _is_letterboxd_export_name(filename: str) -> bool:

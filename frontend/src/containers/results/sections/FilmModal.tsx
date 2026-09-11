@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { motion } from 'framer-motion';
 import IsolatedModal from '@/components/IsolatedModal';
 import { useI18n } from '@/i18n/I18nProvider';
 
@@ -16,6 +17,7 @@ interface FilmModalProps {
     runtime?: number;
     language?: string;
     review_text?: string;
+    letterboxd_uri?: string | null;
   };
   userAvg: number;
 }
@@ -82,6 +84,19 @@ export default function FilmModal({ open, onClose, film }: FilmModalProps) {
           </div>
         )}
 
+        {film.letterboxd_uri ? (
+          <motion.a
+            href={film.letterboxd_uri}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full mt-2 px-4 py-2 rounded-lg bg-orange-500 text-center text-sm font-semibold text-[#1a1a1a]"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          >
+            Open on Letterboxd
+          </motion.a>
+        ) : null}
         <button
           onClick={onClose}
           className="w-full mt-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold transition-colors"

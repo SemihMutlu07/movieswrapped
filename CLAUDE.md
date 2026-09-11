@@ -1,14 +1,14 @@
 # Movies Wrapped (Letterboxd Wrapped)
 
 ## What this repo does
-Analyze a user's Letterboxd data and generate a "wrapped"-style film stats summary.
-Two input paths: (a) CSV/ZIP export upload, (b) public-profile scrape by username.
-Frontend is a static Next.js export; backend is FastAPI that processes uploads/scrapes and enriches with TMDB.
+Analyze a user's Letterboxd export and generate a "wrapped"-style film stats summary.
+Input path: ZIP or CSV/folder export from Letterboxd Settings → Data. Username scrape is archived on `archive/scrape`, not on live `main`.
+Frontend is a static Next.js export; backend is FastAPI that processes uploads and enriches with TMDB.
 
 ## Tech stack
 - Frontend: Next.js 15 (App Router), React 19, TypeScript, TailwindCSS, Recharts, Framer Motion
 - Backend: Python, FastAPI, Uvicorn, pandas/numpy, aiohttp/aiofiles
-- Scraper: BeautifulSoup4 + lxml + requests (used by `app/services/scraper.py`)
+- Scraper: archived on `archive/scrape` (not on live `main`)
 - Database: Supabase (client-side insert/upsert for `user_sessions`, `feedback`, `analysis_runs`)
 - Analytics: PostHog (consent-gated), in-app helper modules
 - Deployment: Frontend on Netlify static export (`output: 'export'`); backend is **live on Render** at `https://wrapped-backend.onrender.com` (built from `backend/Dockerfile`; `netlify.toml` sets it as the production `NEXT_PUBLIC_API_BASE`)
@@ -24,7 +24,7 @@ Frontend is a static Next.js export; backend is FastAPI that processes uploads/s
 - `backend/app/task_manager.py`: In-memory async task state (used by `/api/analyze` polling)
 - `backend/app/analysis_utils.py`: Safe numerical helpers + `compute_cinema_scale`
 - `backend/app/routes/{analyze,tmdb,feedback}.py`: FastAPI routers
-- `backend/app/services/{analysis,scraper,tmdb_client}.py`: Domain logic (CSV pipeline, public-profile scrape, TMDB)
+- `backend/app/services/{analysis,tmdb_client}.py`: Domain logic (CSV pipeline, TMDB)
 - `backend/app/models/`: Pydantic request/response shapes
 - `backend/Dockerfile`, `backend/requirements.txt`, `backend/pytest.ini`, `backend/tests/`
 
@@ -71,7 +71,6 @@ Backend (routers in `backend/app/routes/`):
 - `GET /` — root banner (in `main.py`)
 - `GET /health` — liveness probe (in `main.py`)
 - `POST /api/analyze` — **202 Accepted**, returns `{task_id, status}`; analysis runs in a background task (`routes/analyze.py`)
-- `POST /api/scrape-profile` — synchronous scrape + analyze for a public Letterboxd username (`routes/analyze.py`)
 - `GET /api/progress/{task_id}` — poll task state (`pending|running|done|failed` + stage/message/progress + final `result`)
 - `GET /api/progress` — legacy: returns the most recent active task's stage (no task_id)
 - `GET /api/tmdb/person/search` (`routes/tmdb.py`)
@@ -85,7 +84,7 @@ Frontend route handlers (built into static export only when statically generable
 - `POST /api/analytics` — validates event payload and returns `ok`
 
 Run logging:
-- Each successful `analyze`/`scrape-profile` writes `backend/runs/{username}-{iso-ts}.json` (best-effort; gitignored).
+- Each successful `analyze` writes `backend/runs/{username}-{iso-ts}.json` (best-effort; gitignored).
 
 ## Hard constraints (do not violate)
 - Read the relevant file(s) before making any change.

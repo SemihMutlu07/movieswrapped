@@ -13,6 +13,7 @@ import {
 import { useReducedMotion } from 'framer-motion';
 
 import type { PersonSequenceData } from '../types';
+import { openingElapsedMs } from '../motion/phaseTimeline';
 import { PERSON_PHASE_MS, personPhaseAt, type PersonPhase } from './personPhases';
 
 type PersonSlidePhaseValue = {
@@ -51,11 +52,11 @@ export function PersonSlidePhaseProvider({
   }, [reduce]);
 
   useEffect(() => {
-    elapsedRef.current = 0;
     lastTickRef.current = null;
-    setPhase(reduce ? 'final' : 'textReveal');
-    // Reset only on real slide changes: a data refresh re-creates the sequence
-    // object with the same slideKey, and the A1 entrance must not replay.
+    const settledMs = PERSON_PHASE_MS.final ?? 0;
+    elapsedRef.current = openingElapsedMs(paused, reduce, settledMs);
+    setPhase(reduce || paused ? 'final' : 'textReveal');
+    // Sample paused only on slide change so a mid-slide pause freezes instead of skipping to final.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideKey, reduce]);
 

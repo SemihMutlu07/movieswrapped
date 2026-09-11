@@ -14,10 +14,12 @@ import {
 } from "@/components/share/viewModel";
 import type { StatsData } from "@/containers/results/sections/types";
 
+import { DesktopRequiredNotice } from "@/components/DesktopRequiredNotice";
 import { ThemeProvider } from "@/lib/theme";
 import ThemeWrapper from "@/components/ThemeWrapper";
 import type { FeedbackFabRef } from "@/components/FeedbackFab";
 import { trackEvent } from "@/lib/analytics";
+import { usePhoneLayout } from "@/hooks/usePhoneLayout";
 import {
   buildAnalysisRange,
   buildDecadeData,
@@ -59,6 +61,7 @@ const ResultsContentLazy = dynamic(
 
 export default function ResultsPage() {
   const { locale, t } = useI18n();
+  const isPhone = usePhoneLayout();
   const {
     stats,
     loading,
@@ -190,21 +193,27 @@ export default function ResultsPage() {
       <ThemeProvider>
         <ThemeWrapper>
           {chrome}
-          <div className="min-h-dvh bg-[#1e252d] flex items-center justify-center text-white">
-            <div className="text-center px-4">
-              <h2 className="text-2xl font-bold mb-4">{t('results.empty.noData')}</h2>
-              <p className="text-gray-400">
-                {username
-                  ? t('results.empty.noUserData', { username })
-                  : t('results.empty.uploadFirst')}
-              </p>
-              <Link
-                href={localizePath('/', locale)}
-                className="mt-6 inline-block px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl font-semibold transition-colors"
-              >
-                {t('results.empty.goBack')}
-              </Link>
-            </div>
+          <div className="min-h-dvh bg-[#1a1a1a] flex items-center justify-center text-white">
+            {isPhone ? (
+              <div className="w-full max-w-md px-4">
+                <DesktopRequiredNotice surface="results" />
+              </div>
+            ) : (
+              <div className="text-center px-4">
+                <h2 className="text-2xl font-bold mb-4">{t('results.empty.noData')}</h2>
+                <p className="text-gray-400">
+                  {username
+                    ? t('results.empty.noUserData', { username })
+                    : t('results.empty.uploadFirst')}
+                </p>
+                <Link
+                  href={localizePath('/', locale)}
+                  className="mt-6 inline-block px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl font-semibold transition-colors"
+                >
+                  {t('results.empty.goBack')}
+                </Link>
+              </div>
+            )}
           </div>
         </ThemeWrapper>
       </ThemeProvider>

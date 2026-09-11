@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom';
 import {
   SHARE_POPOVER_Z_INDEX,
   computeSharePopoverPosition,
+  isShareSheetViewport,
 } from './sharePopoverLayout';
 
 type SharePopoverProps = {
@@ -38,6 +39,7 @@ export function SharePopover({
   const panelRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [sheet, setSheet] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -50,6 +52,13 @@ export function SharePopover({
     }
 
     const updatePosition = () => {
+      const compact = isShareSheetViewport(window.innerWidth);
+      setSheet(compact);
+      if (compact) {
+        setCoords({ top: 0, left: 0 });
+        return;
+      }
+
       const anchor = anchorRef.current;
       const panel = panelRef.current;
       if (!anchor || !panel) return;
@@ -127,13 +136,25 @@ export function SharePopover({
       aria-modal="false"
       data-share-popover-panel="true"
       data-mw-overlay-layer="true"
-      className="fixed"
-      style={{
-        top: coords?.top ?? -10000,
-        left: coords?.left ?? -10000,
-        zIndex: SHARE_POPOVER_Z_INDEX,
-        visibility: coords ? 'visible' : 'hidden',
-      }}
+      data-share-sheet={sheet ? 'bottom' : 'popover'}
+      className={sheet
+        ? 'fixed inset-x-3 z-[210] w-auto'
+        : 'fixed'}
+      style={sheet
+        ? {
+            top: 'auto',
+            bottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))',
+            left: 12,
+            right: 12,
+            zIndex: SHARE_POPOVER_Z_INDEX,
+            visibility: coords ? 'visible' : 'hidden',
+          }
+        : {
+            top: coords?.top ?? -10000,
+            left: coords?.left ?? -10000,
+            zIndex: SHARE_POPOVER_Z_INDEX,
+            visibility: coords ? 'visible' : 'hidden',
+          }}
     >
       {children}
     </div>,

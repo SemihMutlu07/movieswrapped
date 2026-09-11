@@ -120,7 +120,6 @@ export function initPostHog() {
       defaults: '2026-05-30',
       // Pageviews are emitted by PageViewTracker so App Router navigation is deterministic.
       capture_pageview: false,
-      // Consent is explicit, so product interaction autocapture is useful for UX diagnosis.
       autocapture: true,
       capture_exceptions: {
         capture_unhandled_errors: true,
@@ -146,7 +145,6 @@ export function captureEvent(event: string, properties?: Record<string, unknown>
   if (POSTHOG_DISABLED || typeof window === 'undefined') return;
 
   try {
-    // Never collect behavioral analytics without explicit opt-in.
     if (getConsent() !== 'accept') return;
     if (shouldSuppressLifecycleDuplicate(event)) return;
 

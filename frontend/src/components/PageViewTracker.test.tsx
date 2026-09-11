@@ -16,25 +16,13 @@ vi.mock('@/lib/posthog', () => posthogMocks);
 
 import PageViewTracker from './PageViewTracker';
 
-describe('PageViewTracker consent gate', () => {
+describe('PageViewTracker default-on analytics', () => {
   beforeEach(() => {
     sessionStorage.clear();
-    localStorage.clear();
     vi.clearAllMocks();
   });
 
-  it('keeps analytics off when no explicit consent decision exists', () => {
-    render(<PageViewTracker />);
-
-    expect(localStorage.getItem('consent_decision')).toBeNull();
-    expect(posthogMocks.initPostHog).not.toHaveBeenCalled();
-    expect(posthogMocks.flushQueue).not.toHaveBeenCalled();
-    expect(posthogMocks.captureEvent).not.toHaveBeenCalled();
-  });
-
-  it('initializes, flushes, and captures after explicit persisted acceptance', () => {
-    localStorage.setItem('consent_decision', 'accept');
-
+  it('initializes, flushes, and captures on mount', () => {
     render(<PageViewTracker />);
 
     expect(posthogMocks.initPostHog).toHaveBeenCalledOnce();
@@ -43,15 +31,5 @@ describe('PageViewTracker consent gate', () => {
       path: '/results',
       search: 'source=test',
     });
-  });
-
-  it('keeps analytics off after an explicit decline', () => {
-    localStorage.setItem('consent_decision', 'decline');
-
-    render(<PageViewTracker />);
-
-    expect(posthogMocks.initPostHog).not.toHaveBeenCalled();
-    expect(posthogMocks.flushQueue).not.toHaveBeenCalled();
-    expect(posthogMocks.captureEvent).not.toHaveBeenCalled();
   });
 });

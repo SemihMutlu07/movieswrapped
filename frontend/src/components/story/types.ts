@@ -34,6 +34,8 @@ export type PersonSequenceData = {
   profile: StoryMedia | null;
   streamPosters: StoryMedia[];
   rewatch: PersonRewatchInsight | null;
+  /** Actor slide only: same name as the director slide, so copy can distinguish the credit. */
+  sameAsDirector?: boolean;
 };
 
 export type DirectorRewatchInsight = PersonRewatchInsight;

@@ -208,6 +208,7 @@ class TestComputeStoryAnalytics:
         result = compute_story_analytics(stats, films_enriched, films_df, diary_df)
         assert "most_active_day" in result
         assert result["most_active_day"]["films"] == 3
+        assert result["most_active_day"]["date"] == "2024-01-15"
 
     def test_cinematic_passport(self):
         stats = {

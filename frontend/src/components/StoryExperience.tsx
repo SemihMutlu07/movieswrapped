@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 
+import { DesktopRequiredNotice } from '@/components/DesktopRequiredNotice';
 import { slideMeta } from '@/components/story/manifest';
 import { useStoryMachine } from '@/components/story/useStoryMachine';
 import { AUTO_MIN_MS, SLIDE_MS, PRELOAD_AHEAD } from '@/components/story/constants';
@@ -10,6 +12,8 @@ import { buildSlides } from '@/components/story/slides/buildSlides';
 import { StoryNavigation } from '@/components/story/StoryNavigation';
 import { StorySlidePanel } from '@/components/story/StorySlidePanel';
 import { StoryTopChrome } from '@/components/story/StoryTopChrome';
+import { usePhoneLayout } from '@/hooks/usePhoneLayout';
+import { localizePath } from '@/i18n/routing';
 import { PersonSlidePhaseProvider } from '@/components/story/person/PersonSlidePhaseContext';
 import { ReviewSlidePhaseProvider } from '@/components/story/review/ReviewSlidePhaseContext';
 import { FinaleSlidePhaseProvider } from '@/components/story/finale/FinaleSlidePhaseContext';
@@ -22,9 +26,28 @@ import { useI18n } from '@/i18n/I18nProvider';
 /** Scene crossfade wall-clock lock (audit band 480–620ms). */
 const SCENE_TRANSITION_MS = Math.round(MOTION_DURATION.transition * 1000);
 
+function StorySessionMessage({ title, description }: { title: string; description: string }) {
+  const { locale, t } = useI18n();
+  return (
+    <main className="grid min-h-screen place-items-center bg-[#0f0d0b] p-8 text-center">
+      <div>
+        <p className="font-mono text-xs uppercase tracking-[0.18em] text-stone-500">{title}</p>
+        <p className="mt-3 text-sm text-stone-400">{description}</p>
+        <Link
+          href={localizePath('/', locale)}
+          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full border border-white/15 px-5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-stone-200 transition-colors hover:border-amber-300 hover:text-amber-200"
+        >
+          {t('nav.backHome')}
+        </Link>
+      </div>
+    </main>
+  );
+}
+
 export default function StoryExperience() {
   const i18n = useI18n();
   const { t } = i18n;
+  const isPhoneLayout = usePhoneLayout();
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -58,14 +81,15 @@ export default function StoryExperience() {
       setIndex(clamped);
       elapsedRef.current = 0;
       setProgress(0);
-      setIsPaused(false);
     });
   }, [sceneGate, slides.length]);
 
   const goNext = useCallback(() => {
-    if (currentInteraction === 'auto-min' && elapsedRef.current < AUTO_MIN_MS) return;
+    // Pause is an explicit hold; the next tap should skip. Auto-min only
+    // blocks hasty taps while the slide is actually playing.
+    if (currentInteraction === 'auto-min' && !isPaused && elapsedRef.current < AUTO_MIN_MS) return;
     goToSlide(index + 1);
-  }, [currentInteraction, goToSlide, index]);
+  }, [currentInteraction, goToSlide, index, isPaused]);
   const goPrevious = useCallback(() => goToSlide(index - 1), [goToSlide, index]);
 
   useEffect(() => {
@@ -74,7 +98,7 @@ export default function StoryExperience() {
   }, [index, isLast]);
 
   useEffect(() => {
-    if (slides.length === 0 || isLast || isPaused || phase !== 'playing' || currentInteraction === 'manual') return;
+    if (isPhoneLayout || slides.length === 0 || isLast || isPaused || phase !== 'playing' || currentInteraction === 'manual') return;
     let frame = 0;
     let previous = performance.now();
 
@@ -93,10 +117,10 @@ export default function StoryExperience() {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [goToSlide, index, slides.length, isLast, isPaused, phase, currentInteraction]);
+  }, [goToSlide, index, slides.length, isLast, isPaused, phase, currentInteraction, isPhoneLayout]);
 
   useEffect(() => {
-    if (slides.length === 0) return;
+    if (isPhoneLayout || slides.length === 0) return;
     const urls = new Set<string>();
     for (let i = index; i <= Math.min(index + PRELOAD_AHEAD, slides.length - 1); i += 1) {
       for (const item of slides[i]?.media?.slice(0, 12) ?? []) urls.add(item.url);
@@ -105,7 +129,7 @@ export default function StoryExperience() {
       const img = new Image();
       img.src = url;
     }
-  }, [index, slides]);
+  }, [index, slides, isPhoneLayout]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -120,17 +144,22 @@ export default function StoryExperience() {
     return () => window.removeEventListener('keydown', onKey);
   }, [goNext, goPrevious, isLast]);
 
+  if (isPhoneLayout) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-[#1a1a1a] p-4">
+        <DesktopRequiredNotice surface="story" />
+      </div>
+    );
+  }
+
   if (phase === 'idle') return null;
 
+  if (phase === 'error') {
+    return <StorySessionMessage title={t('story.error.title')} description={t('story.error.description')} />;
+  }
+
   if (!stats || slides.length === 0) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-[#0f0d0b] p-8 text-center">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-stone-500">{t('story.empty.title')}</p>
-          <p className="mt-3 text-sm text-stone-400">{t('story.empty.description')}</p>
-        </div>
-      </main>
-    );
+    return <StorySessionMessage title={t('story.empty.title')} description={t('story.empty.description')} />;
   }
 
   const activeSlide = slides[index];
@@ -174,7 +203,7 @@ export default function StoryExperience() {
         slide={activeSlide}
         isLast={isLast}
         stats={stats}
-        showTapHint={currentInteraction === 'manual'}
+        showTapHint={false}
       />
 
       {!isLast && (

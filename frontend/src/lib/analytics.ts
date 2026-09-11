@@ -88,7 +88,7 @@ export function getDirectTmdbImageUrl(path: string | null | undefined, size: str
 
 /**
  * Always-allowed, high-level events (page hits, feature usage, errors).
- * Still respects PostHog init + consent gate inside captureEvent.
+ * Still respects PostHog init inside captureEvent.
  */
 export function trackEvent(name: string, props?: Props): void {
   try {
@@ -99,7 +99,7 @@ export function trackEvent(name: string, props?: Props): void {
 }
 
 /**
- * Events that should only fire when the user has explicitly accepted analytics.
+ * Events that should only fire when PostHog is initialized.
  */
 export function trackConsentedEvent(name: string, props?: Props): void {
   try {
