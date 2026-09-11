@@ -1,5 +1,6 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import StoryFinaleCard from '@/components/story/StoryFinaleCard';
@@ -35,6 +36,7 @@ export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlid
   const { t } = useI18n();
   const { reduce } = useStoryMotion();
   const isPerson = slide.visual === 'person' || slide.visual === 'director';
+  const accent = slide.accent ?? '#f59e0b';
 
   return (
     <div
@@ -53,10 +55,11 @@ export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlid
             duration: reduce ? 0 : MOTION_DURATION.panelEnter,
             ease: MOTION_EASE.snap,
           }}
+          style={{ ['--story-accent']: accent } as CSSProperties}
           className={`@container flex h-full max-h-full min-h-0 min-w-0 w-full flex-col ${
             isLast
               ? 'mx-auto max-w-md md:ml-[5vw] md:max-w-2xl'
-              : `mx-auto max-w-xl text-center md:mx-0 md:my-auto md:h-auto md:rounded-[28px] md:border md:border-white/10 md:bg-black/42 md:px-8 md:py-8 md:text-left md:shadow-2xl md:shadow-black/40 md:backdrop-blur-md ${
+              : `mx-auto max-w-xl text-center md:mx-0 md:my-auto md:h-auto md:rounded-[28px] md:border md:border-white/10 md:bg-black/60 md:px-8 md:py-8 md:text-left md:backdrop-blur-xl md:shadow-[inset_3px_0_0_0_var(--story-accent),0_26px_60px_-18px_rgba(0,0,0,0.7)] ${
                   isPerson ? 'md:ml-[6vw] md:max-w-lg' : 'md:ml-[8vw]'
                 }`
           }`}
