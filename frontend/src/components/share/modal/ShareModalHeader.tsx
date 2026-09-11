@@ -22,7 +22,7 @@ export function ShareModalHeader({
   const { t } = useI18n();
 
   return (
-    <div className="flex items-center justify-between border-b border-transparent px-5 pb-2 pt-4 md:border-white/10 md:px-6 md:py-4">
+    <div className="flex items-center justify-between border-b border-white/8 px-5 pb-2 pt-4 md:px-6 md:py-3">
       <div>
         <span id="share-modal-title" className="block text-sm font-semibold text-white/90">{t('share.title')}</span>
         <span className="block text-[11px] text-slate-500">

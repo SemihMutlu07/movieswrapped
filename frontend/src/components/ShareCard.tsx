@@ -24,7 +24,7 @@ const ShareCard = React.forwardRef<HTMLDivElement, Props>(function ShareCard({ d
       className="relative flex h-[675px] w-[1200px] overflow-hidden bg-[#0d0d0d] p-10 text-white"
       style={{ fontFamily: "'Avenir Next', Manrope, 'Segoe UI', system-ui, sans-serif" }}
     >
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-fuchsia-400 to-emerald-400" />
+      <div className="absolute inset-x-0 top-0 h-1 bg-[#ff8000]" />
       <div className="grid min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
         <header className="flex min-w-0 items-start justify-between gap-8">
           <div className="min-w-0">
@@ -40,7 +40,7 @@ const ShareCard = React.forwardRef<HTMLDivElement, Props>(function ShareCard({ d
 
         <main className="mt-7 grid min-h-0 min-w-0 grid-cols-[minmax(0,1.08fr)_minmax(440px,0.92fr)] gap-7">
           <section className="flex min-h-0 min-w-0 flex-col rounded-[28px] border border-white/10 bg-white/[0.035] p-7">
-            <p className="text-[15px] font-bold uppercase tracking-[0.18em] text-violet-300">{labels.youWatched}</p>
+            <p className="text-[15px] font-bold uppercase tracking-[0.18em] text-orange-400">{labels.youWatched}</p>
             <div className="mt-2 flex min-w-0 items-end gap-4">
               <strong className="text-[118px] font-black leading-[0.8] tabular-nums text-white">
                 {data.watchedFilms}
@@ -53,7 +53,7 @@ const ShareCard = React.forwardRef<HTMLDivElement, Props>(function ShareCard({ d
                 label={labels.writtenReviews}
                 value={data.writtenReviews}
                 className="rounded-2xl bg-black/30 p-4"
-                valueClassName="text-[32px] font-black leading-none text-fuchsia-300 tabular-nums"
+                valueClassName="text-[32px] font-black leading-none text-orange-300 tabular-nums"
               />
               <Metric
                 label={labels.daysWatching}
@@ -65,7 +65,7 @@ const ShareCard = React.forwardRef<HTMLDivElement, Props>(function ShareCard({ d
                 label={labels.scale}
                 value={`${Math.round(data.cinemaScale)}/100`}
                 className="rounded-2xl bg-black/30 p-4"
-                valueClassName="text-[32px] font-black leading-none text-violet-300 tabular-nums"
+                valueClassName="text-[32px] font-black leading-none text-orange-300 tabular-nums"
               />
             </div>
 
@@ -90,7 +90,7 @@ const ShareCard = React.forwardRef<HTMLDivElement, Props>(function ShareCard({ d
               label={labels.onScreenCrush}
               countLabel={labels.moviesTogether}
               unknownName={labels.unknown}
-              className="rounded-[28px] border border-fuchsia-400/20 bg-gradient-to-br from-fuchsia-500/15 to-violet-500/5 p-5"
+              className="rounded-[28px] border border-orange-400/20 bg-orange-400/[0.08] p-5"
               mediaClassName="w-[112px] rounded-2xl border border-white/10 bg-zinc-900"
               nameClassName="text-[25px] font-black leading-tight text-white"
             />
@@ -99,7 +99,7 @@ const ShareCard = React.forwardRef<HTMLDivElement, Props>(function ShareCard({ d
               label={labels.favoriteDirector}
               countLabel={labels.moviesDirected}
               unknownName={labels.directorUnavailable}
-              className="rounded-[28px] border border-emerald-400/20 bg-gradient-to-br from-emerald-500/15 to-cyan-500/5 p-5"
+              className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5"
               mediaClassName="w-[112px] rounded-2xl border border-white/10 bg-zinc-900"
               nameClassName="text-[25px] font-black leading-tight text-white"
             />
