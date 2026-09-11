@@ -34,9 +34,9 @@ import type {
 import { ScrollspyIndicator } from "@/containers/results/ScrollspyIndicator";
 import { useLazyMount } from "@/hooks/useIntersectionObserver";
 import { trackEvent } from "@/lib/analytics";
+import { storyPath } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/i18n/I18nProvider";
-import { localizePath } from "@/i18n/routing";
 
 const ShareModal = dynamic(() => import("@/components/ShareModal"), {
   ssr: false,
@@ -419,7 +419,7 @@ export function ResultsContent({
               {t('results.share.footerTitle')}
             </button>
             <Link
-              href={localizePath('/story', locale)}
+              href={storyPath(username, locale)}
               className="text-sm underline underline-offset-2 transition-colors hover:text-slate-200"
               style={{
                 color:
@@ -430,7 +430,7 @@ export function ResultsContent({
                       : "#6a6a6a",
               }}
             >
-              View as Story
+              {t('results.share.viewStory')}
             </Link>
           </div>
 

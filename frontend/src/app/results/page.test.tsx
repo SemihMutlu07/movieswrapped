@@ -168,6 +168,7 @@ describe('ResultsPage stored-result contracts', () => {
 
     expect(await screen.findByText('No data found')).toBeInTheDocument();
     expect(screen.getByText('Please upload your Letterboxd data first.')).toBeInTheDocument();
+    expect(screen.queryByTestId('desktop-required-results')).not.toBeInTheDocument();
   });
 
   it('selects the requested film set and sorts rated films before unrated films', async () => {

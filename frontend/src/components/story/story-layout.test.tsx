@@ -5,11 +5,20 @@ import type { ReactNode } from 'react';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { Big, Label, Sub } from '@/components/story/SlideTypography';
 import { StoryMotionProvider } from '@/components/story/motion/StoryMotionContext';
+import { StoryNavigation } from '@/components/story/StoryNavigation';
+import { StoryTopChrome } from '@/components/story/StoryTopChrome';
 import { MobileMediaRail } from '@/components/story/visuals/MobileMediaRail';
+import type { Slide } from '@/components/story/types';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/en/story',
   useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
 }));
 
 function wrap(ui: ReactNode) {
@@ -34,22 +43,83 @@ describe('story mobile layout primitives', () => {
       expect(node.className).toMatch(/min-w-0/);
       expect(node.className).toMatch(/break-words/);
       expect(node.className).not.toMatch(/whitespace-nowrap/);
+      expect(node.className).not.toMatch(/tracking-\[0\.22em\]/);
     }
   });
 
-  it('sizes the mobile poster rail with shrinking grid tracks', () => {
+  it('shows a single hero poster without a collapsing peek strip', () => {
     const media = [
       { type: 'poster' as const, url: '/a.jpg', alt: 'A poster' },
       { type: 'poster' as const, url: '/b.jpg', alt: 'B poster' },
       { type: 'poster' as const, url: '/c.jpg', alt: 'C poster' },
-      { type: 'poster' as const, url: '/d.jpg', alt: 'D poster' },
-      { type: 'poster' as const, url: '/e.jpg', alt: 'E poster' },
     ];
     const { container } = wrap(<MobileMediaRail media={media} accent="#f59e0b" />);
     const rail = screen.getByTestId('story-mobile-media-rail');
-    const grid = rail.firstElementChild as HTMLElement;
-    expect(grid.style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))');
-    expect(container.querySelectorAll('img')).toHaveLength(3);
-    expect(grid.className).toMatch(/min-w-0/);
+    const hero = rail.firstElementChild as HTMLElement;
+    expect(hero).toHaveAttribute('data-story-peek', 'false');
+    expect(container.querySelectorAll('img')).toHaveLength(1);
+  });
+});
+
+describe('story top chrome', () => {
+  it('keeps locale off the progress segments and pause on the row below', () => {
+    const slides = Array.from({ length: 12 }, (_, i) => ({ key: `slide-${i}` })) as Slide[];
+    wrap(
+      <StoryTopChrome
+        slides={slides}
+        index={2}
+        progress={40}
+        isPaused={false}
+        isLast={false}
+        onTogglePause={() => undefined}
+      />,
+    );
+    const progress = screen.getByTestId('story-progress-bar');
+    const locale = screen.getByTestId('story-language-switch');
+    const row = progress.parentElement?.parentElement;
+    expect(row).toContainElement(progress);
+    expect(row).toContainElement(locale);
+    expect(progress).toHaveAttribute('data-story-progress-count', '12');
+    expect(progress.children).toHaveLength(12);
+    expect(screen.getByLabelText('Pause story')).toBeInTheDocument();
+  });
+});
+
+describe('story tap zones', () => {
+  it('keeps Instagram-style hit targets without a visible amber outline', () => {
+    wrap(
+      <StoryNavigation
+        isLast={false}
+        locale="en"
+        onPrevious={() => undefined}
+        onNext={() => undefined}
+        onReplay={() => undefined}
+      />,
+    );
+    const previous = screen.getByLabelText('Previous slide');
+    const next = screen.getByLabelText('Next slide');
+    expect(previous).toHaveAttribute('data-story-tap', 'previous');
+    expect(next).toHaveAttribute('data-story-tap', 'next');
+    expect(previous.className).toMatch(/outline-none/);
+    expect(next.className).toMatch(/outline-none/);
+    expect(previous.className).not.toMatch(/outline-amber/);
+    expect(next.className).not.toMatch(/outline-amber/);
+    expect(next.className).toMatch(/w-2\/3/);
+  });
+
+  it('puts Open the dossier above Back and Replay on the finale', () => {
+    wrap(
+      <StoryNavigation
+        isLast
+        locale="en"
+        onPrevious={() => undefined}
+        onNext={() => undefined}
+        onReplay={() => undefined}
+      />,
+    );
+    const actions = screen.getByTestId('story-finale-actions');
+    const labels = Array.from(actions.querySelectorAll('a, button')).map((node) => node.textContent);
+    expect(labels[0]).toMatch(/Open the dossier/i);
+    expect(labels.slice(1)).toEqual(['Back', 'Replay']);
   });
 });

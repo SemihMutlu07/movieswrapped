@@ -38,17 +38,28 @@ const ERROR_CODE_HINTS: Record<string, string> = {
 
 export { ERROR_CODE_HINTS };
 
+function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'AbortError') return true;
+  return /Failed to fetch|NetworkError|ECONNREFUSED|Unable to connect|Network error/i.test(error.message);
+}
+
 export function handleApiError(error: unknown, context: string): Error {
   const code = error instanceof Error && 'code' in error ? (error as { code?: string }).code : undefined;
   const rawMessage = error instanceof Error ? error.message : String(error);
   const hint = code ? ERROR_CODE_HINTS[code] : undefined;
+  const network = isNetworkFailure(error);
 
-  console.error(`[API Error] ${context}:`, rawMessage, { code, hint, error, context });
+  // ponytail: Failed to fetch is expected when the backend is down; console.error pops the Next overlay
+  if (!network) {
+    console.error(`[API Error] ${context}:`, rawMessage, { code, hint, error, context });
+  }
 
   if (error instanceof Error) {
-    if (error.name === 'TypeError' || error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
-      const err = new Error(`Network error: Unable to connect to ${context}. The server may still be starting or your internet connection may be down.`);
-      if (code) (err as { code?: string }).code = code;
+    if (network) {
+      const err = new Error(`Network error: Unable to connect to ${context}. Failed to fetch.`);
+      (err as { code?: string }).code = code || 'backend_unreachable';
       return err;
     }
     if (code) return error;
@@ -199,9 +210,6 @@ export async function testBackend(retries = 2, delayMs = 1000) {
       return data;
     } catch (error) {
       if (attempt === retries) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          throw new Error('Backend connection timeout. The server may still be starting up.');
-        }
         throw handleApiError(error, 'the backend');
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs));

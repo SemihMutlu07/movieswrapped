@@ -24,7 +24,10 @@ Ship the ZIP-export path that is already on `main`: user drops a Letterboxd Sett
 - Extract already handles nested folders, Windows `\`, `__MACOSX`, skip `deleted`/`orphaned`/`likes`/`lists`, PK magic, extensionless `-utc`.
 - `application/octet-stream` is not a zip by itself; PK or Letterboxd filename decides. Single `.csv` + octet-stream is a CSV.
 - Review like counts are not in the export. UI already hides Most liked / Hidden gems when `reviews_with_likes_data` is null.
-- `npm run dev` must use `backend/.venv` (`frontend/scripts/run-backend.mjs`). System `python` has no pip.
+- TMDB matching: exact title (original title beats an English namesake), year ±1 as a band, then vote_count/popularity. Letterboxd film URL slug wins when present. Never send `year=` to `search/movie` (Split 2016 vs Écartée).
+- Story tap zones must stay outline-free (`data-story-tap`); Instagram left-1/3 / right-2/3. Progress bar is full-width above Pause/locale (`data-story-progress-count`). Mobile rail is one hero poster (`data-story-peek=false`).
+- Share actor/director picker is a solid sheet on viewports < 640px (`data-share-sheet=bottom`), not a frosted overlay on the card.
+- Phone gate is UA (`usePhoneLayout`), not viewport: desktop DnD stays on a narrow window. Do not say computer / bilgisayar.
 
 ## Forbidden
 
@@ -44,8 +47,8 @@ Ship the ZIP-export path that is already on `main`: user drops a Letterboxd Sett
 ## Acceptance
 
 - `cd frontend && npx tsc --noEmit`
-- `cd frontend && npx vitest run src/lib/api.export.test.ts src/i18n/catalogs.test.ts src/containers/results/sections/ReviewAnalysisSection.test.tsx src/containers/results/sections/ShareModalDynamic.test.tsx`
-- `cd backend && python -m pytest tests/test_zip_export.py tests/test_api.py`
+- `cd frontend && npx vitest run src/lib/api.export.test.ts src/i18n/catalogs.test.ts src/containers/results/sections/ReviewAnalysisSection.test.tsx src/containers/results/sections/ShareModalDynamic.test.tsx src/components/story/story-layout.test.tsx src/components/share/modal/sharePopoverLayout.test.ts src/components/LetterboxdLanding.consent.test.tsx src/components/share/ShareModal.test.tsx`
+- `cd backend && python -m pytest tests/test_zip_export.py tests/test_api.py tests/test_tmdb_movie_pick.py`
 - Landing copy is ZIP/folder, not “type your username”
 - Share buttons use `results.share.cta` / `results.share.footerTitle`
 
@@ -58,7 +61,6 @@ Ship the ZIP-export path that is already on `main`: user drops a Letterboxd Sett
 
 ## DEFER (do not open work)
 
-- TMDB first-result match (`resolve_tmdb_id` uses `results[0]`; country/poster mismatches like 1917-as-Spain)
-- Share-card layout / bento / year poster pack
+- Share-card visual polish / bento / year poster pack (share card layout is OK for now)
 - LoadingScreen `mode="scrape"` leftover (dev harness + tests only)
 - Remaining watchlist i18n keys with no `/watchlist` page

@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeError } from './errors';
 
+describe('normalizeError network failures', () => {
+  it('maps Failed to fetch to backend_unreachable', () => {
+    expect(normalizeError(new TypeError('Failed to fetch')).reason).toBe('backend_unreachable');
+  });
+
+  it('maps wrapped handleApiError network messages to backend_unreachable', () => {
+    const err = Object.assign(
+      new Error('Network error: Unable to connect to file analysis. Failed to fetch.'),
+      { code: 'backend_unreachable' },
+    );
+    expect(normalizeError(err).reason).toBe('backend_unreachable');
+  });
+});
+
 describe('normalizeError desktop worker offline', () => {
   it('maps desktop_worker_offline from error code', () => {
     const err = Object.assign(new Error('temporary failure'), { code: 'desktop_worker_offline' });

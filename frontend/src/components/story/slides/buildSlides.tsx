@@ -3,7 +3,8 @@
 import type { StatsData } from '@/containers/results/sections/types';
 import { findReviewForSummary, selectLongestReview } from '@/lib/reviews';
 import type { Translator } from '@/i18n/createTranslator';
-import { formatActiveDay, formatStoryTimeline } from '@/i18n/story-timeline';
+import { indefiniteArticle } from '@/i18n/englishArticle';
+import { formatActiveDay, formatPeakMonth, formatStoryTimeline } from '@/i18n/story-timeline';
 
 import type { Slide } from '../types';
 import {
@@ -24,7 +25,6 @@ import {
   collectCinematicClaimedUrls,
 } from '../media';
 import { IntroUsername } from './IntroUsername';
-import { RewatchInsight } from './RewatchInsight';
 import { Big, Label, Sub } from '../SlideTypography';
 
 export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
@@ -77,7 +77,7 @@ export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
           {d || stats.hours_watched ? (
             <Sub>
               {d
-                ? t('story.slide.volume.daysSub', { days: formatNumber(d) })
+                ? t('story.slide.volume.daysSub', { days: formatNumber(Math.round(d)) })
                 : stats.hours_watched
                   ? t('story.slide.volume.hoursSub', { hours: formatNumber(Math.round(stats.hours_watched)) })
                   : null}
@@ -101,13 +101,11 @@ export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
       body: (
         <>
           <Label>{t('story.slide.rhythm.label')}</Label>
-          <Big>{peakMonth ? peakMonth.month : viewingSeason}</Big>
-          <Sub>
-            {peakMonth
-              ? t('story.slide.rhythm.peakMonth', { count: formatNumber(peakMonth.count) })
-              : null}
-            {mostActiveDay ? ` ${mostActiveDay}` : ''}
-          </Sub>
+          <Big>{peakMonth ? formatPeakMonth(peakMonth.month, i18n.locale) : viewingSeason}</Big>
+          {peakMonth ? (
+            <Sub>{t('story.slide.rhythm.peakMonth', { count: formatNumber(peakMonth.count) })}</Sub>
+          ) : null}
+          {mostActiveDay ? <Sub>{mostActiveDay}</Sub> : null}
         </>
       ),
     });
@@ -155,16 +153,19 @@ export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
       (poster) => poster.url,
     ) ?? [];
     const actorProfile = stats.top_actors?.find((actor) => actor.name === topActor.name);
-    const actorSequence = buildActorSequence(
-      stats,
-      topActor.name,
-      topActor.count,
-      actorProfile,
-      {
-        excludeUrls: new Set(directorClaimedUrls),
-        directorClaimedUrls,
-      },
-    );
+    const actorSequence = {
+      ...buildActorSequence(
+        stats,
+        topActor.name,
+        topActor.count,
+        actorProfile,
+        {
+          excludeUrls: new Set(directorClaimedUrls),
+          directorClaimedUrls,
+        },
+      ),
+      sameAsDirector: Boolean(directorName && topActor.name === directorName),
+    };
     slides.push({
       key: 'actor',
       media: compactMedia([actorSequence.profile, ...actorSequence.streamPosters], 6),
@@ -282,7 +283,7 @@ export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
           <Big>{t('story.slide.sinefil.score', { score: formatNumber(stats.sinefil_meter.score) })}</Big>
           {stats.sinefil_meter.type && (
             <Sub>
-              {t('story.slide.sinefil.prefix')}
+              {t('story.slide.sinefil.prefix', { article: indefiniteArticle(stats.sinefil_meter.type) })}
               <strong>{stats.sinefil_meter.type}</strong>
               {t('story.slide.sinefil.suffix')}
             </Sub>
@@ -298,7 +299,7 @@ export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
       key: 'persona',
       media: genrePosters(stats, basis?.genre ?? stats.favorite_genre?.name, 12),
       accent: '#c084fc',
-      visual: 'poster-wall',
+      visual: 'mosaic',
       body: (
         <>
           <Label>{t('story.slide.persona.label')}</Label>

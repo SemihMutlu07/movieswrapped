@@ -5,7 +5,7 @@ import re
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
-from app.services.tmdb_client import tmdb_get
+from app.services.tmdb_client import pick_movie_result_id, tmdb_get
 from app.security import enforce_rate_limit
 
 router = APIRouter()
@@ -66,21 +66,17 @@ async def search_tmdb_movie(request: Request, title: str, year: int | None = Non
 
     session = request.app.state.aiohttp_session
     try:
-        params: dict = {"query": title, "include_adult": "false"}
-        if year:
-            params["year"] = year
-
-        movie_data = await tmdb_get(session, "search/movie", params)
+        # Ranking uses year; TMDB year= hides off-by-one hits (Split 2016/2017).
+        movie_data = await tmdb_get(
+            session, "search/movie", {"query": title, "include_adult": "false"}
+        )
         results = movie_data.get("results", []) if movie_data else []
-
-        if not results and year:
-            movie_data = await tmdb_get(session, "search/movie", {"query": title, "include_adult": "false"})
-            results = movie_data.get("results", []) if movie_data else []
 
         if not results:
             return {"found": False, "message": "No movie found"}
 
-        movie = results[0]
+        tmdb_id = pick_movie_result_id(results, year, title)
+        movie = next((item for item in results if item.get("id") == tmdb_id), results[0])
         poster_path = movie.get("poster_path")
         if poster_path:
             return {

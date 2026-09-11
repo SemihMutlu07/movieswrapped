@@ -34,6 +34,69 @@ function namedCountList(value: unknown, limit: number): { name: string; count: n
         .slice(0, limit);
 }
 
+function finiteNumber(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Review counts plus title/year/length records — never bodies or likers. */
+function buildReviewMetrics(stats: Record<string, unknown>): Record<string, unknown> | null {
+    const source = stats.review_analysis;
+    if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+    const review = source as Record<string, unknown>;
+    const metrics: Record<string, unknown> = {};
+    for (const key of [
+        "total_reviews",
+        "reviews_with_text",
+        "review_rate",
+        "total_words_written",
+        "avg_review_length_words",
+        "unique_words_used",
+        "vocab_richness",
+        "total_review_likes",
+        "reviews_with_likes_data",
+    ] as const) {
+        const value = finiteNumber(review[key]);
+        if (value !== null) metrics[key] = value;
+    }
+    const longest = review.longest_review;
+    if (longest && typeof longest === "object" && !Array.isArray(longest)) {
+        const row = longest as Record<string, unknown>;
+        const length = finiteNumber(row.length);
+        if (length !== null) {
+            metrics.longest_review = {
+                length,
+                ...(row.unit === "words" || row.unit === "characters" ? { unit: row.unit } : {}),
+            };
+        }
+    }
+    const reviews = slimReviewList(review.reviews);
+    if (reviews.length > 0) metrics.reviews = reviews;
+    return Object.keys(metrics).length > 0 ? metrics : null;
+}
+
+function slimReviewList(value: unknown, limit = 80): Record<string, unknown>[] {
+    if (!Array.isArray(value)) return [];
+    const rows: Array<Record<string, unknown> & { _sort: number }> = [];
+    for (const item of value) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+        const row = item as Record<string, unknown>;
+        if (typeof row.title !== "string" || !row.title.trim()) continue;
+        const slim: Record<string, unknown> & { _sort: number } = {
+            title: row.title.trim(),
+            _sort: finiteNumber(row.word_count) ?? 0,
+        };
+        if (typeof row.year === "string" && row.year) slim.year = row.year;
+        const wordCount = finiteNumber(row.word_count);
+        if (wordCount !== null) slim.word_count = wordCount;
+        const rating = finiteNumber(row.rating);
+        if (rating !== null) slim.rating = rating;
+        if (typeof row.poster_path === "string" && row.poster_path) slim.poster_path = row.poster_path;
+        rows.push(slim);
+    }
+    rows.sort((a, b) => b._sort - a._sort);
+    return rows.slice(0, limit).map(({ _sort: _ignored, ...rest }) => rest);
+}
+
 function pickObject(value: unknown, keys: string[]): Record<string, unknown> | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     const source = value as Record<string, unknown>;
@@ -72,6 +135,7 @@ function buildPersistedDetails(stats: Record<string, unknown>): Record<string, u
             "total_days",
             "period_description",
         ]),
+        review_metrics: buildReviewMetrics(stats) ?? undefined,
     });
 }
 

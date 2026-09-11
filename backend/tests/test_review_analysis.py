@@ -4,9 +4,12 @@ import pytest
 from app.services.review_analysis import (
     _select_longest_review_entry,
     _word_count,
+    apply_fetched_review_posters,
+    attach_review_posters,
     compute_review_metrics,
     enrich_scraped_reviews,
     recompute_longest_review,
+    unique_reviews_missing_posters,
 )
 
 
@@ -191,3 +194,47 @@ def test_recompute_longest_review_from_reviews_list():
         "length": 13,
         "unit": "characters",
     }
+
+
+def test_attach_review_posters_matches_letterboxd_title_when_tmdb_title_differs():
+    analysis = {
+        "reviews": [
+            {"title": "Memories of Underdevelopment", "year": 1968, "text": "long review body"},
+            {"title": "Unknown", "year": 2001, "text": "orphan"},
+        ],
+        "top_liked_reviews": [
+            {"title": "Memories of Underdevelopment", "year": "1968"},
+        ],
+    }
+    all_films = [
+        {
+            "title": "Memorias del subdesarrollo",
+            "letterboxd_title": "Memories of Underdevelopment",
+            "original_title": "Memorias del subdesarrollo",
+            "year": 1968,
+            "poster_path": "/mem.jpg",
+        }
+    ]
+    attach_review_posters(analysis, all_films)
+    assert analysis["reviews"][0]["poster_path"] == "/mem.jpg"
+    assert analysis["reviews"][1]["poster_path"] == ""
+    assert analysis["top_liked_reviews"][0]["poster_path"] == "/mem.jpg"
+    assert unique_reviews_missing_posters(analysis) == [("Unknown", 2001)]
+
+
+def test_attach_review_posters_does_not_overwrite_existing_path():
+    analysis = {"reviews": [{"title": "Stalker", "year": 1979, "poster_path": "/keep.jpg"}]}
+    attach_review_posters(analysis, [{"title": "Stalker", "year": 1979, "poster_path": "/other.jpg"}])
+    assert analysis["reviews"][0]["poster_path"] == "/keep.jpg"
+
+
+def test_apply_fetched_review_posters_fills_only_blanks():
+    analysis = {
+        "reviews": [
+            {"title": "Hero", "year": 2020, "poster_path": ""},
+            {"title": "Kept", "year": 2021, "poster_path": "/kept.jpg"},
+        ]
+    }
+    apply_fetched_review_posters(analysis, [("Hero", 2020, "/hero.jpg"), ("Kept", 2021, "/ignored.jpg")])
+    assert analysis["reviews"][0]["poster_path"] == "/hero.jpg"
+    assert analysis["reviews"][1]["poster_path"] == "/kept.jpg"

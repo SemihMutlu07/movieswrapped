@@ -11,9 +11,16 @@ type StoryProgressBarProps = {
 
 export function StoryProgressBar({ slides, index, progress }: StoryProgressBarProps) {
   return (
-    <div className="flex w-full min-w-0 gap-1" data-testid="story-progress-bar">
+    <div
+      className="flex w-full min-w-0 gap-[3px]"
+      data-testid="story-progress-bar"
+      data-story-progress-count={slides.length}
+    >
       {slides.map((slide, i) => (
-        <div key={slide.key} className="h-0.5 min-w-0 flex-1 overflow-hidden bg-stone-700/70">
+        <div
+          key={slide.key}
+          className="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full bg-white/25"
+        >
           {i < index && <div className="h-full w-full bg-amber-300" />}
           {i === index && (
             <div

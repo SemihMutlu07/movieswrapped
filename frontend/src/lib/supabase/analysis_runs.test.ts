@@ -42,6 +42,11 @@ describe('buildSummaryForPersistence', () => {
       rated_films: [{ title: 'Another Private Title' }],
       review_analysis: {
         reviews: [{ title: 'Private Title', text: 'Private review', likers: ['person'] }],
+        total_reviews: 4,
+        reviews_with_text: 3,
+        total_words_written: 120,
+        avg_review_length_words: 40,
+        longest_review: { title: 'Private Title', length: 80, unit: 'words' },
       },
       scraped_username: 'alice',
       profile_avatar_url: 'https://example.test/avatar.jpg',
@@ -59,6 +64,14 @@ describe('buildSummaryForPersistence', () => {
         top_directors: [{ name: 'Director', count: 4 }],
         sinefil_meter: { score: 73, type: 'Explorer', model_version: 'cine_v2' },
         cinematic_persona: { persona: 'The Explorer' },
+        review_metrics: {
+          total_reviews: 4,
+          reviews_with_text: 3,
+          total_words_written: 120,
+          avg_review_length_words: 40,
+          longest_review: { length: 80, unit: 'words' },
+          reviews: [{ title: 'Private Title' }],
+        },
       }),
     );
     expect(summary.details).not.toHaveProperty('all_films');
@@ -67,8 +80,27 @@ describe('buildSummaryForPersistence', () => {
     expect(summary.details).not.toHaveProperty('scraped_username');
     expect(summary.details).not.toHaveProperty('profile_avatar_url');
     expect(summary.schema_version).toBe('results_v2_aggregate');
-    expect(JSON.stringify(summary)).not.toContain('Private');
+    expect(JSON.stringify(summary)).toContain('Private Title');
+    expect(JSON.stringify(summary)).not.toContain('Private review');
+    expect(JSON.stringify(summary)).not.toContain('Secret Film');
+    expect(JSON.stringify(summary)).not.toContain('Another Private Title');
     expect(JSON.stringify(summary)).not.toContain('Sensitive prose');
+  });
+
+  it('persists slim review titles without bodies when scalars are missing', () => {
+    const summary = buildSummaryForPersistence({
+      total_films: 2,
+      review_analysis: {
+        reviews: [{ title: 'Private Title', text: 'Private review', likers: ['person'] }],
+      },
+    });
+    expect(summary.details).toEqual(
+      expect.objectContaining({
+        review_metrics: { reviews: [{ title: 'Private Title' }] },
+      }),
+    );
+    expect(JSON.stringify(summary)).not.toContain('Private review');
+    expect(JSON.stringify(summary)).not.toMatch(/"likers"/);
   });
 });
 

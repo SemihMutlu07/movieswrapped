@@ -4,6 +4,7 @@ import {
   SHARE_POPOVER_GAP,
   SHARE_POPOVER_VIEWPORT_PADDING,
   computeSharePopoverPosition,
+  isShareSheetViewport,
 } from './sharePopoverLayout';
 
 describe('computeSharePopoverPosition', () => {
@@ -27,5 +28,12 @@ describe('computeSharePopoverPosition', () => {
     expect(position.left).toBeGreaterThanOrEqual(SHARE_POPOVER_VIEWPORT_PADDING);
     expect(position.top + panel.height).toBeLessThanOrEqual(viewport.height - SHARE_POPOVER_VIEWPORT_PADDING);
     expect(position.left + panel.width).toBeLessThanOrEqual(viewport.width - SHARE_POPOVER_VIEWPORT_PADDING);
+  });
+});
+
+describe('isShareSheetViewport', () => {
+  it('uses a bottom sheet under 640px', () => {
+    expect(isShareSheetViewport(390)).toBe(true);
+    expect(isShareSheetViewport(1280)).toBe(false);
   });
 });

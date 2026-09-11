@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { fileLooksLikeZip, isLetterboxdExportFilename, isLetterboxdZipFilename } from './api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fileLooksLikeZip, handleApiError, isLetterboxdExportFilename, isLetterboxdZipFilename } from './api';
 
 describe('Letterboxd export file detection', () => {
   it('treats extensionless Letterboxd utc downloads as zip names', () => {
@@ -27,5 +27,25 @@ describe('Letterboxd export file detection', () => {
   it('does not treat octet-stream CSV as a zip when magic is missing', async () => {
     const file = new File(['Date,Name,Year\n'], 'watched.csv', { type: 'application/octet-stream' });
     expect(await fileLooksLikeZip(file)).toBe(false);
+  });
+});
+
+describe('handleApiError network failures', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does not console.error Failed to fetch', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const err = handleApiError(new TypeError('Failed to fetch'), 'the backend');
+    expect(spy).not.toHaveBeenCalled();
+    expect(err.message).toMatch(/Failed to fetch/);
+    expect((err as { code?: string }).code).toBe('backend_unreachable');
+  });
+
+  it('still console.errors unexpected API failures', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleApiError(new Error('boom'), 'file analysis');
+    expect(spy).toHaveBeenCalled();
   });
 });

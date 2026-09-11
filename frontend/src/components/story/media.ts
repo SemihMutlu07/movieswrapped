@@ -41,10 +41,20 @@ export function allPosterMedia(stats: StatsData, limit = 24): StoryMedia[] {
   return compactMedia((stats.all_films ?? []).map((film) => posterMedia(film, 'w342')), limit);
 }
 
+export function filmNameKeys(film: {
+  title?: string | null;
+  letterboxd_title?: string | null;
+  original_title?: string | null;
+}): string[] {
+  return [film.title, film.letterboxd_title, film.original_title]
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
+    .map((name) => name.toLowerCase());
+}
+
 export function filmByTitle(stats: StatsData, title?: string | null) {
   if (!title) return null;
   const clean = title.toLowerCase();
-  return (stats.all_films ?? []).find((film) => film.title?.toLowerCase() === clean) ?? null;
+  return (stats.all_films ?? []).find((film) => filmNameKeys(film).includes(clean)) ?? null;
 }
 
 export function topRatedPosters(stats: StatsData, limit = 8) {
@@ -395,7 +405,7 @@ function softFillReviewFilms(
   heroTitleLower: string,
 ) {
   const films = (stats.all_films ?? []).filter(
-    (film) => film.poster_path && film.title?.toLowerCase() !== heroTitleLower,
+    (film) => film.poster_path && !filmNameKeys(film).includes(heroTitleLower),
   );
   const heroDirector = heroFilm?.director?.toLowerCase();
   const heroGenres = heroFilm?.genres ?? [];

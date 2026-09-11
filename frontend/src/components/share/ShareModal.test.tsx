@@ -156,25 +156,41 @@ describe('ShareModal customization popover', () => {
     expect(within(panel as HTMLElement).getByText('Actor')).toBeInTheDocument();
   });
 
+  it('pins the picker to a bottom sheet on compact viewports', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+
+    renderShareModal();
+    await openSwapDrawer();
+
+    const panel = document.querySelector<HTMLElement>('[data-share-popover-panel="true"]');
+    expect(panel).toBeTruthy();
+    await waitFor(() => {
+      expect(panel).toHaveAttribute('data-share-sheet', 'bottom');
+    });
+    expect(panel!.style.top).toBe('auto');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+  });
+
   it('keeps the popover inside the viewport when the tune button is near the top-right edge', async () => {
     const tuneRect = {
       top: 8,
-      left: 348,
-      right: 392,
+      left: 1220,
+      right: 1264,
       bottom: 52,
       width: 44,
       height: 44,
-      x: 348,
+      x: 1220,
       y: 8,
       toJSON: () => ({}),
     } as DOMRect;
     const defaultRect = {
       top: 0,
       left: 0,
-      right: 400,
-      bottom: 700,
-      width: 400,
-      height: 700,
+      right: 1280,
+      bottom: 800,
+      width: 1280,
+      height: 800,
       x: 0,
       y: 0,
       toJSON: () => ({}),
@@ -189,8 +205,8 @@ describe('ShareModal customization popover', () => {
       },
     });
 
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
 
     renderShareModal();
     await openSwapDrawer();
@@ -199,6 +215,7 @@ describe('ShareModal customization popover', () => {
     expect(panel).toBeTruthy();
 
     await waitFor(() => {
+      expect(panel).toHaveAttribute('data-share-sheet', 'popover');
       expect(Number.isFinite(Number.parseFloat(panel!.style.top))).toBe(true);
       expect(Number.isFinite(Number.parseFloat(panel!.style.left))).toBe(true);
     });
@@ -207,12 +224,13 @@ describe('ShareModal customization popover', () => {
     const left = Number.parseFloat(panel!.style.left);
     expect(top).toBeGreaterThanOrEqual(12);
     expect(left).toBeGreaterThanOrEqual(12);
-    expect(left + 256).toBeLessThanOrEqual(400 - 12);
+    expect(left + 256).toBeLessThanOrEqual(1280 - 12);
 
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
       configurable: true,
       value: original,
     });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
   });
 
   it('closes the customization popover on Escape without closing the share modal', async () => {

@@ -5,6 +5,9 @@ const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000';
 
 const nextConfig: NextConfig = {
   output: 'export',
+  devIndicators: {
+    position: 'top-right',
+  },
   images: {
     unoptimized: true,
     remotePatterns: [

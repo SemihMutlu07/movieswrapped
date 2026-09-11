@@ -17,6 +17,12 @@ type SwapDrawerProps = {
 };
 
 /** Swap controls body — rendered inside SharePopover near the tune button. */
+function chipClass(active: boolean, tone: 'actor' | 'director') {
+  if (active && tone === 'actor') return 'bg-[#5c2438] text-rose-100';
+  if (active && tone === 'director') return 'bg-[#1d4d5c] text-cyan-100';
+  return 'bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white';
+}
+
 export function SwapDrawer({
   cardProps,
   hasActors,
@@ -30,50 +36,51 @@ export function SwapDrawer({
   const { t } = useI18n();
 
   return (
-    <div className="min-w-[16rem] max-w-[min(18rem,calc(100vw-1.5rem))] rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-xs backdrop-blur space-y-2">
+    <div
+      data-testid="share-swap-drawer"
+      className="w-full min-w-0 space-y-3 rounded-2xl border border-white/10 bg-[#141414] px-3 py-3 sm:min-w-[16rem] sm:px-4"
+    >
       {hasActors && (
-        <div className="flex items-center gap-2">
-          <span className="w-16 shrink-0 text-slate-400">{t('share.actor')}</span>
-          <div className="flex flex-wrap items-center gap-1">
+        <fieldset className="min-w-0 space-y-1.5">
+          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            {t('share.actor')}
+          </legend>
+          <div className="flex flex-wrap gap-1.5">
             {cardProps.topActors!.slice(0, 3).map((a, i) => (
               <button
                 key={a.name}
                 type="button"
                 onClick={() => onActorIdxChange(i)}
                 disabled={isSaving}
-                className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                  actorIdx === i
-                    ? 'bg-pink-500/15 text-pink-300'
-                    : 'bg-white/5 text-slate-400 hover:text-slate-200'
-                }`}
+                aria-pressed={actorIdx === i}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${chipClass(actorIdx === i, 'actor')}`}
               >
                 {lastName(a.name)}
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
       )}
       {hasDirectors && (
-        <div className="flex items-center gap-2">
-          <span className="w-16 shrink-0 text-slate-400">{t('share.director')}</span>
-          <div className="flex flex-wrap items-center gap-1">
+        <fieldset className="min-w-0 space-y-1.5">
+          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            {t('share.director')}
+          </legend>
+          <div className="flex flex-wrap gap-1.5">
             {cardProps.topDirectors!.slice(0, 3).map((d, i) => (
               <button
                 key={d.name}
                 type="button"
                 onClick={() => onDirectorIdxChange(i)}
                 disabled={isSaving}
-                className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                  directorIdx === i
-                    ? 'bg-cyan-500/15 text-cyan-300'
-                    : 'bg-white/5 text-slate-400 hover:text-slate-200'
-                }`}
+                aria-pressed={directorIdx === i}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${chipClass(directorIdx === i, 'director')}`}
               >
                 {lastName(d.name)}
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
       )}
     </div>
   );

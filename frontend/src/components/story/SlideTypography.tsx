@@ -6,7 +6,7 @@ const wrap = 'min-w-0 max-w-full break-words';
 
 export function Label({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <p className={`${wrap} font-mono text-[clamp(0.62rem,2.5vw,0.75rem)] uppercase tracking-[0.16em] text-amber-300 md:tracking-[0.22em] ${className}`}>
+    <p className={`${wrap} font-mono text-[clamp(0.62rem,2.5vw,0.75rem)] uppercase tracking-[0.08em] text-amber-300 md:tracking-[0.16em] ${className}`}>
       {children}
     </p>
   );

@@ -10,6 +10,7 @@ type StoryPauseButtonProps = {
 
 export function StoryPauseButton({ isPaused, isLast, onToggle }: StoryPauseButtonProps) {
   const { t } = useI18n();
+  if (isLast) return null;
 
   return (
     <button

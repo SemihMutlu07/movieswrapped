@@ -22,7 +22,7 @@ export const FINALE_VARIANT: Record<ShareOrientation, ShareVariant> = {
   vertical: 'double-feature',
 };
 
-/** Portrait finale in narrow containers, landscape when the frame is wider. */
-export function pickFinaleOrientation(containerWidth: number): ShareOrientation {
-  return containerWidth < 768 ? 'vertical' : 'horizontal';
+/** Story is desktop-only; the finale card is always the landscape share card. */
+export function pickFinaleOrientation(_containerWidth?: number): ShareOrientation {
+  return 'horizontal';
 }

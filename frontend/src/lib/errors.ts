@@ -66,8 +66,9 @@ export function normalizeError(err: unknown): NormalizedError {
 
   // Backend unreachable / network failure
   if (
+    code === 'backend_unreachable' ||
     err instanceof TypeError ||
-    /Failed to fetch|NetworkError|fetch|ECONNREFUSED/i.test(raw)
+    /Failed to fetch|NetworkError|ECONNREFUSED|Unable to connect|Network error/i.test(raw)
   ) {
     return {
       title: "Can't reach the server",

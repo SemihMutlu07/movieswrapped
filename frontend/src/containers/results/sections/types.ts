@@ -152,6 +152,7 @@ export interface StatsData {
     average_rating?: number | null;
     poster_path?: string;
     popularity?: number;
+    letterboxd_uri?: string | null;
   }[];
   /** Up to 4 films pinned as favorites on the user's Letterboxd profile page. */
   favorite_films?: {
@@ -202,6 +203,8 @@ export interface StatsData {
   /** Full film list for frontend-side re-aggregation (e.g. country→films lookup). */
   all_films?: {
     title: string;
+    letterboxd_title?: string;
+    original_title?: string | null;
     year?: number;
     director?: string;
     genres?: string[];
@@ -214,6 +217,7 @@ export interface StatsData {
     cast?: string[];
     average_rating?: number | null;
     popularity?: number;
+    letterboxd_uri?: string | null;
   }[];
 
   /** Review text metrics from compute_review_metrics (review_analysis.py). */

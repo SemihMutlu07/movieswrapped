@@ -86,4 +86,21 @@ class TestBuildFilmDatasets:
         assert film["countries"] == []
         assert film["cast"] == []
         assert film["poster_path"] == ""
-        assert film["director"] is None
+        assert film["letterboxd_title"] == "A"
+        assert film["original_title"] is None
+
+    def test_all_films_keeps_letterboxd_and_original_titles(self):
+        analysis_df = pd.DataFrame({
+            "title": ["Memorias del subdesarrollo"],
+            "letterboxd_title": ["Memories of Underdevelopment"],
+            "original_title": ["Memorias del subdesarrollo"],
+            "year": [1968],
+            "poster_path": ["/mem.jpg"],
+            "letterboxd_uri": ["https://boxd.it/29Dq"],
+        })
+        film = build_film_datasets(analysis_df)["all_films"][0]
+        assert film["title"] == "Memorias del subdesarrollo"
+        assert film["letterboxd_title"] == "Memories of Underdevelopment"
+        assert film["original_title"] == "Memorias del subdesarrollo"
+        assert film["poster_path"] == "/mem.jpg"
+        assert film["letterboxd_uri"] == "https://boxd.it/29Dq"

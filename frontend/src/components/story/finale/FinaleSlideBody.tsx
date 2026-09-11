@@ -8,8 +8,8 @@ import { useFinaleSlidePhase } from './FinaleSlidePhaseContext';
 
 export function FinaleSlideBody() {
   const { t } = useI18n();
-  const { reduce } = useFinaleSlidePhase();
-  const instant = reduce;
+  const { reduce, paused } = useFinaleSlidePhase();
+  const instant = reduce || paused;
 
   return (
     <div className="min-w-0 max-w-full">

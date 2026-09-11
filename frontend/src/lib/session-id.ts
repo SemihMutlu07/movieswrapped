@@ -34,25 +34,16 @@ export function setUsername(u: string) {
 export function setConsent(c: 'accept' | 'decline') {
   if (typeof window === 'undefined') return;
 
-  // Consent is a user preference, not a per-tab state. Persist it across visits.
   localStorage.setItem('consent_decision', c);
-  // Keep the legacy session value during the migration so older code stays safe.
   sessionStorage.setItem('consent_decision', c);
   window.dispatchEvent(new CustomEvent('analytics-consent-changed', { detail: c }));
 }
 
+/**
+ * Analytics is on by default (no consent banner). Missing consent and a
+ * previously stored "No thanks" (`decline`) both count as accept so an old
+ * localStorage value cannot block PostHog forever.
+ */
 export function getConsent(): 'accept' | 'decline' | '' {
-  if (typeof window === 'undefined') return '';
-
-  const persisted = localStorage.getItem('consent_decision') || '';
-  if (persisted === 'accept' || persisted === 'decline') return persisted;
-
-  // Migrate consent recorded before this value moved from sessionStorage.
-  const legacy = sessionStorage.getItem('consent_decision') || '';
-  if (legacy === 'accept' || legacy === 'decline') {
-    localStorage.setItem('consent_decision', legacy);
-    return legacy;
-  }
-
-  return '';
+  return 'accept';
 }
