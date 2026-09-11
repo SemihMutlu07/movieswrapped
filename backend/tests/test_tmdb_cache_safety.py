@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import time
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -225,14 +226,22 @@ async def test_cancelled_write_leaves_no_temp_and_keeps_old(tmp_path, monkeypatc
     old_content = json.dumps({"old": True})
     dest.write_text(old_content, encoding="utf-8")
 
-    task = asyncio.create_task(_write_cache_atomic(dest, {"new": "x" * 100000}))
-    # Cancel mid-write.
-    await asyncio.sleep(0.01)
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    class CancelAfterTmp:
+        def __init__(self, path, *args, **kwargs):
+            self.path = path
+
+        async def __aenter__(self):
+            Path(self.path).write_text("partial", encoding="utf-8")
+            raise asyncio.CancelledError()
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(tmdb_client.aiofiles, "open", lambda *a, **k: CancelAfterTmp(*a, **k))
+
+    with pytest.raises(asyncio.CancelledError):
+        await _write_cache_atomic(dest, {"new": "x" * 100000})
+
     # Temp cleanup runs detached on the executor (survives cancellation); give it a beat.
     for _ in range(20):
         if not list(tmp_path.glob("*.tmp")):
