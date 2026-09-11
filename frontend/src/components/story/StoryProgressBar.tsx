@@ -24,7 +24,7 @@ export function StoryProgressBar({ slides, index, progress }: StoryProgressBarPr
           {i < index && <div className="h-full w-full bg-amber-300" />}
           {i === index && (
             <div
-              className="h-full bg-amber-300 transition-[width] duration-150 ease-linear"
+              className="h-full bg-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-[width] duration-150 ease-linear"
               style={{ width: `${progress}%` }}
             />
           )}
