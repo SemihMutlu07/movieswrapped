@@ -8,7 +8,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    exclude: [...configDefaults.exclude, 'tests/share-cards/**'],
+    exclude: [...configDefaults.exclude, 'tests/share-cards/**', 'tests/story/**'],
   },
   resolve: {
     alias: {
