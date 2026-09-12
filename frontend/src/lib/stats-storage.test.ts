@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { persistStats, StatsTooLargeError, STATS_STORAGE_KEY } from '@/lib/stats-storage';
+import { STORY_PLAYBACK_KEY } from '@/lib/story-playback';
 
 /**
  * Storage double that rejects writes above `limit` characters, the way a real
@@ -60,6 +61,20 @@ describe('persistStats', () => {
 
     expect(result.dropped).toEqual([]);
     expect(storage.size()).toBe(first);
+  });
+
+  it('clears a saved story cursor so a new analysis cannot resume mid-wrap', () => {
+    const storage = makeStorage(10_000_000);
+    storage.setItem(STORY_PLAYBACK_KEY, JSON.stringify({
+      username: 'semihmutsuz',
+      fingerprint: 'old',
+      index: 6,
+      paused: true,
+    }));
+
+    persistStats(statsFixture(), storage);
+
+    expect(storage.getItem(STORY_PLAYBACK_KEY)).toBeNull();
   });
 
   it('sheds heavy optional fields instead of losing a successful analysis', () => {

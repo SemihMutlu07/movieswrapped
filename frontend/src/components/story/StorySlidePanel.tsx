@@ -34,8 +34,9 @@ function SlideCopy({ slide }: { slide: Slide }) {
 
 export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlidePanelProps) {
   const { t } = useI18n();
-  const { reduce } = useStoryMotion();
-  const isPerson = slide.visual === 'person' || slide.visual === 'director';
+  const { reduce, paused } = useStoryMotion();
+  const instant = reduce || paused;
+  const isPerson = slide.visual === 'person' || slide.visual === 'director' || slide.visual === 'actor';
   const accent = slide.accent ?? '#f59e0b';
 
   return (
@@ -48,17 +49,17 @@ export function StorySlidePanel({ slide, isLast, stats, showTapHint }: StorySlid
       <AnimatePresence mode="wait">
         <motion.div
           key={slide.key}
-          initial={reduce ? false : { opacity: 0, y: 14 }}
+          initial={instant ? false : { opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10 }}
+          exit={instant ? { opacity: 0 } : { opacity: 0, y: -10 }}
           transition={{
-            duration: reduce ? 0 : MOTION_DURATION.panelEnter,
+            duration: instant ? 0 : MOTION_DURATION.panelEnter,
             ease: MOTION_EASE.snap,
           }}
           style={{ ['--story-accent']: accent } as CSSProperties}
           className={`@container flex h-full max-h-full min-h-0 min-w-0 w-full flex-col ${
             isLast
-              ? 'mx-auto max-w-md md:ml-[5vw] md:max-w-2xl'
+              ? 'mx-auto max-w-md md:ml-[4vw] md:max-w-3xl xl:max-w-4xl 2xl:max-w-5xl'
               : `mx-auto max-w-xl text-center md:mx-0 md:my-auto md:h-auto md:rounded-[28px] md:border md:border-white/10 md:bg-black/60 md:px-8 md:py-8 md:text-left md:backdrop-blur-xl md:shadow-[inset_3px_0_0_0_var(--story-accent),0_26px_60px_-18px_rgba(0,0,0,0.7)] ${
                   isPerson ? 'md:ml-[6vw] md:max-w-lg' : 'md:ml-[8vw]'
                 }`

@@ -35,7 +35,7 @@ export function StoryTopChrome({
         <div className="min-w-0 flex-1">
           <StoryProgressBar slides={slides} index={index} progress={progress} />
         </div>
-        <Suspense fallback={<span className="inline-block h-7 w-[4.75rem] shrink-0" aria-hidden />}>
+        <Suspense fallback={<span className="inline-block h-7 w-[5.5rem] shrink-0" aria-hidden />}>
           <StoryLanguageSwitch />
         </Suspense>
       </div>

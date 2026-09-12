@@ -14,6 +14,8 @@ export type TransitionGate = {
    * started immediately.
    */
   tryBegin(run: () => void): boolean;
+  /** Drop a queued run so a pause-skip cannot be rewound when the lock releases. */
+  dropQueued(): void;
   /** Cancel the pending release timer and drop any queued run. */
   dispose(): void;
 };
@@ -43,6 +45,9 @@ export function createTransitionGate(durationMs: number): TransitionGate {
   return {
     tryBegin: begin,
     isLocked: () => locked,
+    dropQueued: () => {
+      queued = null;
+    },
     dispose: () => {
       if (timer != null) clearTimeout(timer);
       timer = null;
