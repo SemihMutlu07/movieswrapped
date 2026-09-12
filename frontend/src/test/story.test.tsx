@@ -17,6 +17,11 @@ import { I18nProvider } from '@/i18n/I18nProvider';
 import { createTranslator } from '@/i18n/createTranslator';
 import { readySlideKeys, slideMeta } from '@/components/story/manifest';
 import { buildStoryShareCard, pickFinaleOrientation } from '@/components/story/viewModel';
+import {
+  STORY_PLAYBACK_KEY,
+  storyFingerprint,
+  writeStoryPlayback,
+} from '@/lib/story-playback';
 import { ActorSlideBody } from '@/components/story/actor/ActorSlideBody';
 import { PersonSlidePhaseProvider } from '@/components/story/person/PersonSlidePhaseContext';
 import { ReviewSlideBody } from '@/components/story/review/ReviewSlideBody';
@@ -156,6 +161,29 @@ describe('StoryPage', () => {
     expect(screen.getByLabelText('Pause story')).toBeInTheDocument();
   });
 
+  it('does not rewind a paused skip when a queued transition flushes', async () => {
+    sessionStorage.setItem('letterboxdStats', JSON.stringify(STATS));
+    renderStory();
+    expect(await screen.findByText('@semihmutsuz')).toBeInTheDocument();
+    const next = screen.getByLabelText('Next slide');
+
+    await userEvent.click(screen.getByLabelText('Pause story'));
+    await userEvent.click(next);
+    await userEvent.click(next);
+    await userEvent.click(screen.getByLabelText('Resume story'));
+    await userEvent.click(next);
+    await userEvent.click(next);
+    await userEvent.click(screen.getByLabelText('Pause story'));
+    await userEvent.click(next);
+    await userEvent.click(next);
+
+    const stage = screen.getByTestId('story-slide-stage');
+    const held = stage.getAttribute('data-story-key');
+    expect(held).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect(stage).toHaveAttribute('data-story-key', held);
+  });
+
   it('lets next skip an auto-min slide while paused', async () => {
     sessionStorage.setItem('letterboxdStats', JSON.stringify(STATS));
     renderStory();
@@ -165,6 +193,22 @@ describe('StoryPage', () => {
     await userEvent.click(screen.getByLabelText('Next slide'));
     expect(await screen.findByText('692 films')).toBeInTheDocument();
     expect(screen.getByLabelText('Resume story')).toBeInTheDocument();
+  });
+
+  it('resumes the saved slide after a remount (locale switch)', async () => {
+    sessionStorage.setItem('letterboxdStats', JSON.stringify(STATS));
+    const slides = buildSlides(STATS as unknown as StatsData, enI18n);
+    writeStoryPlayback({
+      username: 'semihmutsuz',
+      fingerprint: storyFingerprint(STATS, slides.length),
+      index: 1,
+      paused: true,
+    });
+    renderStory();
+    expect(await screen.findByText('692 films')).toBeInTheDocument();
+    expect(screen.queryByText('@semihmutsuz')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Resume story')).toBeInTheDocument();
+    expect(JSON.parse(sessionStorage.getItem(STORY_PLAYBACK_KEY)!).index).toBe(1);
   });
 
   it('renders story media in the mobile slide flow', async () => {
@@ -583,6 +627,20 @@ describe('buildStoryShareCard', () => {
     expect(card.onScreenCrush.name).toBe('Greta Lee');
     expect(card.favoriteDirector?.name).toBe('Wim Wenders');
     expect(card.genres).toEqual(['Drama', 'Noir']);
+  });
+
+  it('keeps Woody as the crush and Scorsese as the director after de-dupe', () => {
+    const card = buildStoryShareCard({
+      total_films: 711,
+      top_actors: [{ name: 'Woody Allen', count: 21, profile_path: '/w.jpg' }],
+      top_directors: [
+        { name: 'Woody Allen', count: 27, profile_path: '/w.jpg' },
+        { name: 'Martin Scorsese', count: 12, profile_path: '/s.jpg' },
+      ],
+    } as StatsData);
+
+    expect(card.onScreenCrush.name).toBe('Woody Allen');
+    expect(card.favoriteDirector?.name).toBe('Martin Scorsese');
   });
 
   it('returns a null director when none remain after de-duplication', () => {

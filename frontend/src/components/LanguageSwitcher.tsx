@@ -25,7 +25,7 @@ export function LanguageSwitchControl({ compact = false }: { compact?: boolean }
   };
 
   return (
-    <>
+    <div className={`flex items-center ${compact ? 'gap-0.5' : 'gap-1'}`}>
       <span className="sr-only">{t('language.label')}</span>
       {(['en', 'tr'] as const).map((item) => (
         <button
@@ -34,9 +34,9 @@ export function LanguageSwitchControl({ compact = false }: { compact?: boolean }
           onClick={() => selectLocale(item)}
           aria-pressed={locale === item}
           aria-label={item === 'en' ? t('language.english') : t('language.turkish')}
-          className={`rounded-full font-bold transition active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 ${
+          className={`shrink-0 whitespace-nowrap rounded-full font-bold transition active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 ${
             compact
-              ? 'min-h-7 min-w-8 px-2 text-[10px] tracking-[0.08em]'
+              ? 'min-h-7 min-w-9 px-2.5 text-[10px] tracking-[0.06em]'
               : 'min-h-9 min-w-11 px-3 text-xs'
           } ${
             locale === item
@@ -49,7 +49,7 @@ export function LanguageSwitchControl({ compact = false }: { compact?: boolean }
           {item.toUpperCase()}
         </button>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -57,7 +57,7 @@ export function StoryLanguageSwitch() {
   return (
     <div
       data-testid="story-language-switch"
-      className="rounded-full border border-white/10 bg-black/55 p-0.5 shadow-md backdrop-blur-md"
+      className="flex shrink-0 items-center rounded-full border border-white/10 bg-black/55 p-0.5 shadow-md backdrop-blur-md"
     >
       <LanguageSwitchControl compact />
     </div>

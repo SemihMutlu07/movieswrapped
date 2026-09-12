@@ -1,3 +1,5 @@
+import { clearStoryPlayback } from '@/lib/story-playback';
+
 export const STATS_STORAGE_KEY = 'letterboxdStats';
 
 /**
@@ -46,6 +48,7 @@ export function persistStats(
   // Free the previous run's blob first — otherwise a second analysis in the
   // same tab competes with its own leftovers for the quota.
   storage.removeItem(STATS_STORAGE_KEY);
+  clearStoryPlayback(storage);
 
   const payload: Record<string, unknown> = { ...stats };
   // Clone the nested window too, so shedding from it below never mutates the

@@ -79,6 +79,9 @@ describe('story top chrome', () => {
     const row = progress.parentElement?.parentElement;
     expect(row).toContainElement(progress);
     expect(row).toContainElement(locale);
+    expect(locale.className).toMatch(/shrink-0/);
+    expect(screen.getByLabelText('English')).toHaveTextContent('EN');
+    expect(screen.getByLabelText('Turkish')).toHaveTextContent('TR');
     expect(progress).toHaveAttribute('data-story-progress-count', '12');
     expect(progress.children).toHaveLength(12);
     expect(screen.getByLabelText('Pause story')).toBeInTheDocument();

@@ -23,7 +23,8 @@ import { resolvePosterFieldLayout } from './posterFieldConfig';
 import { PersonCinematicVisual } from './cinematic/PersonCinematicVisual';
 
 export function StoryVisual({ slide }: { slide: Slide }) {
-  const { reduce } = useStoryMotion();
+  const { reduce, paused } = useStoryMotion();
+  const instant = reduce || paused;
   const media = slide.media ?? [];
   const accent = slide.accent ?? '#f59e0b';
   const hero = media[0];
@@ -32,11 +33,11 @@ export function StoryVisual({ slide }: { slide: Slide }) {
   return (
     <motion.div
       className="pointer-events-none absolute inset-0 overflow-hidden"
-      initial={reduce ? false : { opacity: 0 }}
+      initial={instant ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{
-        duration: reduce ? 0 : MOTION_DURATION.transition,
+        duration: instant ? 0 : MOTION_DURATION.transition,
         ease: MOTION_EASE.editorial,
       }}
     >

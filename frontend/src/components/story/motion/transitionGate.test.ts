@@ -55,6 +55,18 @@ describe('transitionGate', () => {
     expect(latest).toHaveBeenCalledTimes(1);
   });
 
+  it('drops a queued run without unlocking the in-flight scene', () => {
+    const gate = createTransitionGate(600);
+    const queued = vi.fn();
+    gate.tryBegin(vi.fn());
+    gate.tryBegin(queued);
+    gate.dropQueued();
+
+    vi.advanceTimersByTime(600);
+    expect(queued).not.toHaveBeenCalled();
+    expect(gate.isLocked()).toBe(false);
+  });
+
   it('drops everything on dispose', () => {
     const gate = createTransitionGate(600);
     const queued = vi.fn();

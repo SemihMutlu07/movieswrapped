@@ -19,7 +19,8 @@ type PosterFieldProps = {
  * Inner visuals stay free to compose; they should not hardcode field anchors.
  */
 export function PosterField({ slideKey, layout, children }: PosterFieldProps) {
-  const { reduce } = useStoryMotion();
+  const { reduce, paused } = useStoryMotion();
+  const instant = reduce || paused;
   const fieldStyle: CSSProperties = {
     top: layout.top,
     bottom: layout.bottom,
@@ -37,11 +38,11 @@ export function PosterField({ slideKey, layout, children }: PosterFieldProps) {
     <PosterFieldProvider layout={layout}>
       <motion.div
         key={`poster-field-${slideKey}`}
-        initial={reduce ? false : { opacity: 0, scale: 0.985 }}
+        initial={instant ? false : { opacity: 0, scale: 0.985 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 1.01 }}
         transition={{
-          duration: reduce ? 0 : MOTION_DURATION.fieldEnter,
+          duration: instant ? 0 : MOTION_DURATION.fieldEnter,
           ease: MOTION_EASE.editorial,
         }}
         className="absolute hidden md:block"

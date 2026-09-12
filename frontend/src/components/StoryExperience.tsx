@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 
@@ -22,6 +22,11 @@ import { MOTION_DURATION } from '@/components/story/motion/motionTokens';
 import { createTransitionGate, type TransitionGate } from '@/components/story/motion/transitionGate';
 import { StoryVisual } from '@/components/story/visuals/StoryVisual';
 import { useI18n } from '@/i18n/I18nProvider';
+import {
+  readStoryPlayback,
+  storyFingerprint,
+  writeStoryPlayback,
+} from '@/lib/story-playback';
 
 /** Scene crossfade wall-clock lock (audit band 480–620ms). */
 const SCENE_TRANSITION_MS = Math.round(MOTION_DURATION.transition * 1000);
@@ -51,6 +56,7 @@ export default function StoryExperience() {
   const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [playbackReady, setPlaybackReady] = useState(false);
   const elapsedRef = useRef(0);
   const indexRef = useRef(0);
   const gateRef = useRef<TransitionGate | null>(null);
@@ -65,7 +71,7 @@ export default function StoryExperience() {
   }, [phase, start]);
 
   const slides = useMemo(() => (stats ? buildSlides(stats, i18n) : []), [i18n, stats]);
-  const isLast = index >= slides.length - 1;
+  const isLast = slides.length > 0 && index >= slides.length - 1;
   const username = stats?.scraped_username;
   const currentInteraction = slideMeta(slides[index]?.key ?? '').interaction;
 
@@ -74,23 +80,58 @@ export default function StoryExperience() {
   const goToSlide = useCallback((nextIndex: number) => {
     const clamped = Math.max(0, Math.min(nextIndex, slides.length - 1));
     if (clamped === indexRef.current) return;
-    sceneGate.tryBegin(() => {
-      // Re-check on queue flush: the latest target may equal the settled slide.
+    const apply = () => {
       if (clamped === indexRef.current) return;
       indexRef.current = clamped;
       setIndex(clamped);
       elapsedRef.current = 0;
       setProgress(0);
-    });
-  }, [sceneGate, slides.length]);
+    };
+    if (isPaused) {
+      sceneGate.dropQueued();
+      apply();
+      return;
+    }
+    sceneGate.tryBegin(apply);
+  }, [isPaused, sceneGate, slides.length]);
 
   const goNext = useCallback(() => {
     // Pause is an explicit hold; the next tap should skip. Auto-min only
     // blocks hasty taps while the slide is actually playing.
     if (currentInteraction === 'auto-min' && !isPaused && elapsedRef.current < AUTO_MIN_MS) return;
-    goToSlide(index + 1);
-  }, [currentInteraction, goToSlide, index, isPaused]);
-  const goPrevious = useCallback(() => goToSlide(index - 1), [goToSlide, index]);
+    goToSlide(indexRef.current + 1);
+  }, [currentInteraction, goToSlide, isPaused]);
+  const goPrevious = useCallback(() => goToSlide(indexRef.current - 1), [goToSlide]);
+
+  const togglePause = useCallback(() => {
+    if (isLast) return;
+    if (!isPaused) sceneGate.dropQueued();
+    setIsPaused((paused) => !paused);
+  }, [isLast, isPaused, sceneGate]);
+
+  useLayoutEffect(() => {
+    if (!stats || slides.length === 0 || playbackReady) return;
+    const username = stats.scraped_username ?? '';
+    const fingerprint = storyFingerprint(stats, slides.length);
+    const saved = readStoryPlayback();
+    if (saved && saved.username === username && saved.fingerprint === fingerprint) {
+      const clamped = Math.max(0, Math.min(Math.trunc(saved.index), slides.length - 1));
+      indexRef.current = clamped;
+      setIndex(clamped);
+      setIsPaused(Boolean(saved.paused) && clamped < slides.length - 1);
+    }
+    setPlaybackReady(true);
+  }, [playbackReady, slides.length, stats]);
+
+  useEffect(() => {
+    if (!playbackReady || !stats || slides.length === 0) return;
+    writeStoryPlayback({
+      username: stats.scraped_username ?? '',
+      fingerprint: storyFingerprint(stats, slides.length),
+      index,
+      paused: isPaused,
+    });
+  }, [index, isPaused, playbackReady, slides.length, stats]);
 
   useEffect(() => {
     elapsedRef.current = isLast ? SLIDE_MS : 0;
@@ -137,12 +178,12 @@ export default function StoryExperience() {
       if (event.key === 'ArrowLeft') goPrevious();
       if (event.key === ' ') {
         event.preventDefault();
-        if (!isLast) setIsPaused((v) => !v);
+        togglePause();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [goNext, goPrevious, isLast]);
+  }, [goNext, goPrevious, togglePause]);
 
   if (isPhoneLayout) {
     return (
@@ -161,6 +202,8 @@ export default function StoryExperience() {
   if (!stats || slides.length === 0) {
     return <StorySessionMessage title={t('story.empty.title')} description={t('story.empty.description')} />;
   }
+
+  if (!playbackReady) return null;
 
   const activeSlide = slides[index];
 
@@ -196,7 +239,7 @@ export default function StoryExperience() {
         progress={progress}
         isPaused={isPaused}
         isLast={isLast}
-        onTogglePause={() => !isLast && setIsPaused((v) => !v)}
+        onTogglePause={togglePause}
       />
 
       <StorySlidePanel
