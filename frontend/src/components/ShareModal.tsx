@@ -10,10 +10,8 @@ import { normalizeShareCardData } from '@/components/share/viewModel';
 import { SHARE_EXPORT_CONFIG } from '@/components/share/modal/exportUtils';
 import { CanonicalExportCard } from '@/components/share/modal/CanonicalExportCard';
 import { CardPreview } from '@/components/share/modal/CardPreview';
-import { FormatControls } from '@/components/share/modal/FormatControls';
 import { ShareModalHeader } from '@/components/share/modal/ShareModalHeader';
 import { ShareModalSidebar } from '@/components/share/modal/ShareModalSidebar';
-import { VariantPicker } from '@/components/share/modal/VariantPicker';
 import { useShareExport } from '@/components/share/modal/useShareExport';
 import type { ShareModalProps } from '@/components/share/modal/types';
 import IsolatedModal from '@/components/IsolatedModal';
@@ -30,10 +28,11 @@ export default function ShareModal({
   open,
   onClose,
   orientation,
-  setOrientation,
+  setOrientation: _setOrientation,
   cardProps,
   onDownloadSuccess,
 }: ShareModalProps) {
+  void _setOrientation;
   const { variantLabel: resolveVariantLabel } = useShareLabels();
   const availableVariants = useMemo(
     () => shareVariantsForOrientation(orientation, resolveVariantLabel),
@@ -141,7 +140,7 @@ export default function ShareModal({
         if (!isSaving) onClose();
       }}
       labelledBy="share-modal-title"
-      panelClassName="relative h-full max-h-full w-full bg-[#1a1a1a] md:h-[calc(100dvh-3rem)] md:max-h-[920px] md:w-[calc(100vw-3rem)] md:max-w-[1180px] md:rounded-3xl"
+      panelClassName="relative h-full max-h-full w-full bg-[#1a1a1a] md:h-[calc(100dvh-2rem)] md:max-h-[960px] md:w-[calc(100vw-2rem)] md:max-w-[1320px] md:rounded-3xl"
       extras={
         <CanonicalExportCard
           variantKey={variantKey}
@@ -158,22 +157,7 @@ export default function ShareModal({
         onClose={onClose}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 space-y-3 border-b border-white/8 px-5 py-3 md:px-6">
-          <FormatControls
-            orientation={orientation}
-            setOrientation={setOrientation}
-            isSaving={isSaving}
-          />
-          <VariantPicker
-            variants={availableVariants}
-            activeIdx={clampedIdx}
-            isSaving={isSaving}
-            onSelect={selectVariant}
-          />
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           <CardPreview
             previewRef={bindPreview}
             variantKey={variantKey}
@@ -204,9 +188,11 @@ export default function ShareModal({
             setShowUsername={setShowUsername}
             exportError={exportError}
             onSave={handleSavePNG}
+            variants={availableVariants}
+            activeIdx={clampedIdx}
+            onSelectVariant={selectVariant}
           />
         </div>
-      </div>
     </IsolatedModal>
   );
 }
