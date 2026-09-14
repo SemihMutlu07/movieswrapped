@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fileLooksLikeZip, handleApiError, isLetterboxdExportFilename, isLetterboxdZipFilename } from './api';
+import { analyzeFiles, fileLooksLikeZip, handleApiError, isLetterboxdExportFilename, isLetterboxdZipFilename } from './api';
 
 describe('Letterboxd export file detection', () => {
   it('treats extensionless Letterboxd utc downloads as zip names', () => {
@@ -47,5 +47,28 @@ describe('handleApiError network failures', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     handleApiError(new Error('boom'), 'file analysis');
     expect(spy).toHaveBeenCalled();
+  });
+});
+
+describe('analyzeFiles cancellation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('aborts the in-flight request instead of reporting a network error', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        reject(new DOMException('Aborted', 'AbortError'));
+      });
+    }));
+    const formData = new FormData();
+    formData.append('files', new File(['Date,Name\n'], 'letterboxd.zip', { type: 'application/zip' }));
+
+    const pending = analyzeFiles(formData, { signal: controller.signal });
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ signal: controller.signal }));
   });
 });
