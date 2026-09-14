@@ -50,8 +50,8 @@ export function CardPreview({
         ref={previewRef}
         data-active="true"
         data-variant={variantKey}
-        className="flex min-h-0 flex-1 items-center justify-center px-3 py-2 md:px-6 md:py-5"
-        style={{ minHeight: 220 }}
+        className="flex min-h-0 flex-1 items-center justify-center px-3 py-3 md:px-8 md:py-8"
+        style={{ minHeight: 360 }}
       >
         {pageW > 0 && pageH > 0 && (
           <VariantPage

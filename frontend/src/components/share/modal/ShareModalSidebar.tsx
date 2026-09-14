@@ -1,10 +1,11 @@
 'use client';
 
-import type { ShareCardInput } from '@/components/share/types';
+import type { ShareCardInput, ShareVariant } from '@/components/share/types';
 
 import { ShareSaveButton } from './ShareSaveButton';
 import { SwapDrawer } from './SwapDrawer';
 import { UsernameToggle } from './UsernameToggle';
+import { VariantPicker } from './VariantPicker';
 
 type ShareModalSidebarProps = {
   cardProps: ShareCardInput;
@@ -20,6 +21,9 @@ type ShareModalSidebarProps = {
   setShowUsername: (value: boolean | ((prev: boolean) => boolean)) => void;
   exportError: string | null;
   onSave: () => void;
+  variants: ReadonlyArray<{ key: ShareVariant; label: string }>;
+  activeIdx: number;
+  onSelectVariant: (idx: number) => void;
 };
 
 export function ShareModalSidebar({
@@ -36,9 +40,18 @@ export function ShareModalSidebar({
   setShowUsername,
   exportError,
   onSave,
+  variants,
+  activeIdx,
+  onSelectVariant,
 }: ShareModalSidebarProps) {
   return (
-    <div className="relative shrink-0 space-y-3 border-t border-white/8 px-5 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-3 md:w-[300px] md:space-y-5 md:overflow-y-auto md:border-l md:border-t-0 md:border-white/10 md:px-6 md:py-5 lg:w-[320px]">
+    <div className="relative shrink-0 space-y-5 border-t border-white/8 px-5 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4 md:w-[340px] md:overflow-y-auto md:border-l md:border-t-0 md:border-white/10 md:px-6 md:py-6 lg:w-[380px]">
+      <VariantPicker
+        variants={variants}
+        activeIdx={activeIdx}
+        isSaving={isSaving}
+        onSelect={onSelectVariant}
+      />
       {showPeople && (
         <SwapDrawer
           cardProps={cardProps}
