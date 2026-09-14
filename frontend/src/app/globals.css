@@ -190,6 +190,16 @@ h1, h2, h3 {
   100% { opacity: 0; transform: translate(-50%, -56px) scale(1.4); }
 }
 
+@keyframes mw-share-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.mw-share-cta {
+  background-size: 220% 220%;
+  animation: mw-share-shift 7s ease-in-out infinite;
+}
+
 /* Recharts: ensure slice colors are not overridden by text color */
 .recharts-wrapper .recharts-sector { 
   fill-opacity: 1 !important; 

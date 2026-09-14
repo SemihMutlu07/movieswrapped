@@ -258,6 +258,23 @@ export function ResultsContent({
               onClickDirector={handleDirectorClick}
               onClickDecade={handleDecadeClick}
             />
+            <div className="flex justify-center pt-4 md:pt-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowShareModal(true);
+                  trackEvent("share_modal_opened");
+                }}
+                className="mw-share-cta px-8 py-3.5 text-base md:text-lg font-semibold rounded-2xl shadow-lg shadow-black/30 transition-transform hover:scale-[1.03] active:scale-[0.98]"
+                style={{
+                  backgroundImage: `linear-gradient(120deg, ${config.cssVars["--theme-accent"]}, ${config.cssVars["--theme-accent-2"]}, ${config.cssVars["--theme-accent"]})`,
+                  color:
+                    theme === "current" || theme === "vhs" ? "#fff" : "#181614",
+                }}
+              >
+                {t('results.share.cta')}
+              </button>
+            </div>
           </SectionContainer>
         </div>
       ),
@@ -275,31 +292,6 @@ export function ResultsContent({
               stats={stats}
               onActorClick={(name) => handlePersonClick(name, false)}
             />
-          </div>
-
-          <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl border border-white/[0.06] bg-white/[0.03]">
-            <div>
-              <p className="text-sm font-semibold text-white">
-                Ready to share your year?
-              </p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Turn your stats into a shareable card.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setShowShareModal(true);
-                trackEvent("share_modal_opened");
-              }}
-              className="shrink-0 px-4 py-2 text-sm font-semibold rounded-xl transition-all hover:scale-105"
-              style={{
-                background: `linear-gradient(135deg, ${config.cssVars["--theme-accent"]}, ${config.cssVars["--theme-accent-2"]})`,
-                color:
-                  theme === "current" || theme === "vhs" ? "#fff" : "#181614",
-              }}
-            >
-              {t('results.share.cta')}
-            </button>
           </div>
         </div>
       ),
