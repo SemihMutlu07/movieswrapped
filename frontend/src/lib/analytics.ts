@@ -56,13 +56,27 @@ export function getTmdbImageUrl(path: string | null | undefined, size: string = 
 export function getPosterUrl(path: string | null | undefined, quality: 'grid' | 'share' = 'grid'): string | null {
   return quality === 'share'
     ? getTmdbImageUrl(path, 'original')
-    : getDirectTmdbImageUrl(path, 'w342');
+    : getDirectTmdbImageUrl(path, 'w500');
 }
 
 export function getProfileUrl(path: string | null | undefined, quality: 'grid' | 'share' = 'grid'): string | null {
   return quality === 'share'
-    ? getTmdbImageUrl(path, 'w500')
-    : getDirectTmdbImageUrl(path, 'w342');
+    ? getTmdbImageUrl(path, 'w780')
+    : getDirectTmdbImageUrl(path, 'w500');
+}
+
+export function tmdbSrcSet(
+  path: string | null | undefined,
+  widths: ReadonlyArray<string> = ['w185', 'w342', 'w500', 'w780'],
+): string | null {
+  const parts = widths
+    .map((size) => {
+      const url = getDirectTmdbImageUrl(path, size);
+      const width = size.replace(/^[wh]/, '');
+      return url ? `${url} ${width}w` : null;
+    })
+    .filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(', ') : null;
 }
 
 /** Normalize any supported TMDB path/URL to the public CDN for normal display. */
