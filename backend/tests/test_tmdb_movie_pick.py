@@ -96,3 +96,16 @@ def test_letterboxd_slug_identifies_ecartee_when_that_film_was_logged():
         "Split",
         letterboxd_uri="https://letterboxd.com/film/ecartee/",
     ) == ECARTEE_SPLIT_ID
+
+
+def test_unrelated_high_vote_title_cannot_steal_a_named_search():
+    other = {
+        "id": 99,
+        "title": "Completely Different",
+        "original_title": "Completely Different",
+        "release_date": "2016-01-01",
+        "popularity": 99.0,
+        "vote_count": 99_000,
+        "poster_path": "/wrong.jpg",
+    }
+    assert pick_movie_result_id([other, SHYAMALAN_SPLIT], 2016, "Split") == SHYAMALAN_SPLIT_ID
