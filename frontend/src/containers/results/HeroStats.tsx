@@ -39,10 +39,12 @@ export default function HeroStats({
     : 'N/A';
   const [timeInfoOpen, setTimeInfoOpen] = useState(false);
 
+  const showAvatar = Boolean(avatarUrl);
+
   return (
     <section className="flex items-center justify-center py-4 md:py-6">
-      <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 max-w-4xl mx-auto w-full">
-        {username && (
+      <div className={`flex flex-col items-center gap-4 md:gap-6 mx-auto w-full ${showAvatar ? 'md:flex-row max-w-4xl' : 'max-w-3xl'}`}>
+        {avatarUrl && username && (
           <div className="flex items-center justify-center shrink-0 md:h-full">
             <a
               href={`https://letterboxd.com/${username}/`}
@@ -50,21 +52,15 @@ export default function HeroStats({
               rel="noopener noreferrer"
               className="group flex flex-col items-center gap-3 transition-transform duration-200 hover:scale-105 active:scale-95"
             >
-              {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarUrl}
-                  alt={`${username}'s Letterboxd avatar`}
-                  loading="eager"
-                  decoding="async"
-                  fetchPriority="high"
-                  className="h-24 w-24 md:h-28 md:w-28 rounded-full object-cover ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500"
-                />
-              ) : (
-                <span className="grid h-24 w-24 md:h-28 md:w-28 place-items-center rounded-full bg-slate-700 text-3xl font-bold text-white ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500">
-                  {username.charAt(0).toUpperCase()}
-                </span>
-              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={avatarUrl}
+                alt={`${username}'s Letterboxd avatar`}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                className="h-24 w-24 md:h-28 md:w-28 rounded-full object-cover ring-2 ring-white/20 transition-all duration-200 group-hover:ring-orange-400 group-active:ring-orange-500"
+              />
               <span className="px-4 py-1.5 rounded-full border border-white/30 text-base md:text-lg font-bold text-white transition-colors duration-200 group-hover:border-orange-400 group-hover:text-orange-400 group-active:border-orange-500 group-active:text-orange-500">
                 @{username}
               </span>
@@ -72,7 +68,7 @@ export default function HeroStats({
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 items-stretch flex-1 w-full" style={{ gridAutoRows: '1fr' }}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 items-stretch w-full" style={{ gridAutoRows: '1fr' }}>
           <StatCard value={totalFilms} label="Films" size="large" color="text-white" onClick={onClickFilms} />
           <StatCard value={avgRatingLabel} label="Avg Rating" size="large" color="text-white" onClick={onClickAvgRating} />
           <GenreStatCard value={topGenre} label="Top Genre" onClick={onClickGenre} />
