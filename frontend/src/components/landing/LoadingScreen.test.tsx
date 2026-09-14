@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -36,6 +36,46 @@ describe('LoadingScreen result transition', () => {
 
     expect(screen.getByRole('heading', { name: 'Profilin taranıyor' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'İptal' })).toBeInTheDocument();
+  });
+
+  it('keeps progress honest after the typical threshold', () => {
+    vi.useFakeTimers();
+    try {
+      renderLoading('en', { mode: 'upload', typicalSeconds: 45 });
+
+      act(() => {
+        vi.advanceTimersByTime(46_000);
+      });
+
+      const progress = screen.getByRole('progressbar');
+      expect(progress).not.toHaveAttribute('aria-valuenow');
+      expect(screen.queryByText(/Almost there|Typical|Remaining/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/little trouble|longer/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Elapsed 46s/)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ['en', 'upload'],
+    ['en', 'scrape'],
+    ['tr', 'upload'],
+    ['tr', 'scrape'],
+  ] as const)('keeps elapsed copy honest for %s %s loading', (locale, mode) => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = renderLoading(locale, { mode, typicalSeconds: 45 });
+      act(() => {
+        vi.advanceTimersByTime(46_000);
+      });
+      expect(screen.queryByText(/under a minute|Most profiles|bir dakikadan kısa|Çoğu/i)).not.toBeInTheDocument();
+      expect(screen.getAllByText(/Elapsed 46s|46(?:s geçti| sn\. geçti)/)).toHaveLength(1);
+      expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows the queued degraded-state message instead of normal progress when worker fleet is empty', () => {

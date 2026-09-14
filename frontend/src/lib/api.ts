@@ -170,21 +170,32 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
   throw new Error('Analysis timed out after 10 minutes');
 }
 
-export async function analyzeFiles(formData: FormData): Promise<{ status: string; stats: LetterboxdStats; task_id?: string }> {
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+export async function analyzeFiles(
+  formData: FormData,
+  opts: { signal?: AbortSignal } = {},
+): Promise<{ status: string; stats: LetterboxdStats; task_id?: string }> {
   const url = `${API_BASE}/api/analyze`;
+  const signal = opts.signal;
   try {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (!formData || formData.entries().next().done) {
       throw new Error('No files provided for analysis');
     }
 
-    const r = await fetch(url, { method: 'POST', body: formData });
+    const r = await fetch(url, { method: 'POST', body: formData, signal });
     if (!r.ok) {
       throw await parseApiFailure(r, 'file analysis', `analyze ${r.status}`);
     }
 
     const data = await r.json();
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (data && data.task_id) {
-      const result = await pollTask<{ status: string; stats: LetterboxdStats }>(data.task_id, data.poll_token);
+      const result = await pollTask<{ status: string; stats: LetterboxdStats }>(data.task_id, data.poll_token, { signal });
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       return { ...result, task_id: data.task_id };
     }
     if (!data || data.status === 'error') {
@@ -192,6 +203,9 @@ export async function analyzeFiles(formData: FormData): Promise<{ status: string
     }
     return data as { status: string; stats: LetterboxdStats; task_id?: string };
   } catch (error) {
+    if (signal?.aborted || isAbortError(error)) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     throw handleApiError(error, 'file analysis');
   }
 }

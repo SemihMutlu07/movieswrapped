@@ -2,7 +2,7 @@
 
 import JSZip from 'jszip';
 import { useRouter } from 'next/navigation';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Upload, Sparkles, PartyPopper, ChevronDown } from 'lucide-react';
 import { analyzeFiles, parseLetterboxdUsername, testBackend, isLetterboxdExportFilename, fileLooksLikeZip } from '@/lib/api';
 import { persistStats } from '@/lib/stats-storage';
@@ -69,6 +69,9 @@ export default function LetterboxdLanding() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<NormalizedError | null>(null);
   const [backendOffline, setBackendOffline] = useState(false);
+  const analysisGeneration = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastUploadRef = useRef<File[] | null>(null);
 
   useEffect(() => {
     const testBackendConnectivity = async () => {
@@ -136,8 +139,15 @@ export default function LetterboxdLanding() {
       }
     }
 
+    lastUploadRef.current = filesArray;
     setIsUploading(true);
     setError(null);
+    analysisGeneration.current += 1;
+    const generation = analysisGeneration.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const stillCurrent = () => generation === analysisGeneration.current && !controller.signal.aborted;
     trackEvent('analyze_started', { fileCount: files.length, method: 'upload' });
 
     let detectedUsername: string | null = null;
@@ -159,6 +169,7 @@ export default function LetterboxdLanding() {
     } catch {
       // ponytail: username is optional; analyzeFiles reports a dead backend
     }
+    if (!stillCurrent()) return;
 
     const hasPersistenceConsent = getConsent() === 'accept';
     if (detectedUsername) {
@@ -187,6 +198,7 @@ export default function LetterboxdLanding() {
     } else if (isFolderUpload) {
       const csvFiles = Array.from(files).filter((f) => /\.csv$/i.test(f.name));
       if (csvFiles.length === 0) {
+        if (!stillCurrent()) return;
         setError({
           title: 'No CSV files found',
           message: 'The selected folder contains no Letterboxd CSV files.',
@@ -200,6 +212,7 @@ export default function LetterboxdLanding() {
       try {
         uploadFiles = [await zipFiles(csvFiles)];
       } catch (err) {
+        if (!stillCurrent()) return;
         console.error('[upload] folder zip packaging failed:', err);
         setError({ title: 'prepare_folder', message: '', reason: 'unknown_error' });
         setIsUploading(false);
@@ -214,6 +227,7 @@ export default function LetterboxdLanding() {
       try {
         uploadFiles = [await zipFiles(files)];
       } catch (err) {
+        if (!stillCurrent()) return;
         console.error('[upload] file zip packaging failed:', err);
         setError({ title: 'prepare_files', message: '', reason: 'unknown_error' });
         setIsUploading(false);
@@ -221,6 +235,8 @@ export default function LetterboxdLanding() {
         return;
       }
     }
+
+    if (!stillCurrent()) return;
 
     const formData = new FormData();
     uploadFiles.forEach((file) => formData.append('files', file));
@@ -240,9 +256,11 @@ export default function LetterboxdLanding() {
         }
       }
 
+      if (!stillCurrent()) return;
       startedAt = performance.now();
-      const result = await analyzeFiles(formData);
+      const result = await analyzeFiles(formData, { signal: controller.signal });
       const durationMs = performance.now() - startedAt;
+      if (!stillCurrent()) return;
 
       if (detectedUsername) setUsername(detectedUsername);
       const { dropped } = persistStats(result.stats);
@@ -282,8 +300,10 @@ export default function LetterboxdLanding() {
         })();
       }
 
+      if (!stillCurrent()) return;
       router.push(storyPath(detectedUsername, locale));
     } catch (err) {
+      if (!stillCurrent() || (err instanceof Error && err.name === 'AbortError')) return;
       const normalized = normalizeError(err);
       if (analysisRun && detectedUsername) {
         try {
@@ -307,9 +327,18 @@ export default function LetterboxdLanding() {
   }, [locale, router, zipFiles]);
 
   const handleCancel = useCallback(() => {
+    analysisGeneration.current += 1;
+    abortRef.current?.abort();
     setIsUploading(false);
     setError(null);
   }, []);
+
+  const handleRetry = useCallback(() => {
+    const files = lastUploadRef.current;
+    setError(null);
+    if (!files?.length) return;
+    void handleFiles(files);
+  }, [handleFiles]);
 
   const translatedError = error ? localizeLandingError(error, t) : null;
 
@@ -357,7 +386,7 @@ export default function LetterboxdLanding() {
           </section>
 
           {translatedError && (
-            <ErrorBanner error={translatedError} onDismiss={() => setError(null)} onRetry={() => setError(null)} />
+            <ErrorBanner error={translatedError} onDismiss={() => setError(null)} onRetry={handleRetry} />
           )}
 
           <section aria-label={t('landing.howItWorks.label')} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
