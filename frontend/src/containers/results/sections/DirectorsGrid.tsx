@@ -15,7 +15,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { getDirectTmdbImageUrl, getProfileUrl } from '@/lib/analytics';
+import { getDirectTmdbImageUrl, getProfileUrl, tmdbSrcSet } from '@/lib/analytics';
 import type { StatsData, PersonFilm } from './types';
 import type { GateResult, SectionToggle } from './section-utils';
 import PersonFilmsModal from './PersonFilmsModal';
@@ -227,10 +227,9 @@ export function PersonCard({
   liteMotion?: boolean;
 }) {
   const imageUrl = profilePath
-    ? liteMotion
-      ? getDirectTmdbImageUrl(profilePath, 'w185')
-      : getProfileUrl(profilePath, 'grid')
+    ? (liteMotion ? getDirectTmdbImageUrl(profilePath, 'w500') : getProfileUrl(profilePath, 'grid'))
     : null;
+  const imageSrcSet = profilePath ? tmdbSrcSet(profilePath) : null;
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [retried, setRetried] = useState(false);
@@ -298,6 +297,8 @@ export function PersonCard({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={imageUrl!}
+                srcSet={imageSrcSet ?? undefined}
+                sizes="(min-width: 768px) 128px, 112px"
                 alt=""
                 aria-hidden="true"
                 loading="lazy"
@@ -309,6 +310,8 @@ export function PersonCard({
             )}
             <motion.img
               src={imageUrl!}
+              srcSet={imageSrcSet ?? undefined}
+              sizes="(min-width: 768px) 128px, 112px"
               alt={name}
               loading="lazy"
               decoding="async"

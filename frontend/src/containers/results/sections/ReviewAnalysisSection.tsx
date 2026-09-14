@@ -291,7 +291,7 @@ export default function ReviewAnalysisSection({ stats }: Props) {
                   : null;
                 return (
                   <li key={`${review.title}-${review.year}-${review.slug ?? ''}`}>
-                    <article className="flex h-full gap-3 rounded-xl bg-slate-900/60 p-3 transition-colors duration-150 ease-out hover:bg-slate-900/90">
+                    <article className="flex h-full items-start gap-4 rounded-xl bg-slate-900/60 p-3 transition-colors duration-150 ease-out hover:bg-slate-900/90">
                       <ReviewPoster posterPath={review.poster_path} title={review.title} />
                       <div className="flex min-w-0 flex-1 flex-col">
                         <header className="flex items-start justify-between gap-2">
@@ -401,7 +401,7 @@ type ReviewItem = NonNullable<NonNullable<StatsData['review_analysis']>['reviews
 function ReviewPoster({ posterPath, title }: { posterPath?: string; title: string }) {
   const url = posterPath ? getPosterUrl(posterPath, 'grid') : null;
   return (
-    <div className="w-14 shrink-0 sm:w-16">
+    <div className="w-24 shrink-0 sm:w-28">
       <div className="aspect-[2/3] overflow-hidden rounded-lg ring-1 ring-white/10">
         <PosterImage src={url} alt={`${title} poster`} />
       </div>
@@ -580,7 +580,7 @@ function FullReviewCard({ review, showLikes = false }: { review: ReviewItem; sho
     <li>
       <Wrapper
         {...(href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {})}
-        className={`flex gap-3 rounded-xl border border-white/10 bg-slate-900/60 p-4 transition-colors duration-150 ${
+        className={`flex items-start gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4 transition-colors duration-150 ${
           href ? 'cursor-pointer hover:border-orange-400/30 hover:bg-slate-900/90' : 'hover:bg-slate-900/80'
         }`}
       >
