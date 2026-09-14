@@ -85,11 +85,11 @@ async def _fill_missing_review_posters(
     from app.services.tmdb_client import resolve_movie_poster
 
     paths = await asyncio.gather(
-        *[resolve_movie_poster(session, title, year) for title, year in needed]
+        *[resolve_movie_poster(session, title, year, uri) for title, year, uri in needed]
     )
     fetched = [
         (title, year, path)
-        for (title, year), path in zip(needed, paths)
+        for (title, year, _uri), path in zip(needed, paths)
         if isinstance(path, str) and path
     ]
     if fetched:

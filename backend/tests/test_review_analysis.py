@@ -219,7 +219,30 @@ def test_attach_review_posters_matches_letterboxd_title_when_tmdb_title_differs(
     assert analysis["reviews"][0]["poster_path"] == "/mem.jpg"
     assert analysis["reviews"][1]["poster_path"] == ""
     assert analysis["top_liked_reviews"][0]["poster_path"] == "/mem.jpg"
-    assert unique_reviews_missing_posters(analysis) == [("Unknown", 2001)]
+    assert unique_reviews_missing_posters(analysis) == [("Unknown", 2001, None)]
+
+
+def test_attach_review_posters_matches_letterboxd_uri_when_titles_differ():
+    analysis = {
+        "reviews": [
+            {
+                "title": "Split",
+                "year": 2016,
+                "letterboxd_uri": "https://letterboxd.com/film/split-2016/",
+            }
+        ]
+    }
+    all_films = [
+        {
+            "title": "Écartée",
+            "letterboxd_title": "Split",
+            "year": 2016,
+            "letterboxd_uri": "https://letterboxd.com/film/split-2016/",
+            "poster_path": "/split.jpg",
+        }
+    ]
+    attach_review_posters(analysis, all_films)
+    assert analysis["reviews"][0]["poster_path"] == "/split.jpg"
 
 
 def test_attach_review_posters_does_not_overwrite_existing_path():
