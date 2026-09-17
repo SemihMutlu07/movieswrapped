@@ -27,7 +27,7 @@ export function RewatchInsight({ title, watchCount, extraCount }: RewatchInsight
       </p>
       <p className="mt-1 text-sm text-stone-100">
         <span className="font-semibold text-amber-100">{title}</span>
-        {' — '}
+        {', '}
         {t('story.slide.rewatch.watchedTimes', { count: watchCount })}
       </p>
       {extraCount > 0 && (

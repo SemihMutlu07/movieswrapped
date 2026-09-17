@@ -1,4 +1,4 @@
-export const FINALE_CURTAIN_POSTER_CAP = 8;
+export const FINALE_CURTAIN_POSTER_CAP = 5;
 export const FINALE_CURTAIN_MIN_FILL = 4;
 
 export type FinalePhase =

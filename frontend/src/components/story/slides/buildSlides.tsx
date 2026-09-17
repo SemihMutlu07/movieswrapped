@@ -262,7 +262,7 @@ export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
         media: compactMedia([reviewSequence.heroPoster, ...reviewSequence.streamPosters], 6),
         accent: '#fb7185',
         visual: 'review',
-        posterLayout: { contentX: '-10%', rotation: 3 },
+        posterLayout: { contentX: '0%', rotation: 0 },
         reviewSequence,
         body: null,
       });

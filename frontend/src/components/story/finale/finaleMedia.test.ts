@@ -21,7 +21,7 @@ const STATS = {
 } as unknown as StatsData;
 
 describe('buildFinaleCurtainMedia', () => {
-  it('caps curtain posters at eight unique film posters', () => {
+  it('caps curtain posters at five unique film posters', () => {
     const manyFilms = Array.from({ length: 12 }, (_, index) => ({
       title: `Film ${index}`,
       poster_path: `/p${index}.jpg`,
@@ -59,10 +59,12 @@ describe('buildFinaleCurtainMedia', () => {
     expect(urls.some((url) => url.includes('/a.jpg') || url.includes('/b.jpg'))).toBe(true);
   });
 
-  it('buildFinaleSequence returns curtain posters only', () => {
+  it('buildFinaleSequence returns curtain posters and a w500 parade sample', () => {
     const sequence = buildFinaleSequence(STATS);
     expect(sequence.curtainPosters.length).toBeGreaterThan(0);
     expect(sequence.curtainPosters.every((item) => item.type === 'poster')).toBe(true);
+    expect(sequence.paradePosters.length).toBeGreaterThan(0);
+    expect(sequence.paradePosters.every((item) => item.url.includes('/w500/'))).toBe(true);
   });
 });
 

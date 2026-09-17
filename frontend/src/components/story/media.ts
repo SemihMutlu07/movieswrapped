@@ -545,7 +545,9 @@ export function buildReviewSequence(
 }
 
 
-export const FINALE_CURTAIN_POSTER_CAP = 8;
+export const FINALE_CURTAIN_POSTER_CAP = 5;
+export const FINALE_PARADE_POSTER_CAP = 36;
+export const FINALE_PARADE_SLOT_COUNT = 9;
 export const FINALE_CURTAIN_MIN_FILL = 4;
 
 function applyFinaleCurtainDedupe(
@@ -614,6 +616,34 @@ export function buildFinaleCurtainMedia(
   return applyFinaleCurtainDedupe(primary, excludedPool, options?.claimedUrls ?? [], limit);
 }
 
+/** Even stride through the library so the 4s pass is the year, not only the top-rated pile. */
+export function sampleFinaleParadePosters(
+  stats: StatsData,
+  limit = FINALE_PARADE_POSTER_CAP,
+): StoryMedia[] {
+  const unique = compactMedia(
+    (stats.all_films ?? []).map((film) => posterMedia(film, 'w500')),
+    Number.POSITIVE_INFINITY,
+  );
+  if (unique.length <= limit) return unique;
+  if (limit <= 1) return unique.slice(0, Math.max(0, limit));
+
+  const picked: StoryMedia[] = [];
+  const seen = new Set<string>();
+  const last = unique.length - 1;
+  for (let i = 0; i < limit; i += 1) {
+    const start = Math.round((i * last) / (limit - 1));
+    for (let index = start; index < unique.length; index += 1) {
+      const item = unique[index];
+      if (!item || seen.has(item.url)) continue;
+      seen.add(item.url);
+      picked.push(item);
+      break;
+    }
+  }
+  return picked;
+}
+
 export function buildFinaleSequence(
   stats: StatsData,
   options?: {
@@ -623,5 +653,6 @@ export function buildFinaleSequence(
 ) {
   return {
     curtainPosters: buildFinaleCurtainMedia(stats, options),
+    paradePosters: sampleFinaleParadePosters(stats),
   };
 }

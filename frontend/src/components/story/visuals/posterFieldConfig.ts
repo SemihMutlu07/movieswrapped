@@ -22,7 +22,7 @@ export type PosterFieldConfig = {
 export const DEFAULT_POSTER_FIELD: PosterFieldConfig = {
   // Sit just right of the text card (~32rem) instead of a wide % gutter that grows dead space.
   left: 'max(calc(8vw + 32rem + 1.5vw), 36vw)',
-  right: 'clamp(-10vw, -6vw, -3vw)',
+  right: '2vw',
   top: '9vh',
   bottom: '9vh',
   rotation: 0,
@@ -33,12 +33,12 @@ export const DEFAULT_POSTER_FIELD: PosterFieldConfig = {
 
 /** Per-visual defaults — rotation and inner bias without duplicating field anchors. */
 export const VISUAL_POSTER_DEFAULTS: Partial<Record<SlideVisual, Partial<PosterFieldConfig>>> = {
-  mosaic: { rotation: -4, contentX: '-3%' },
-  cascade: { rotation: 7, contentX: '-5%', density: 1 },
+  mosaic: { rotation: 0, contentX: '0%' },
+  cascade: { rotation: 2, contentX: '0%', density: 0.85 },
   director: { rotation: 2, contentX: '-4%' },
   person: { rotation: 1, contentX: '-2%' },
   actor: { rotation: 2, contentX: '-6%' },
-  review: { rotation: 3, contentX: '-8%' },
+  review: { rotation: 0, contentX: '0%' },
   finale: { rotation: -2, contentX: '-5%', motionScale: 1.15 },
   hero: { rotation: 2, contentX: '-6%' },
   strip: { rotation: 5, contentX: '-4%' },
