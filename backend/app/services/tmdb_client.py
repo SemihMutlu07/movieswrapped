@@ -494,6 +494,14 @@ def pick_movie_result_id(
             (slug_miss, _title_rank(result, want), _year_rank(result, target), vote_count, popularity, result)
         )
     ranked.sort(key=lambda item: item[:5])
+    if slug_title:
+        slug_hits = [item for item in ranked if item[0] == 0]
+        if slug_hits:
+            ranked = slug_hits
+    if want:
+        titled = [item for item in ranked if item[1] < 3]
+        if titled:
+            ranked = titled
     movie_id = ranked[0][5].get("id")
     return int(movie_id) if movie_id is not None else None
 

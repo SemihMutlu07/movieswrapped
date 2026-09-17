@@ -236,18 +236,40 @@ def _review_rows(review_analysis: Dict[str, Any]) -> List[dict]:
     return rows
 
 
-def _index_film_posters(all_films: list[dict]) -> tuple[dict, dict]:
-    """Map normalized (title, year) and title-only keys to poster_path.
+def _film_key(value: object) -> str:
+    """Stable identity for a Letterboxd film URL, short link, or /film/slug path."""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    from app.services.tmdb_client import letterboxd_slug_title
 
-    Indexes TMDB display title, original_title, and the Letterboxd CSV title
-    so ZIP reviews still match after analysis overwrites `title` with TMDB.
+    if "://" not in raw:
+        candidate = raw if raw.startswith("/") else f"/film/{raw}"
+        candidate = f"https://letterboxd.com{candidate}"
+    else:
+        candidate = raw
+    slug = letterboxd_slug_title(candidate) or letterboxd_slug_title(raw)
+    if slug:
+        return f"slug:{slug}"
+    return raw.rstrip("/").casefold()
+
+
+def _index_film_posters(all_films: list[dict]) -> tuple[dict, dict, dict]:
+    """Map URI, (title, year), and title-only keys to poster_path.
+
+    Letterboxd URI is the title/year-independent identity when the ZIP
+    includes it. Title keys still cover TMDB-renamed all_films rows.
     """
+    poster_by_uri: dict[str, str] = {}
     poster_by_ty: dict[tuple[str, Optional[str]], str] = {}
     poster_by_t: dict[str, str] = {}
     for film in all_films:
         path = film.get("poster_path")
         if not isinstance(path, str) or not path:
             continue
+        uri = _film_key(film.get("letterboxd_uri"))
+        if uri:
+            poster_by_uri.setdefault(uri, path)
         year = _year_key(film.get("year"))
         for raw in (film.get("letterboxd_title"), film.get("title"), film.get("original_title")):
             title = _title_key(raw)
@@ -255,7 +277,7 @@ def _index_film_posters(all_films: list[dict]) -> tuple[dict, dict]:
                 continue
             poster_by_ty.setdefault((title, year), path)
             poster_by_t.setdefault(title, path)
-    return poster_by_ty, poster_by_t
+    return poster_by_uri, poster_by_ty, poster_by_t
 
 
 def attach_review_posters(
@@ -269,21 +291,23 @@ def attach_review_posters(
     all_films titles and missed. Match Letterboxd title+year first.
     Does not overwrite a non-empty poster_path already on the review.
     """
-    poster_by_ty, poster_by_t = _index_film_posters(all_films)
+    poster_by_uri, poster_by_ty, poster_by_t = _index_film_posters(all_films)
     for review in _review_rows(review_analysis):
         existing = review.get("poster_path")
         if isinstance(existing, str) and existing:
             continue
+        uri = _film_key(review.get("letterboxd_uri") or review.get("review_path"))
+        from_uri = poster_by_uri.get(uri) if uri else None
         title = _title_key(review.get("title"))
         year = _year_key(review.get("year"))
-        review["poster_path"] = poster_by_ty.get((title, year)) or poster_by_t.get(title) or ""
+        review["poster_path"] = from_uri or poster_by_ty.get((title, year)) or poster_by_t.get(title) or ""
     return review_analysis
 
 
-def unique_reviews_missing_posters(review_analysis: Dict[str, Any]) -> List[Tuple[str, Optional[int]]]:
-    """Distinct (title, year) pairs whose review rows still have no poster_path."""
-    seen: set[tuple[str, Optional[str]]] = set()
-    missing: List[Tuple[str, Optional[int]]] = []
+def unique_reviews_missing_posters(review_analysis: Dict[str, Any]) -> List[Tuple[str, Optional[int], Optional[str]]]:
+    """Distinct (title, year, uri) triples whose review rows still have no poster_path."""
+    seen: set[tuple[str, Optional[str], str]] = set()
+    missing: List[Tuple[str, Optional[int], Optional[str]]] = []
     for review in _review_rows(review_analysis):
         path = review.get("poster_path")
         if isinstance(path, str) and path:
@@ -291,11 +315,12 @@ def unique_reviews_missing_posters(review_analysis: Dict[str, Any]) -> List[Tupl
         title = str(review.get("title") or "").strip()
         if not title:
             continue
-        key = (_title_key(title), _year_key(review.get("year")))
+        uri = str(review.get("letterboxd_uri") or review.get("review_path") or "").strip() or None
+        key = (_title_key(title), _year_key(review.get("year")), uri or "")
         if key in seen:
             continue
         seen.add(key)
-        missing.append((title, _year_int(review.get("year"))))
+        missing.append((title, _year_int(review.get("year")), uri))
     return missing
 
 
@@ -490,6 +515,8 @@ def compute_review_metrics(reviews_df: pd.DataFrame) -> Dict[str, Any]:
         rename_map["Likes"] = "like_count"
     if "Slug" in df.columns:
         rename_map["Slug"] = "slug"
+    if "Letterboxd URI" in df.columns:
+        rename_map["Letterboxd URI"] = "letterboxd_uri"
 
     df = df.rename(columns=rename_map)
 
@@ -678,6 +705,11 @@ def compute_review_metrics(reviews_df: pd.DataFrame) -> Dict[str, Any]:
             "char_length": int(row["char_length"]),
             "word_count": int(row["word_count"]),
             "review_path": str(row.get("slug") or ""),
+            "letterboxd_uri": (
+                str(row.get("letterboxd_uri")).strip()
+                if pd.notna(row.get("letterboxd_uri")) and str(row.get("letterboxd_uri")).strip()
+                else None
+            ),
         })
 
     # --- Top liked reviews + total likes (scraped HTML path only) ---
