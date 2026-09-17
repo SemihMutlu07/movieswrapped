@@ -1,4 +1,4 @@
-fastapi==0.139.0
+fastapi==0.141.1
 uvicorn
 pandas
 python-multipart==0.0.32
