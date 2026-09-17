@@ -146,4 +146,43 @@ describe('HeroStats', () => {
     expect(screen.getByText('1,228h')).toBeInTheDocument();
     expect(screen.getByText('Hours watched')).toBeInTheDocument();
   });
+
+  it('omits the empty profile column so the stats grid can showcase centered', () => {
+    render(
+      <HeroStats
+        username="alice"
+        totalFilms={12}
+        hoursWatched={20}
+        topGenre="Drama"
+        timePct="4%"
+        favoriteDirector={{ name: 'Varda', count: 3 }}
+        favoriteDecade={{ name: '2010s', count: 8 }}
+      />,
+    );
+
+    expect(screen.queryByText('@alice')).not.toBeInTheDocument();
+    expect(screen.queryByText('A')).not.toBeInTheDocument();
+    expect(screen.getByText('Films')).toBeInTheDocument();
+  });
+
+  it('keeps a Letterboxd avatar when the profile image exists', () => {
+    render(
+      <HeroStats
+        username="alice"
+        avatarUrl="https://a.ltrbxd.com/avatar.jpg"
+        totalFilms={12}
+        hoursWatched={20}
+        topGenre="Drama"
+        timePct="4%"
+        favoriteDirector={{ name: 'Varda', count: 3 }}
+        favoriteDecade={{ name: '2010s', count: 8 }}
+      />,
+    );
+
+    expect(screen.getByAltText("alice's Letterboxd avatar")).toHaveAttribute(
+      'src',
+      'https://a.ltrbxd.com/avatar.jpg',
+    );
+    expect(screen.getByText('@alice')).toBeInTheDocument();
+  });
 });
