@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { PersonCard } from './DirectorsGrid';
 
 vi.mock('@/lib/analytics', () => ({
-  getProfileUrl: (path: string) => `https://image.tmdb.org/t/p/w342/${path.replace(/^\/+/, '')}`,
-  getDirectTmdbImageUrl: (path: string, size = 'w342') => `https://image.tmdb.org/t/p/${size}/${path.replace(/^\/+/, '')}`,
+  getProfileUrl: (path: string) => `https://image.tmdb.org/t/p/w500/${path.replace(/^\/+/, '')}`,
+  getDirectTmdbImageUrl: (path: string, size = 'w500') => `https://image.tmdb.org/t/p/${size}/${path.replace(/^\/+/, '')}`,
+  tmdbSrcSet: (path: string) => `https://image.tmdb.org/t/p/w500/${path.replace(/^\/+/, '')} 500w`,
   trackEvent: vi.fn(),
   trackConsentedEvent: vi.fn(),
 }));
@@ -25,7 +26,7 @@ describe('PersonCard', () => {
 
     expect(screen.getByAltText('Director')).toHaveAttribute(
       'src',
-      'https://image.tmdb.org/t/p/w342/working.jpg',
+      'https://image.tmdb.org/t/p/w500/working.jpg',
     );
   });
 });
