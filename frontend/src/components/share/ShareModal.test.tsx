@@ -148,9 +148,9 @@ describe('ShareModal layout and controls', () => {
     expect(within(designs).getByRole('radio', { name: /your wrapped/i })).toHaveAttribute('aria-checked', 'true');
     expect(within(designs).getByRole('radio', { name: /apple clean/i })).toBeInTheDocument();
 
-    expect(screen.getByTestId('share-swap-drawer')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Actor One' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Director One' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('share-swap-drawer')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /tune actor and director/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(document.querySelector('[data-share-controls="bottom"]')).toBeTruthy();
     expect(document.querySelector('[data-share-popover-panel="true"]')).toBeNull();
     expect(screen.getByRole('button', { name: /share or save png/i })).toBeInTheDocument();
   });
@@ -166,8 +166,7 @@ describe('ShareModal layout and controls', () => {
   it('does not auto-open a popover or swap the selected people on open', () => {
     renderShareModal();
     expect(document.querySelector('[data-share-popover-panel="true"]')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Actor One' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Actor Two' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('share-swap-drawer')).not.toBeInTheDocument();
     expect(within(exportRoot()).getByText('Actor One')).toBeInTheDocument();
     expect(within(exportRoot()).queryByText('Actor Two')).not.toBeInTheDocument();
   });
@@ -176,6 +175,7 @@ describe('ShareModal layout and controls', () => {
 describe('ShareModal person swap', () => {
   it('changes selected actor and director data when variety buttons are clicked', async () => {
     renderShareModal();
+    await userEvent.click(screen.getByRole('button', { name: /tune actor and director/i }));
 
     expect(within(exportRoot()).getByText('Actor One')).toBeInTheDocument();
     expect(within(exportRoot()).getByText('Director One')).toBeInTheDocument();
@@ -189,7 +189,7 @@ describe('ShareModal person swap', () => {
 
   it('resets stale selected indexes when fresh share data arrives', async () => {
     const { rerender } = renderShareModal();
-
+    await userEvent.click(screen.getByRole('button', { name: /tune actor and director/i }));
     await userEvent.click(screen.getByRole('button', { name: 'Actor Two' }));
     expect(within(exportRoot()).getByText('Actor Two')).toBeInTheDocument();
 

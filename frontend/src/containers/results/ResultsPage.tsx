@@ -70,7 +70,7 @@ export default function ResultsPage() {
     sessionId,
   } = useResultsSession();
 
-  // stats window toggle (all-time vs last 12 months, computed once during the scrape)
+  // stats window toggle (all-time vs last 12 months from the ZIP diary)
   const [statsWindow, setStatsWindow] = useState<"lifetime" | "year">("lifetime");
   const activeStats =
     statsWindow === "year" && stats?.last_12_months ? stats.last_12_months : stats;

@@ -298,7 +298,7 @@ export function PersonCard({
               <img
                 src={imageUrl!}
                 srcSet={imageSrcSet ?? undefined}
-                sizes="(min-width: 768px) 128px, 112px"
+                sizes="(min-width: 768px) 256px, 224px"
                 alt=""
                 aria-hidden="true"
                 loading="lazy"
@@ -311,7 +311,7 @@ export function PersonCard({
             <motion.img
               src={imageUrl!}
               srcSet={imageSrcSet ?? undefined}
-              sizes="(min-width: 768px) 128px, 112px"
+              sizes="(min-width: 768px) 256px, 224px"
               alt={name}
               loading="lazy"
               decoding="async"
@@ -328,6 +328,7 @@ export function PersonCard({
                 const img = e.currentTarget as HTMLImageElement;
                 if (!retried && imageUrl) {
                   setRetried(true);
+                  img.srcset = '';
                   img.src = `${imageUrl}?retry=1`;
                 } else {
                   setImageError(true);

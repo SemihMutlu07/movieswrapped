@@ -34,7 +34,7 @@ export default function RewatchChampions({ films }: RewatchChampionsProps) {
     <Section title={t('results.rewatch.title')} subtitle={t('results.rewatch.subtitle')}>
       <div className="grid gap-3">
         {shown.map((f) => {
-          const posterUrl = f.poster_path ? getTmdbImageUrl(f.poster_path, 'w342') : null;
+          const posterUrl = f.poster_path ? getTmdbImageUrl(f.poster_path, 'w500') : null;
           return (
             <div
               key={`${f.title}-${f.year ?? ''}`}

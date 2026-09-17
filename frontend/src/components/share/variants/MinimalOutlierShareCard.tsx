@@ -21,7 +21,7 @@ const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).jo
 
 function OutlierFilmCard({ film }: { film?: ShareCardData['ratingOutlierFilm'] }) {
   if (!film) return null;
-  const posterUrl = film.posterPath ? getTmdbImageUrl(film.posterPath, 'w342') : null;
+  const posterUrl = film.posterPath ? getTmdbImageUrl(film.posterPath, 'w780') : null;
   const sign = film.delta > 0 ? '+' : '';
   const deltaColor = film.delta > 0 ? '#5A7D4C' : '#B5533C';
   return (

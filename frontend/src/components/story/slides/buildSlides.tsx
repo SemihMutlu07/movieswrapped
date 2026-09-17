@@ -59,7 +59,7 @@ export function buildSlides(stats: StatsData, i18n: Translator): Slide[] {
     slides.push({
       key: 'volume',
       media: compactMedia([
-        posterMedia(stats.longest_film ? filmByTitle(stats, stats.longest_film.title) : null, 'w342'),
+        posterMedia(stats.longest_film ? filmByTitle(stats, stats.longest_film.title) : null, 'w500'),
         ...fastForwardPosters,
         ...broadPosters,
       ], 24),
