@@ -58,7 +58,7 @@ export interface StatsData {
     start_date?: string | null;
     end_date?: string | null;
   };
-  /** Same shape, computed over the last 12 months only. Present on scrape-profile results only. */
+  /** Same shape, computed over the last 12 months from diary dates. ZIP uploads include this when diary.csv has dated watches. */
   last_12_months?: StatsData;
   cinematic_persona?: {
     persona: string;

@@ -112,7 +112,7 @@ export default function PersonFilmsModal({ open, onClose, name, films, profilePa
 
       <div data-mw-modal-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 grid grid-cols-2 sm:grid-cols-3 gap-4">
         {visibleFilms.map((f) => {
-          const poster = f.poster_path ? getTmdbImageUrl(f.poster_path, 'w342') : null;
+          const poster = f.poster_path ? getTmdbImageUrl(f.poster_path, 'w500') : null;
           return (
             <div key={`${f.title}-${f.year}`} className="space-y-1.5">
               <div className={`relative aspect-[2/3] rounded-lg overflow-hidden bg-zinc-800 ring-1 ring-white/10 transition-all duration-150 hover:scale-[1.02] hover:shadow-2xl hover:shadow-black/40 ${genreStyle ? genreStyle.ring : 'hover:ring-orange-400/30'}`}>

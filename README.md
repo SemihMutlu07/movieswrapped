@@ -1,47 +1,56 @@
-# 🎬 Movies Wrapped
+# Movies Wrapped
 
-**Your year in film — personalized Letterboxd statistics, visualized.**
+**Ready-to-use visualizing of a ZIP folder from Letterboxd.**
 
-Movies Wrapped takes your Letterboxd data (via CSV export or public profile URL) and generates a rich "wrapped"-style summary: top genres, directors, actors, viewing habits, cinema scale score, and shareable cards.
+Export your data from Letterboxd **Settings → Data → Export Your Data**, drop the ZIP here, and get a wrapped-style recap: story playback, results stats, and shareable landscape cards. No username scrape.
 
 → **Live site:** [movieswrapped.netlify.app](https://movieswrapped.netlify.app/)
 
 ---
 
-## ✨ Features
+## Features
 
-- **Two input modes:**
-  - **CSV upload** — export your data from Letterboxd settings → drag & drop the ZIP
-  - **Username scrape** — enter a public Letterboxd username; we scrape diary, grid, reviews, and overview
-- **Cinema Scale** — Shannon entropy across 6 axes (geography, temporal, languages, volume, genres, directors) → a single `sinefil_meter` score
-- **Share Lab** — 20 share card templates across 4 categories (classic, letterboxd, meme, premium); export as PNG or 5-image ZIP pack
-- **Experimental metrics** — Weekday vs Weekend, Director Concentration, and more (opt-in via `?mode=test`)
-- **Watchlist analytics** — analyze any public Letterboxd watchlist
-- **Test Lab** — preview new features before they go live (`/results?mode=test`)
-- **TMDB enrichment** — poster images, cast photos, director bios linked to your stats
+- **ZIP / folder upload** — `watched.csv`, `diary.csv`, `ratings.csv`, `reviews.csv`, `profile.csv` from the Letterboxd export
+- **All Time / Last 12 Months** — results toggle when `diary.csv` has dated watches
+- **Cinema Scale** — Shannon entropy across geography, time, languages, volume, genres, directors (`sinefil_meter`, `cine_v2`)
+- **Story** — full-viewport scenes with Framer Motion; lazy-loaded TMDB stills at w500+ with initials/empty fallbacks (no soft w185 upscales)
+- **Share** — landscape cards, design chips under a large preview, actor/director swap behind **Tune actor and director**
+- **TMDB enrichment** — posters and portraits; reviews attach by Letterboxd URI first, then title/year
 
 ---
 
-## 🏗 Architecture
+## Animations
+
+Story playback is the motion surface: scene transitions, poster cascades, and person/review sequences. Respect `prefers-reduced-motion` (person cards skip hover scale). Share export is a static PNG of the live card, not a recording of the story.
+
+---
+
+## Extending this
+
+The ZIP path is the product. Useful next seams without bringing scrape back:
+
+- **New results section** — add a gated component under `frontend/src/containers/results/sections/` and emit fields from `backend/app/services/`
+- **New share layout** — register a landscape variant in `frontend/src/components/share/registry.ts`
+- **Story beat** — `frontend/src/components/story/slides/buildSlides.tsx` + `media.ts` (keep poster sizes at w500 or larger)
+- **Richer ZIP identity** — resolve `boxd.it` short links if review posters still miss
+
+Username scrape, watchlist jobs, and the desktop worker live on `archive/scrape`, not on `main`.
+
+---
+
+## Architecture
 
 ```
 ┌──────────────────┐     ┌─────────────────┐     ┌──────────────────┐
-│  Next.js 15 SPA  │────▶│  FastAPI Backend │────▶│  Supabase (ops)  │
-│  (Netlify static)│     │  (Render/desktop)│     │  run logs, RLS   │
-└──────────────────┘     └────────┬────────┘     └──────────────────┘
-                                  │
-                        ┌─────────▼─────────┐
-                        │  Desktop Worker   │
-                        │  (Windows —       │
-                        │   direct scraping)│
-                        └───────────────────┘
+│  Next.js 15 SPA  │────▶│  FastAPI Backend │────▶│  Supabase        │
+│  (Netlify static)│     │  (Render)        │     │  sessions, runs  │
+└──────────────────┘     └─────────────────┘     └──────────────────┘
 ```
 
 - **Frontend:** Next.js 15 (static export), React 19, TailwindCSS 4, Recharts, Framer Motion
-- **Backend:** FastAPI, pandas/numpy, aiohttp, BeautifulSoup4 + lxml
-- **Database:** Supabase (anon key only — run logs, user sessions, feedback)
-- **Worker:** Local desktop process for direct Letterboxd scraping (avoids datacenter IP blocks)
-- **Images:** TMDB proxy via backend
+- **Backend:** FastAPI, pandas/numpy, aiohttp — ZIP extract + TMDB match
+- **Database:** Supabase (anon/publishable key only)
+- **Images:** TMDB CDN for display; backend `/tmdb-proxy/` for share-canvas export
 
 ---
 
@@ -83,9 +92,6 @@ cd frontend && npm run dev
 | `FRONTEND_ORIGINS` | (optional) | Comma-separated extra CORS origins (production Netlify URLs are already hardcoded) |
 | `SUPABASE_URL` | | New Supabase project URL |
 | `SUPABASE_ANON_KEY` | | Publishable anon key (never service_role) |
-| `WORKER_TOKEN` | | Shared secret for desktop worker auth |
-| `WORKER_BACKEND_URL` | | Backend URL worker polls for jobs |
-| `SENTRY_DSN` | | Error tracking (optional) |
 
 ### Frontend (`frontend/.env.local`)
 
@@ -99,40 +105,7 @@ cd frontend && npm run dev
 
 ---
 
-## 🖥 Desktop Worker (Direct Scrape)
-
-The backend's datacenter IP is often blocked by Letterboxd's bot detection. To work around this, a lightweight desktop worker runs on a home machine, polls the backend for scrape jobs, and scrapes Letterboxd directly from a residential IP.
-
-**Setup guide:** [`docs/desktop-worker-setup.md`](docs/desktop-worker-setup.md)
-
-The worker uses `cloudscraper` + `BeautifulSoup` for parsing and supports parallel diary/grid/reviews/overview scraping. It includes Windows wake-lock and rate-limiting.
-
----
-
-## 🧪 Test Lab
-
-Access the experimental feature preview at `/results?mode=test`. New metrics appear here before being promoted to the main results page.
-
-Available experimentals:
-- Weekday vs Weekend viewing patterns
-- Director Concentration Index
-- More coming
-
----
-
-## 📦 Share Lab
-
-20 share card templates across 4 categories:
-- **Classic** — clean, Apple-style
-- **Letterboxd** — film-strip aesthetic
-- **Meme** — playful designs
-- **Premium** — editorial look
-
-Export as PNG (1200×630 landscape / 675×1200 portrait) or download a 5-image ZIP pack.
-
----
-
-## 🗄 Supabase Tables
+## Supabase Tables
 
 | Table | Purpose |
 |---|---|

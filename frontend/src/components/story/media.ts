@@ -38,7 +38,7 @@ export function compactMedia(items: Array<StoryMedia | null | undefined>, limit 
 }
 
 export function allPosterMedia(stats: StatsData, limit = 24): StoryMedia[] {
-  return compactMedia((stats.all_films ?? []).map((film) => posterMedia(film, 'w342')), limit);
+  return compactMedia((stats.all_films ?? []).map((film) => posterMedia(film, 'w500')), limit);
 }
 
 export function filmNameKeys(film: {

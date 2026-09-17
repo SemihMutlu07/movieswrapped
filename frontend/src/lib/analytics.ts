@@ -67,7 +67,7 @@ export function getProfileUrl(path: string | null | undefined, quality: 'grid' |
 
 export function tmdbSrcSet(
   path: string | null | undefined,
-  widths: ReadonlyArray<string> = ['w185', 'w342', 'w500', 'w780'],
+  widths: ReadonlyArray<string> = ['w342', 'w500', 'w780'],
 ): string | null {
   const parts = widths
     .map((size) => {

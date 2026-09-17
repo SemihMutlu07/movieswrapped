@@ -32,7 +32,7 @@ describe('TMDB image URL normalization', () => {
 
   it('builds a width-based srcset so large portraits are not upscaled from w185', () => {
     expect(tmdbSrcSet('/face.jpg')).toBe(
-      'https://image.tmdb.org/t/p/w185/face.jpg 185w, https://image.tmdb.org/t/p/w342/face.jpg 342w, https://image.tmdb.org/t/p/w500/face.jpg 500w, https://image.tmdb.org/t/p/w780/face.jpg 780w',
+      'https://image.tmdb.org/t/p/w342/face.jpg 342w, https://image.tmdb.org/t/p/w500/face.jpg 500w, https://image.tmdb.org/t/p/w780/face.jpg 780w',
     );
   });
 });

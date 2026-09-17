@@ -51,6 +51,7 @@ export default function ShareModal({
   const [actorIdx, setActorIdx] = useState(0);
   const [directorIdx, setDirectorIdx] = useState(0);
   const [showUsername, setShowUsername] = useState(true);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
   const clampedIdx = Math.max(0, Math.min(availableVariants.length - 1, activeIdx));
@@ -64,6 +65,7 @@ export default function ShareModal({
     setDirectorIdx(0);
     setActiveIdx(0);
     setShowUsername(true);
+    setPeopleOpen(false);
     setExportError(null);
   }, [open]);
 
@@ -157,7 +159,7 @@ export default function ShareModal({
         onClose={onClose}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col">
           <CardPreview
             previewRef={bindPreview}
             variantKey={variantKey}
@@ -178,6 +180,8 @@ export default function ShareModal({
             cardProps={cardProps}
             isSaving={isSaving}
             showPeople={showPeople}
+            peopleOpen={peopleOpen}
+            onTogglePeople={() => setPeopleOpen((open) => !open)}
             hasActors={hasActors}
             hasDirectors={hasDirectors}
             actorIdx={actorIdx}

@@ -18,7 +18,7 @@ export function PortraitFrame({
   imageClassName?: string;
 }) {
   const [failed, setFailed] = useState(false);
-  const src = person.headshotUrl ? getTmdbImageUrl(person.headshotUrl, 'w342') : null;
+  const src = person.headshotUrl ? getTmdbImageUrl(person.headshotUrl, 'w780') : null;
   const initials = person.name
     .split(/\s+/)
     .filter(Boolean)

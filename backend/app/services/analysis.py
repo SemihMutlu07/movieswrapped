@@ -49,6 +49,7 @@ from app.services.people import (
     compute_signature_duo,
     resolve_profile_paths,
 )
+from app.services.period_window import attach_last_12_months
 from app.services.persona import (
     compute_cinematic_persona,
     compute_film_age_analysis,
@@ -488,6 +489,18 @@ async def process_comprehensive_letterboxd_data(
     stats["review_analysis"] = compute_review_metrics(reviews_df)
     attach_review_posters(stats["review_analysis"], stats.get("all_films") or [])
     await _fill_missing_review_posters(session, stats["review_analysis"])
+
+    try:
+        attach_last_12_months(
+            stats,
+            films_enriched=films_enriched,
+            films_df=films_df,
+            diary_df=diary_df,
+            reviews_df=reviews_df,
+            watched_df=watched_df,
+        )
+    except Exception:
+        logger.exception("last_12_months window failed; omitting")
 
     _progress("analyzing", "Analysis complete!", 11, 11)
 
