@@ -13,7 +13,7 @@ export function UsernameToggle({ username, showUsername, isSaving, onToggle }: U
   const { t } = useI18n();
 
   return (
-    <label className="flex items-center justify-between text-xs text-slate-300">
+    <label className="flex items-center justify-between gap-3 text-sm text-slate-200">
       <span>{t('share.showUsernameValue').replace('{username}', username)}</span>
       <button
         type="button"

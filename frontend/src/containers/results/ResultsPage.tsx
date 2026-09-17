@@ -82,7 +82,7 @@ export default function ResultsPage() {
   // share
   const [showShareModal, setShowShareModal] = useState(false);
   const [orientation, setOrientation] = useState<"horizontal" | "vertical">(
-    "vertical",
+    "horizontal",
   );
 
   // feedback

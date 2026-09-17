@@ -20,7 +20,7 @@ export function VariantPicker({
 
   return (
     <div className="min-w-0 space-y-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
         {t('share.designs')}
       </p>
       <div
@@ -38,7 +38,7 @@ export function VariantPicker({
               aria-checked={active}
               disabled={isSaving}
               onClick={() => onSelect(index)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
                 active
                   ? 'bg-orange-400 text-black'
                   : 'bg-white/8 text-slate-300 hover:bg-white/12 hover:text-white'

@@ -139,14 +139,10 @@ describe('ShareModal layout and controls', () => {
     chrome.remove();
   });
 
-  it('keeps format, designs, people, and save visible without a popover', () => {
+  it('keeps landscape designs, people, and save visible without a portrait toggle', () => {
     renderShareModal();
-    const format = screen.getByRole('group', { name: /share format/i });
-    const portrait = within(format).getByRole('button', { name: /portrait/i });
-    const landscape = within(format).getByRole('button', { name: /landscape/i });
-    expect(format).toContainElement(portrait);
-    expect(format).toContainElement(landscape);
-    expect(within(format).queryByRole('button', { name: /story/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /share format/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /portrait/i })).not.toBeInTheDocument();
 
     const designs = screen.getByRole('radiogroup', { name: /card design/i });
     expect(within(designs).getByRole('radio', { name: /your wrapped/i })).toHaveAttribute('aria-checked', 'true');

@@ -40,17 +40,17 @@ function PersonChip({
       onClick={onSelect}
       disabled={disabled}
       aria-pressed={active}
-      className={`flex max-w-full items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[11px] font-medium transition-colors ${chipClass(active)}`}
+      className={`flex max-w-full items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4 text-sm font-semibold transition-colors ${chipClass(active)}`}
     >
       {person.headshotUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={person.headshotUrl}
           alt=""
-          className="h-6 w-6 shrink-0 rounded-full object-cover"
+          className="h-8 w-8 shrink-0 rounded-full object-cover"
         />
       ) : (
-        <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-bold ${
+        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold ${
           active ? 'bg-black/15' : 'bg-white/10'
         }`}>
           {lastName(person.name).slice(0, 1)}
@@ -77,12 +77,12 @@ export function SwapDrawer({
 
   return (
     <div data-testid="share-swap-drawer" className="min-w-0 space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
         {t('share.people')}
       </p>
       {hasActors && (
         <fieldset className="min-w-0 space-y-1.5">
-          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <legend className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             {t('share.actor')}
           </legend>
           <div className="flex flex-wrap gap-1.5">
@@ -100,7 +100,7 @@ export function SwapDrawer({
       )}
       {hasDirectors && (
         <fieldset className="min-w-0 space-y-1.5">
-          <legend className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <legend className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
             {t('share.director')}
           </legend>
           <div className="flex flex-wrap gap-1.5">

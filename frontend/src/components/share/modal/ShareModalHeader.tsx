@@ -22,10 +22,10 @@ export function ShareModalHeader({
   const { t } = useI18n();
 
   return (
-    <div className="flex items-center justify-between border-b border-white/8 px-5 pb-2 pt-4 md:px-6 md:py-3">
+    <div className="flex items-center justify-between border-b border-white/8 px-5 pb-3 pt-4 md:px-6 md:py-4">
       <div>
-        <span id="share-modal-title" className="block text-sm font-semibold text-white/90">{t('share.title')}</span>
-        <span className="block text-[11px] text-slate-500">
+        <span id="share-modal-title" className="block text-lg font-semibold text-white">{t('share.title')}</span>
+        <span className="block text-sm text-slate-400">
           {variantLabel} · {activeIdx + 1}/{variantCount}
         </span>
       </div>
