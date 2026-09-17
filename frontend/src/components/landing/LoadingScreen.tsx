@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { PosterGuessGame, type PosterGameProps } from '@/components/landing/PosterGuessGame';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -52,12 +53,17 @@ export default function LoadingScreen({
   queued,
 }: Props) {
   const { t, formatNumber } = useI18n();
+  const reduceMotion = Boolean(useReducedMotion());
+  const startedAtRef = useRef(typeof performance === 'undefined' ? Date.now() : performance.now());
   const [elapsed, setElapsed] = useState(0);
   const [funMessageIndex, setFunMessageIndex] = useState(0);
   const isScrape = mode === 'scrape';
 
   useEffect(() => {
-    const interval = setInterval(() => setElapsed((e) => e + 1), 1000);
+    const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+    const updateElapsed = () => setElapsed(Math.floor((now() - startedAtRef.current) / 1000));
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -71,28 +77,23 @@ export default function LoadingScreen({
 
   const defaultTypical = isScrape ? 30 : 45;
   const typical = typicalSeconds ?? defaultTypical;
-  const remaining = Math.max(0, typical - elapsed);
-  const pct = Math.min(100, Math.round((elapsed / typical) * 100));
+  const isSlow = elapsed > typical;
 
   // Live discovery feed from the real scrape trace (films climb as pages load).
   const liveFilms = (events ?? []).reduce((max, e) => {
     const f = e.metrics?.films;
     return typeof f === 'number' && f > max ? f : max;
   }, 0);
-  const recentEvents = (events ?? []).filter((e) => e.message).slice(-3);
-
   const displayTitle = isScrape ? t('landing.loading.scrape.title') : title ?? t('landing.loading.upload.title');
   const displayMessage = isScrape
     ? estimatedFilms && estimatedFilms > 0
       ? t('landing.loading.scrape.readingFilms').replace('{count}', formatNumber(estimatedFilms))
       : t('landing.loading.scrape.readingProfile')
     : message ?? t('landing.loading.upload.message');
-  const displayDetail = isScrape
-    ? t('landing.loading.elapsed').replace('{time}', formatElapsed(elapsed, t)).replace('{source}', t('landing.loading.source.profiles'))
-    : t('landing.loading.elapsed').replace('{time}', formatElapsed(elapsed, t)).replace('{source}', t('landing.loading.source.exports'));
+  const displayDetail = t('landing.loading.elapsed').replace('{time}', formatElapsed(elapsed, t));
 
   return (
-    <div className="flex min-h-dvh w-full min-w-0 flex-col items-center justify-start overflow-x-hidden overflow-y-auto bg-slate-900 px-4 pt-[var(--mw-top-chrome-reserve)] pb-5 text-white sm:justify-center sm:px-6 sm:pb-8">
+    <div className="flex min-h-dvh w-full min-w-0 flex-col items-center justify-start overflow-x-hidden overflow-y-auto bg-[#110f0d] px-4 pt-[var(--mw-top-chrome-reserve)] pb-5 text-white sm:justify-center sm:px-6 sm:pb-8">
       {/* Keep the rotating prompt in one place, above the loading container. */}
       {isScrape && (
         <div className="mb-4 w-full min-w-0 max-w-xl px-1 text-center">
@@ -105,7 +106,7 @@ export default function LoadingScreen({
         </div>
       )}
 
-      <div className="w-full min-w-0 max-w-xl text-center rounded-3xl border border-slate-700/70 bg-slate-800/55 p-5 md:p-6 backdrop-blur-sm">
+      <div className="w-full min-w-0 max-w-xl rounded-3xl border border-amber-300/20 bg-[#1b1713]/90 p-5 text-center shadow-[0_24px_80px_-40px_rgba(251,146,60,0.45)] backdrop-blur-sm md:p-6">
         <header className="mb-3 flex min-w-0 flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-x-4 sm:gap-y-1">
           <h1 className="min-w-0 text-balance break-words text-2xl font-black tracking-tight md:text-3xl">
             {displayTitle}
@@ -114,9 +115,9 @@ export default function LoadingScreen({
             <button
               type="button"
               onClick={onCancel}
-              className="group inline-flex min-h-9 shrink-0 items-center gap-1.5 self-end rounded-lg border border-white/15 bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white/85 shadow-sm shadow-black/20 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/15 hover:text-white hover:shadow-rose-500/15 active:scale-[0.96] sm:self-start"
+              className="group inline-flex min-h-11 shrink-0 items-center gap-1.5 self-end rounded-lg border border-amber-200/25 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/85 shadow-sm shadow-black/20 transition-colors duration-200 motion-safe:hover:border-amber-200/60 motion-safe:hover:bg-amber-500/10 motion-safe:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1b1713] motion-safe:active:scale-[0.98] sm:self-start"
             >
-              <X className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:rotate-90" />
+              <X className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 motion-safe:group-hover:rotate-90" />
               <span className="whitespace-nowrap">{t('landing.loading.cancel')}</span>
             </button>
           )}
@@ -126,7 +127,7 @@ export default function LoadingScreen({
         {/* Live film count — wraps cleanly; number pops on every increase */}
         {isScrape && liveFilms > 0 && (
           <p className="mb-2 flex min-w-0 flex-wrap items-baseline justify-center gap-x-2 gap-y-0.5 text-2xl font-black tabular-nums text-orange-300">
-            <span key={liveFilms} className="inline-block animate-[score-pop_1.1s_ease-out]">
+            <span key={liveFilms} className="inline-block motion-safe:animate-[score-pop_1.1s_ease-out]">
               {formatNumber(liveFilms)}
             </span>
             <span className="text-sm font-medium text-slate-400">{t('landing.loading.filmsFound')}</span>
@@ -136,18 +137,13 @@ export default function LoadingScreen({
         {/* Status — elapsed/almost-there, then trouble hint if it's taking a while */}
         <div className="mb-4 min-w-0 space-y-1">
           {queued ? (
-            <p className="text-pretty break-words text-xs leading-relaxed text-amber-300/90 animate-pulse">
+            <p className="text-pretty break-words text-xs leading-relaxed text-amber-300/90 motion-safe:animate-pulse">
               {t('landing.loading.queued')}
             </p>
           ) : (
             <>
-              <p className="text-pretty break-words text-xs font-medium leading-relaxed text-orange-300">
-                {remaining <= 0 ? t('landing.loading.almostThere') : displayDetail}
-              </p>
-              {elapsed > typical && (
-                <p className="text-pretty break-words text-xs leading-relaxed text-amber-300/90 animate-pulse">
-                  {t('landing.loading.slow')}
-                </p>
+              {isSlow && (
+                <p className="text-pretty break-words text-xs leading-relaxed text-amber-300/90">{t('landing.loading.slow')}</p>
               )}
             </>
           )}
@@ -159,31 +155,26 @@ export default function LoadingScreen({
           </div>
         )}
 
-        {/* Progress + remaining time */}
-        <div className="mt-4 min-w-0 space-y-2">
-          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm font-medium">
-            <span className="min-w-0 text-left text-slate-300">{t('landing.loading.typical')}</span>
-            <span className="shrink-0 tabular-nums text-slate-200">{formatElapsed(typical, t)}</span>
-          </div>
+        {/* Indeterminate: the client does not receive upload/analyze stage progress. */}
+        <div className="mt-5 min-w-0 space-y-2">
           <div
-            className="h-2 overflow-hidden rounded-full bg-slate-700/80"
+            className="relative h-2 overflow-hidden rounded-full bg-amber-950/70"
             role="progressbar"
             aria-label={t('landing.loading.progress')}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={pct}
           >
-            <div
-              className="h-full bg-gradient-to-r from-orange-400 via-amber-300 to-orange-400 transition-all duration-1000"
-              style={{ width: `${pct}%` }}
-            />
+            {reduceMotion ? (
+              <div className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-amber-300/70" aria-hidden="true" />
+            ) : (
+              <motion.div
+                className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-gradient-to-r from-orange-500/30 via-amber-300 to-orange-500/30"
+                initial={{ x: '-100%' }}
+                animate={{ x: ['-100%', '300%'] }}
+                transition={{ duration: 2.2, ease: 'easeInOut', repeat: Infinity }}
+                aria-hidden="true"
+              />
+            )}
           </div>
-          {remaining > 0 && (
-            <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
-              <span className="min-w-0 text-left text-slate-500">{t('landing.loading.remaining')}</span>
-              <span className="shrink-0 font-medium tabular-nums text-orange-300">{formatElapsed(remaining, t)}</span>
-            </div>
-          )}
+          {!queued && <div className="text-xs font-medium tabular-nums text-amber-200">{displayDetail}</div>}
         </div>
       </div>
     </div>

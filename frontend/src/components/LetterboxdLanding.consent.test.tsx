@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nProvider } from '@/i18n/I18nProvider';
 
@@ -109,6 +109,52 @@ describe('LetterboxdLanding persistence', () => {
         expect.objectContaining({ username: 'alice', consent: 'accept' }),
       );
     });
+  });
+
+  it('does not open the story when analysis finishes after cancel', async () => {
+    let resolveAnalyze: (value: unknown) => void = () => undefined;
+    let signal: AbortSignal | undefined;
+    apiMocks.analyzeFiles.mockImplementation((_form: FormData, opts?: { signal?: AbortSignal }) => new Promise((resolve) => {
+      signal = opts?.signal;
+      resolveAnalyze = resolve;
+    }));
+    const user = userEvent.setup();
+    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    const file = new File(['Name,Year\nAftersun,2022\n'], 'letterboxd-alice.zip', { type: 'application/zip' });
+    const input = document.getElementById('upload-zone-input') as HTMLInputElement;
+    await user.upload(input, file);
+
+    await waitFor(() => expect(apiMocks.analyzeFiles).toHaveBeenCalled());
+    expect(signal?.aborted).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(signal?.aborted).toBe(true);
+
+    await act(async () => {
+      resolveAnalyze({ status: 'success', stats: { total_films: 12 } });
+      await Promise.resolve();
+    });
+
+    expect(routerMocks.push).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('letterboxdStats')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(document.getElementById('upload-zone-input')).toBeTruthy();
+  });
+
+  it('restarts analysis when Try again is clicked', async () => {
+    apiMocks.analyzeFiles
+      .mockRejectedValueOnce(new Error('Analysis failed'))
+      .mockResolvedValueOnce({ status: 'success', stats: { total_films: 12 } });
+    const user = userEvent.setup();
+    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    const file = new File(['Name,Year\nAftersun,2022\n'], 'letterboxd-alice.zip', { type: 'application/zip' });
+    const input = document.getElementById('upload-zone-input') as HTMLInputElement;
+    await user.upload(input, file);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument());
+    expect(apiMocks.analyzeFiles).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(apiMocks.analyzeFiles).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalled());
   });
 
   it('stops the loading screen when analyze cannot reach the backend', async () => {
