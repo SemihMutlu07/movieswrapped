@@ -7,6 +7,8 @@ import {
   buildFinaleSequence,
   collectCinematicClaimedUrls,
   FINALE_CURTAIN_POSTER_CAP,
+  FINALE_PARADE_POSTER_CAP,
+  sampleFinaleParadePosters,
 } from '../media';
 import { finalePhaseAt } from './finalePhases';
 
@@ -21,7 +23,7 @@ const STATS = {
 } as unknown as StatsData;
 
 describe('buildFinaleCurtainMedia', () => {
-  it('caps curtain posters at eight unique film posters', () => {
+  it('caps curtain posters at five unique film posters', () => {
     const manyFilms = Array.from({ length: 12 }, (_, index) => ({
       title: `Film ${index}`,
       poster_path: `/p${index}.jpg`,
@@ -59,10 +61,34 @@ describe('buildFinaleCurtainMedia', () => {
     expect(urls.some((url) => url.includes('/a.jpg') || url.includes('/b.jpg'))).toBe(true);
   });
 
-  it('buildFinaleSequence returns curtain posters only', () => {
+  it('buildFinaleSequence returns curtain posters and a w500 parade sample', () => {
     const sequence = buildFinaleSequence(STATS);
     expect(sequence.curtainPosters.length).toBeGreaterThan(0);
     expect(sequence.curtainPosters.every((item) => item.type === 'poster')).toBe(true);
+    expect(sequence.paradePosters.length).toBeGreaterThan(0);
+    expect(sequence.paradePosters.every((item) => item.url.includes('/w500/'))).toBe(true);
+  });
+
+  it('samples an empty library as an empty parade', () => {
+    expect(sampleFinaleParadePosters({ all_films: [] } as unknown as StatsData)).toEqual([]);
+  });
+
+  it('keeps the full library when it is at or under the parade cap', () => {
+    const media = sampleFinaleParadePosters(STATS);
+    expect(media).toHaveLength(STATS.all_films.length);
+  });
+
+  it('caps a large library at 36 and includes the first and last unique posters', () => {
+    const manyFilms = Array.from({ length: 80 }, (_, index) => ({
+      title: `Film ${index}`,
+      poster_path: `/p${index}.jpg`,
+      rating: 1,
+    }));
+    const media = sampleFinaleParadePosters({ all_films: manyFilms } as unknown as StatsData);
+    expect(media).toHaveLength(FINALE_PARADE_POSTER_CAP);
+    expect(media[0].url).toContain('/p0.jpg');
+    expect(media[media.length - 1].url).toContain('/p79.jpg');
+    expect(media.every((item) => item.url.includes('/w500/'))).toBe(true);
   });
 });
 

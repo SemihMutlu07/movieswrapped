@@ -53,6 +53,8 @@ export type ReviewSequenceData = {
 
 export type FinaleSequenceData = {
   curtainPosters: StoryMedia[];
+  /** Even sample of the library, shown once over 4s. Not the settled background. */
+  paradePosters: StoryMedia[];
 };
 
 export type SlideInsight = {
