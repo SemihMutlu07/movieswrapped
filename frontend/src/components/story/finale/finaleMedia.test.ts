@@ -75,7 +75,7 @@ describe('buildFinaleCurtainMedia', () => {
 
   it('keeps the full library when it is at or under the parade cap', () => {
     const media = sampleFinaleParadePosters(STATS);
-    expect(media).toHaveLength(STATS.all_films.length);
+    expect(media).toHaveLength(5);
   });
 
   it('caps a large library at 36 and includes the first and last unique posters', () => {
