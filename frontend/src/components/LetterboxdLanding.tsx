@@ -367,6 +367,18 @@ export default function LetterboxdLanding() {
             </p>
           </header>
 
+          <section aria-label={t('landing.contributors.label')} className="text-center space-y-1.5">
+            <p className="text-xs font-medium tracking-wide text-white/55 uppercase">
+              {t('landing.contributors.label')}
+            </p>
+            <p className="text-sm leading-relaxed text-white/70">
+              {t('landing.contributors.withBerdan')}
+            </p>
+            <p className="text-xs leading-relaxed text-white/45">
+              {t('landing.contributors.thanks')}
+            </p>
+          </section>
+
           <section
             aria-label={t('landing.upload.modalTitle')}
             className="rounded-2xl p-5 sm:p-6 backdrop-blur-sm"
@@ -430,8 +442,6 @@ export default function LetterboxdLanding() {
               ))}
             </div>
           </section>
-
-          <p className="text-center text-xs leading-relaxed text-white/45">{t('landing.attribution')}</p>
 
           {backendOffline && (
             <div

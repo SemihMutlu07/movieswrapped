@@ -426,20 +426,16 @@ export function ResultsContent({
             </Link>
           </div>
 
-          <div className="mt-12 pt-8 border-t border-white/[0.06] text-center space-y-3">
-            <p className="text-xs text-slate-400">
-              Thanks to our beta testers: Mete, Mehlika Ceylin Aydoğan, Salih
-              Emre Padır, Mert Efe Şentürk, Deniz and Ayberk for the
-              invaluable feedback.
-            </p>
+          <div className="mt-12 pt-8 border-t border-white/[0.06] text-center">
             <p className="text-xs text-slate-400">
               Questions or feedback?{" "}
-              <a
-                href="mailto:semihmutlu220@gmail.com"
+              <button
+                type="button"
+                onClick={() => feedbackRef.current?.open()}
                 className="underline underline-offset-2 hover:text-slate-200 transition-colors"
               >
                 Get in touch
-              </a>
+              </button>
             </p>
           </div>
         </div>

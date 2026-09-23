@@ -38,16 +38,22 @@ const FeedbackFab = forwardRef<FeedbackFabRef, FeedbackFabProps>(({ sessionId },
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const MAX_LENGTH = 500;
+  const CONTACT_EMAIL = 'semihmutlu220@gmail.com';
   const isOverLimit = message.length > MAX_LENGTH;
   const isEmpty = message.trim().length === 0;
 
   // Derived username (Letterboxd) – single source, automatic
   const lbUsername = safeGetSessionStorage('lb_username') || '';
 
+  const handleOpen = useCallback(() => {
+    setIsOpen(true);
+    trackEvent('feedback_opened');
+  }, []);
+
   // Imperative handle for programmatic opening
   useImperativeHandle(ref, () => ({
-    open: () => setIsOpen(true)
-  }));
+    open: handleOpen,
+  }), [handleOpen]);
 
   const handleClose = useCallback(() => {
     if (isSubmitting) return;
@@ -80,11 +86,6 @@ const FeedbackFab = forwardRef<FeedbackFabRef, FeedbackFabProps>(({ sessionId },
       e.preventDefault();
       handleSubmit();
     }
-  };
-
-  const handleOpen = () => {
-    setIsOpen(true);
-    trackEvent('feedback_opened');
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -241,7 +242,15 @@ const FeedbackFab = forwardRef<FeedbackFabRef, FeedbackFabProps>(({ sessionId },
                   />
                 </div>
 
-
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Prefer email?{' '}
+                  <a
+                    href={`mailto:${CONTACT_EMAIL}`}
+                    className="underline underline-offset-2 text-slate-300 hover:text-white transition-colors"
+                  >
+                    {CONTACT_EMAIL}
+                  </a>
+                </p>
               </div>
 
               {/* Footer */}
