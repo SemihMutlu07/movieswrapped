@@ -22,7 +22,7 @@ describe('desktopHandoffUrl', () => {
         origin: 'https://movieswrapped.com',
         locale: 'en',
       }),
-    ).toBe('https://movieswrapped.com/en');
+        ).toBe('https://movieswrapped.com/');
   });
 
   it('copies locale home from results for the same session-storage reason', () => {

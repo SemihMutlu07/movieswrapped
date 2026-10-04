@@ -9,3 +9,16 @@
   # Next.js at build time — they are not secrets. Netlify's scanner doesn't
   # know this, so we explicitly omit them from secret detection.
   SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_POSTHOG_KEY,NEXT_PUBLIC_API_BASE"
+
+# English home is `/`. `/en` is the old URL and must not remain as a document.
+[[redirects]]
+  from = "/en"
+  to = "/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/en/"
+  to = "/"
+  status = 301
+  force = true

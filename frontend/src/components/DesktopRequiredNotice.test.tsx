@@ -64,7 +64,7 @@ describe('DesktopRequiredNotice', () => {
     expect(share).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Movies Wrapped',
-        url: expect.stringMatching(/\/en$/),
+        url: expect.stringMatching(/\/$/),
       }),
     );
     expect(analyticsMocks.trackEvent).toHaveBeenCalledWith('desktop_required_shared', { surface: 'story' });

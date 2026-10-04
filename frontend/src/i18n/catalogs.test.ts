@@ -38,4 +38,22 @@ describe('i18n catalogs and routing', () => {
     expect(localizePath('/en/results?u=semih#reviews', 'tr')).toBe('/tr/results?u=semih#reviews');
     expect(localizePath('/results?u=semih', 'en')).toBe('/en/results?u=semih');
   });
+
+  it('keeps English home at / and Turkish home at /tr', () => {
+    expect(localizePath('/', 'en')).toBe('/');
+    expect(localizePath('/en', 'en')).toBe('/');
+    expect(localizePath('/', 'tr')).toBe('/tr');
+    expect(localizePath('/story', 'en')).toBe('/en/story');
+  });
+
+  it('locks the English homepage title copy', () => {
+    expect(en['landing.hero.title']).toBe('Your Letterboxd Wrapped');
+    expect(en['landing.hero.tagline']).toBe('From the zip you download. Not their screen again.');
+    expect(en['landing.faq.whatIs.answer']).toBe(
+      "The file from your zip is your year. Letterboxd's Year in Review is the January 2 email, the same screen again.",
+    );
+    expect(tr['landing.hero.title']).toBe(
+      'Bu senin yılın, indirdiğin dosyadan. Aynı ekran onlarınki.',
+    );
+  });
 });

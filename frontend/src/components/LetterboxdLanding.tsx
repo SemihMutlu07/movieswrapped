@@ -357,7 +357,7 @@ export default function LetterboxdLanding() {
         <div className="w-full space-y-7">
           <header className="text-center">
             <h1 className="font-black tracking-tight leading-[0.95] text-[clamp(28px,6vw,48px)] text-white">
-              Movies Wrapped
+              {t('landing.hero.title')}
             </h1>
             <p className="mx-auto mt-3 max-w-md text-base sm:text-lg leading-relaxed text-white/80">
               {t('landing.hero.tagline')}
