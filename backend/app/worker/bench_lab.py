@@ -320,13 +320,6 @@ def system_snapshot() -> dict:
                     proc_status[k] = v.strip()
     except OSError:
         pass
-    try:
-        import ctypes
-
-        windll = ctypes.windll.kernel32  # noqa: F841
-        windows = True
-    except OSError:
-        windows = False
 
     snapshot: dict[str, Any] = {
         "python_threads": __import__("threading").active_count(),

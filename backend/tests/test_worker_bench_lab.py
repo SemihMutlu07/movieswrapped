@@ -46,6 +46,27 @@ def _clean_task_manager():
     task_manager.set_worker_desired_state("run")
 
 
+def test_fixture_cli_saves_completed_jobs(monkeypatch, tmp_path):
+    import sys
+
+    from app.worker import worker_bench
+
+    monkeypatch.setattr(worker_bench, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(sys, "argv", [
+        "worker-bench", "burst", "--transport", "fixture",
+        "--jobs", "3", "--active", "1", "--run-id", "cli-regression",
+    ])
+
+    assert worker_bench.main() == 0
+    payload = json.loads((tmp_path / "cli-regression.json").read_text())
+    result = payload["result"]
+    assert result["jobs_requested"] == 3
+    assert result["completed"] == 3
+    assert result["lost"] == 0
+    assert result["still_pending"] == 0
+    assert result["max_concurrent_observed"] == 1
+
+
 # ---------------------------------------------------------------------------
 # defaults & burst integrity
 # ---------------------------------------------------------------------------
