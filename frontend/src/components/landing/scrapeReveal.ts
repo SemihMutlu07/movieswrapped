@@ -6,7 +6,7 @@ export type ScrapePreviewItem = {
   poster_url?: string;
 };
 
-export type ScrapeWaitBeat = 'queued' | 'intro' | 'films' | 'reviews' | 'analyzing' | 'ready';
+export type ScrapeWaitBeat = 'queued' | 'intro' | 'films' | 'reviews' | 'analyzing';
 
 /** Ekranda aynı anda en fazla bu kadar poster gösterilir (audit: max 6–8). */
 export const MAX_POSTERS = 8;
@@ -35,7 +35,6 @@ export function chunkIntoBatches<T>(items: T[], max = 4): T[][] {
 export type ScrapeReveal = {
   queued: boolean;
   analyzing: boolean;
-  ready: boolean;
   filmsFound: number | null;
   reviewsFound: number | null;
   items: ScrapePreviewItem[];
@@ -43,10 +42,15 @@ export type ScrapeReveal = {
   beat: ScrapeWaitBeat;
 };
 
-const SAMPLE_STAGES = new Set(['diary_done', 'grid_done']);
-// Analysis running vs finished are distinct machine states: ANALYZING pulses, READY settles.
-const ANALYZING_STAGES = new Set(['scrape_done', 'analysis_started']);
-const READY_STAGES = new Set(['analysis_done', 'postback_started', 'completed']);
+const SAMPLE_STAGES: Record<string, true> = { diary_done: true, grid_done: true };
+// Analysis/postback traces are progress, not proof that the result is stored.
+const ANALYZING_STAGES: Record<string, true> = {
+  scrape_done: true,
+  analysis_started: true,
+  analysis_done: true,
+  postback_started: true,
+  completed: true,
+};
 
 function metricNumber(metrics: Record<string, unknown> | undefined, key: string): number | undefined {
   const value = metrics?.[key];
@@ -69,7 +73,7 @@ function asItem(raw: unknown): ScrapePreviewItem | null {
 function itemsFromEvents(events: ScrapeTraceEvent[]): ScrapePreviewItem[] {
   const byTitle = new Map<string, ScrapePreviewItem>();
   for (const event of events) {
-    if (!SAMPLE_STAGES.has(event.stage ?? '')) continue;
+    if (SAMPLE_STAGES[event.stage ?? ''] !== true) continue;
     const sample = event.metrics?.sample;
     if (!Array.isArray(sample)) continue;
     for (const raw of sample) {
@@ -103,14 +107,9 @@ function confirmedCount(events: ScrapeTraceEvent[], pageStage: string, doneStage
   return total > 0 ? total : null;
 }
 
-function hasStage(events: ScrapeTraceEvent[], stage: string): boolean {
-  return events.some((event) => event.stage === stage);
-}
-
 /** Last beat whose data is actually present. Never advances onto an empty next slide. */
 export function resolveScrapeBeat(reveal: Omit<ScrapeReveal, 'beat'>): ScrapeWaitBeat {
   if (reveal.queued) return 'queued';
-  if (reveal.ready) return 'ready';
   if (reveal.analyzing) return 'analyzing';
   if (reveal.reviewsFound != null) return 'reviews';
   if (reveal.items.length > 0 || reveal.filmsFound != null) return 'films';
@@ -125,8 +124,7 @@ export function resolveScrapeReveal(
   const items = itemsFromEvents(list);
   const base = {
     queued,
-    analyzing: list.some((event) => ANALYZING_STAGES.has(event.stage ?? '')),
-    ready: list.some((event) => READY_STAGES.has(event.stage ?? '')),
+    analyzing: list.some((event) => ANALYZING_STAGES[event.stage ?? ''] === true),
     filmsFound: confirmedCount(list, 'diary_page', 'diary_done', 'films')
       ?? confirmedCount(list, 'grid_page', 'grid_done', 'films'),
     reviewsFound: confirmedCount(list, 'reviews_page', 'reviews_done', 'reviews'),

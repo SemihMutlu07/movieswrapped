@@ -163,6 +163,7 @@ export default function LetterboxdLanding() {
   const [isUploading, setIsUploading] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeProgress, setScrapeProgress] = useState<ScrapeProgress | null>(null);
+  const [scrapeResultReady, setScrapeResultReady] = useState(false);
   // Degraded mode: the desktop worker fleet is empty, so a scrape is queued
   // and may take much longer than usual. Non-fatal — just informs the UI.
   const [workerQueued, setWorkerQueued] = useState(false);
@@ -467,6 +468,7 @@ export default function LetterboxdLanding() {
 
     setIsScraping(true);
     setScrapeProgress(null);
+    setScrapeResultReady(false);
     setWorkerQueued(false);
     // Degraded-mode probe: if no desktop worker is online the scrape is queued
     // and may take much longer. Best-effort — endpoint failure keeps the
@@ -514,6 +516,7 @@ export default function LetterboxdLanding() {
       }
       setUsername(username);
       persistStats(withPosterGameStats(result.stats));
+      setScrapeResultReady(true);
 
       trackConsentedEvent('analyze_succeeded', { total_films: result.stats.total_films, method });
 
@@ -532,8 +535,7 @@ export default function LetterboxdLanding() {
         })();
       }
 
-      // Navigation is deferred: ScrapeStoryWait fires onStoryReady when the
-      // machine settles READY → STORY, so the story opens after its settle dwell.
+      // Only validated, persisted final stats permit the story handoff.
     } catch (err) {
       if ((err instanceof DOMException && err.name === 'AbortError') || (err instanceof Error && err.name === 'AbortError')) {
         return;
@@ -577,6 +579,7 @@ export default function LetterboxdLanding() {
     setIsUploading(false);
     setIsScraping(false);
     setScrapeProgress(null);
+    setScrapeResultReady(false);
     setWorkerQueued(false);
     setPosterRound(null);
     setPosterLevel(0);
@@ -598,6 +601,7 @@ export default function LetterboxdLanding() {
         onCancel={handleCancel}
         queued={workerQueued}
         events={scrapeProgress?.trace_events}
+        resultReady={scrapeResultReady}
         onStoryReady={handleStoryReady}
       />
     );

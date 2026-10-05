@@ -13,6 +13,7 @@ type Props = {
   onCancel?: () => void;
   queued?: boolean;
   events?: ScrapeTraceEvent[];
+  resultReady?: boolean;
   onStoryReady?: () => void;
 };
 
@@ -31,8 +32,6 @@ type DominantMotion = 'crossfade' | 'posterDrop' | 'pulse' | 'settle';
 
 /** Exit crossfade duration — the next slide waits for this before entering. */
 const EXIT_MS = 240;
-/** READY dwells briefly so the final count can settle before the STORY handoff. */
-const STORY_DWELL_MS = 1400;
 
 // Poster stream pacing (audit decision 3): posters arrive in batches of 2–4,
 // never as a single-poster drip. The counter settles COUNT_SETTLE_MS AFTER its
@@ -97,7 +96,7 @@ function formatElapsed(seconds: number, t: (key: MessageKey) => string): string 
   return t('landing.loading.minutesSeconds').replace('{minutes}', String(m)).replace('{seconds}', String(s));
 }
 
-export default function ScrapeStoryWait({ username, onCancel, queued = false, events, onStoryReady }: Props) {
+export default function ScrapeStoryWait({ username, onCancel, queued = false, events, resultReady = false, onStoryReady }: Props) {
   const { t } = useI18n();
   const [elapsed, setElapsed] = useState(0);
   const [started, setStarted] = useState(false);
@@ -106,8 +105,8 @@ export default function ScrapeStoryWait({ username, onCancel, queued = false, ev
   const reveal: ScrapeReveal = resolveScrapeReveal(events, queued);
   const handle = username.replace(/^@/, '');
 
-  // Target comes straight from worker evidence; STORY is entered locally after READY settles.
-  const target: WaitPhase = phaseFromBeat(reveal.beat);
+  // Trace completion can precede final stats; only the parent confirms the handoff.
+  const target: WaitPhase = resultReady ? 'ready' : phaseFromBeat(reveal.beat);
   // What is on screen right now. Transitions exit first, then swap (no overlap).
   const [current, setCurrent] = useState<WaitPhase>(target);
   const [leaving, setLeaving] = useState(false);
@@ -164,11 +163,10 @@ export default function ScrapeStoryWait({ username, onCancel, queued = false, ev
   // Slide transition with real exit motion: old content fades out for EXIT_MS,
   // only then the new phase mounts. A rapid replay cancels the pending swap and
   // re-targets cleanly — stale timers never fire across phases.
-  // STORY is absorbing: worker evidence stays at 'ready', so a ready→story
-  // target must not pull the machine back out of the handoff state.
+  // STORY is absorbing while the parent's confirmed result still targets READY.
   const effectiveTarget: WaitPhase = current === 'story' && target === 'ready' ? 'story' : target;
   useEffect(() => {
-    if (!animate) {
+    if (!animate || resultReady) {
       if (effectiveTarget !== current) setCurrent(effectiveTarget);
       return;
     }
@@ -182,14 +180,12 @@ export default function ScrapeStoryWait({ username, onCancel, queued = false, ev
       window.clearTimeout(id);
       setLeaving(false);
     };
-  }, [animate, effectiveTarget, current]);
+  }, [animate, effectiveTarget, current, resultReady]);
 
-  // READY → STORY dwell. Runs even under reduced motion (it is timing, not animation).
+  // No decorative dwell after the complete result has been persisted.
   useEffect(() => {
-    if (current !== 'ready') return;
-    const id = window.setTimeout(() => setCurrent('story'), reduceMotion ? 0 : STORY_DWELL_MS);
-    return () => window.clearTimeout(id);
-  }, [current, reduceMotion]);
+    if (current === 'ready') setCurrent('story');
+  }, [current]);
 
   // onStoryReady fires exactly once per journey; a replay that leaves STORY
   // re-arms it for the next run.
@@ -304,7 +300,7 @@ export default function ScrapeStoryWait({ username, onCancel, queued = false, ev
         }
       `}</style>
 
-      <header className="flex min-w-0 items-start justify-between gap-3">
+      <header className="flex min-w-0 items-start justify-between gap-3 pr-24">
         <p className="min-w-0 break-words text-sm font-medium text-white/70">@{handle}</p>
         {onCancel && (
           <button

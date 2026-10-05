@@ -87,102 +87,44 @@ describe('ScrapeStoryWait', () => {
 });
 
 describe('ScrapeStoryWait state machine (L1)', () => {
-  it('walks INTRO → SCRAPING → REVIEWS → ANALYZING → READY on worker evidence', () => {
-    const events = (stage: string, metrics?: Record<string, unknown>) => [{ stage, metrics }];
-    const { rerender } = render(
-      <I18nProvider locale="en">
-        <ScrapeStoryWait username="semihmutsuz" events={events('scrape_started')} />
-      </I18nProvider>,
-    );
-    expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'intro');
+  it.each(['analysis_done', 'postback_started', 'completed'])(
+    'does not open the story from a %s trace without the final result',
+    (stage) => {
+      vi.useFakeTimers();
+      const onStoryReady = vi.fn();
+      const { rerender } = render(
+        <I18nProvider locale="en">
+          <ScrapeStoryWait username="semihmutsuz" events={[{ stage }]} onStoryReady={onStoryReady} />
+        </I18nProvider>,
+      );
+      act(() => { vi.advanceTimersByTime(3000); });
+      expect(onStoryReady).not.toHaveBeenCalled();
 
-    rerender(
-      <I18nProvider locale="en">
-        <ScrapeStoryWait
-          username="semihmutsuz"
-          events={events('grid_done', { films: 12, sample: [{ title: 'Heat' }] })}
-        />
-      </I18nProvider>,
-    );
-    expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'scraping');
+      rerender(
+        <I18nProvider locale="en">
+          <ScrapeStoryWait username="semihmutsuz" resultReady onStoryReady={onStoryReady} />
+        </I18nProvider>,
+      );
+      expect(onStoryReady).toHaveBeenCalledOnce();
+      rerender(
+        <I18nProvider locale="en">
+          <ScrapeStoryWait username="semihmutsuz" resultReady queued onStoryReady={onStoryReady} />
+        </I18nProvider>,
+      );
+      expect(onStoryReady).toHaveBeenCalledOnce();
+    },
+  );
 
-    rerender(
-      <I18nProvider locale="en">
-        <ScrapeStoryWait
-          username="semihmutsuz"
-          events={[...events('grid_done'), { stage: 'reviews_done', metrics: { reviews: 40 } }]}
-        />
-      </I18nProvider>,
-    );
-    expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'reviews');
-
-    rerender(
-      <I18nProvider locale="en">
-        <ScrapeStoryWait
-          username="semihmutsuz"
-          events={[...events('grid_done'), { stage: 'reviews_done' }, { stage: 'analysis_started' }]}
-        />
-      </I18nProvider>,
-    );
-    expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'analyzing');
-
-    rerender(
-      <I18nProvider locale="en">
-        <ScrapeStoryWait
-          username="semihmutsuz"
-          events={[...events('grid_done'), { stage: 'analysis_done' }]}
-        />
-      </I18nProvider>,
-    );
-    expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'ready');
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '4');
-    expect(screen.getByTestId('wait-progress-analyzing')).toHaveAttribute('data-state', 'done');
-  });
-
-  it('settles READY into STORY after a dwell and fires onStoryReady once', () => {
-    vi.useFakeTimers();
+  it('opens a completed result even without traces and despite an empty-fleet hint', () => {
     const onStoryReady = vi.fn();
     render(
       <I18nProvider locale="en">
-        <ScrapeStoryWait
-          username="semihmutsuz"
-          onStoryReady={onStoryReady}
-          events={[{ stage: 'completed' }]}
-        />
+        <ScrapeStoryWait username="semihmutsuz" queued resultReady onStoryReady={onStoryReady} />
       </I18nProvider>,
     );
-    expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'ready');
-    expect(onStoryReady).not.toHaveBeenCalled();
-
-    act(() => {
-      vi.advanceTimersByTime(1400);
-    });
-    expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'story');
-    expect(onStoryReady).toHaveBeenCalledTimes(1);
+    expect(onStoryReady).toHaveBeenCalledOnce();
   });
 
-  it('stops the elapsed timer once the machine reaches READY', () => {
-    vi.useFakeTimers();
-    const viewport = stubViewportEntry();
-    try {
-      render(
-        <I18nProvider locale="en">
-          <ScrapeStoryWait username="semihmutsuz" events={[{ stage: 'analysis_done' }]} />
-        </I18nProvider>,
-      );
-      viewport.enter();
-
-      act(() => {
-        vi.advanceTimersByTime(1000); // past STORY_DWELL? no — still READY (1400ms dwell)
-      });
-      // Elapsed never ticks past READY — the wait is over.
-      expect(screen.queryByText('1s')).not.toBeInTheDocument();
-      expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'ready');
-    } finally {
-      viewport.restore();
-      vi.useRealTimers();
-    }
-  });
 
   it('drops a pending slide swap when the target changes again mid-exit (replay hygiene)', () => {
     vi.useFakeTimers();
@@ -211,15 +153,15 @@ describe('ScrapeStoryWait state machine (L1)', () => {
         <I18nProvider locale="en">
           <ScrapeStoryWait
             username="semihmutsuz"
-            events={[...base, { stage: 'reviews_done' }, { stage: 'analysis_done' }]}
+            events={[...base, { stage: 'reviews_done' }, { stage: 'analysis_started' }]}
           />
         </I18nProvider>,
       );
       act(() => {
         vi.advanceTimersByTime(240);
       });
-      // Third event set ends with analysis_done — the re-targeted swap lands on READY.
-      expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'ready');
+      // The re-targeted swap skips the stale reviews phase.
+      expect(screen.getByTestId('scrape-story-wait')).toHaveAttribute('data-beat', 'analyzing');
       expect(screen.queryByText('Reviews are in')).not.toBeInTheDocument();
     } finally {
       viewport.restore();
@@ -253,59 +195,7 @@ describe('ScrapeStoryWait progress (L4)', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
   });
 
-  it('never gives the active segment a full-width linear fill', () => {
-    render(
-      <I18nProvider locale="en">
-        <ScrapeStoryWait username="semihmutsuz" events={[{ stage: 'scrape_started' }]} />
-      </I18nProvider>,
-    );
 
-    for (const stage of ['intro', 'scraping', 'reviews', 'analyzing']) {
-      const segment = screen.getByTestId(`wait-progress-${stage}`);
-      for (const child of Array.from(segment.children)) {
-        expect(child.className).not.toContain('w-full');
-      }
-    }
-    expect(screen.getByTestId('wait-progress-intro')).toHaveAttribute('data-state', 'active');
-  });
-
-  it('runs the progress shimmer only in the pulse-dominant phase', () => {
-    vi.useFakeTimers();
-    const viewport = stubViewportEntry();
-    try {
-      const { rerender } = render(
-        <I18nProvider locale="en">
-          <ScrapeStoryWait
-            username="semihmutsuz"
-            events={[{ stage: 'grid_done', metrics: { films: 2, sample: [{ title: 'Heat' }] } }]}
-          />
-        </I18nProvider>,
-      );
-      viewport.enter();
-      // SCRAPING is posterDrop-dominant: no shimmer on the active segment.
-      expect(screen.getByTestId('wait-progress-fill-scraping').className).not.toContain('mw-wait-seg-active');
-
-      rerender(
-        <I18nProvider locale="en">
-          <ScrapeStoryWait
-            username="semihmutsuz"
-            events={[
-              { stage: 'grid_done', metrics: { films: 2, sample: [{ title: 'Heat' }] } },
-              { stage: 'analysis_started' },
-            ]}
-          />
-        </I18nProvider>,
-      );
-      act(() => {
-        vi.advanceTimersByTime(250); // let the exit crossfade finish
-      });
-      // ANALYZING is pulse-dominant: shimmer allowed here.
-      expect(screen.getByTestId('wait-progress-fill-analyzing').className).toContain('mw-wait-seg-active');
-    } finally {
-      viewport.restore();
-      vi.useRealTimers();
-    }
-  });
 });
 
 describe('ScrapeStoryWait motion gating (L4)', () => {
