@@ -107,6 +107,24 @@ The backend's datacenter IP is often blocked by Letterboxd's bot detection. To w
 
 The worker uses `cloudscraper` + `BeautifulSoup` for parsing and supports parallel diary/grid/reviews/overview scraping. It includes Windows wake-lock and rate-limiting.
 
+### Archived loading handoff
+
+The scrape loader opens the story only after the final response passes username validation and its stats are stored successfully. Analysis/postback traces describe progress; they cannot authorize navigation. A completed result also overrides an earlier empty-worker-fleet hint. The handoff has no decorative 1.4-second dwell or phase-exit delay after persistence.
+
+The loader header leaves space for the fixed language selector so its Cancel button remains accessible.
+
+These archive-only correctness changes do not establish real Letterboxd scraping below 30 seconds.
+
+### Offline fixture benchmark
+
+From `backend/`, use Python 3.11 with the declared requirements installed:
+
+```bash
+python -m app.worker.worker_bench baseline
+```
+
+This archive-only command runs synthetic jobs, starts no production worker, and makes no Letterboxd or TMDB requests. It saves results under `bench_runs/`. On Linux, system sampling reads `/proc`; `psutil` remains optional. Fixture timings do not measure real scrape latency or prove complete results below 30 seconds.
+
 ---
 
 ## 🧪 Test Lab
