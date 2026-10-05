@@ -20,6 +20,7 @@ import os
 import time
 from unittest.mock import MagicMock
 
+import aiofiles
 import pytest
 
 from app.config import settings as app_settings
@@ -225,14 +226,36 @@ async def test_cancelled_write_leaves_no_temp_and_keeps_old(tmp_path, monkeypatc
     old_content = json.dumps({"old": True})
     dest.write_text(old_content, encoding="utf-8")
 
+    write_entered = asyncio.Event()
+    real_open = aiofiles.open
+
+    def open_hold_write(*args, **kwargs):
+        manager = real_open(*args, **kwargs)
+
+        class _Hold:
+            async def __aenter__(self):
+                self._file = await manager.__aenter__()
+                original_write = self._file.write
+
+                async def write(data):
+                    write_entered.set()
+                    await asyncio.Event().wait()
+                    return await original_write(data)
+
+                self._file.write = write
+                return self._file
+
+            async def __aexit__(self, *exc):
+                return await manager.__aexit__(*exc)
+
+        return _Hold()
+
+    monkeypatch.setattr(aiofiles, "open", open_hold_write)
     task = asyncio.create_task(_write_cache_atomic(dest, {"new": "x" * 100000}))
-    # Cancel mid-write.
-    await asyncio.sleep(0.01)
+    await asyncio.wait_for(write_entered.wait(), timeout=2)
     task.cancel()
-    try:
+    with pytest.raises(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
     # Temp cleanup runs detached on the executor (survives cancellation); give it a beat.
     for _ in range(20):
         if not list(tmp_path.glob("*.tmp")):

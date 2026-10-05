@@ -19,15 +19,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys_path = r"C:\Users\semih\Desktop\letterboxd_wrapped\backend"
-os.chdir(sys_path)
-sys.path.insert(0, sys_path)
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 HARD_MAX_FILMS = 1000
 HARD_RATE_RPS = 5
