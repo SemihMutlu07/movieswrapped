@@ -6,6 +6,7 @@ Scrapes Letterboxd HTML and runs the analysis pipeline over synthesized CSVs.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 from calendar import monthrange
@@ -83,6 +84,65 @@ def analysis_period_bounds(
     start_month = end_date.month - 1 if end_date.month > 1 else 12
     start_day = min(end_date.day, monthrange(start_year, start_month)[1])
     return date(start_year, start_month, start_day), end_date
+
+
+def _window_inputs(sources, period: str, start_date: date | None, end_date: date):
+    """Films, diary rows, and reviews for one analysis window."""
+    diary = sources.diary
+    reviews = sources.reviews
+    if start_date is not None:
+        diary = [
+            film
+            for film in diary
+            if _date_in_period(film.get("watch_date"), start_date, end_date)
+        ]
+        reviews = [
+            review
+            for review in reviews
+            if _date_in_period(review.get("date"), start_date, end_date)
+        ]
+    grid = sources.grid if period == "lifetime" else []
+    return merge_scraped_films(diary, grid), diary, reviews
+
+
+async def _warm_film_tmdb_cache(session, films: list[dict]) -> None:
+    """Resolve and fetch the same TMDB records analysis will request.
+
+    Cache hits return before a rate-limit slot is taken, so a later analysis
+    pass does not pay those slots again. This does not change the request
+    shape or send any Letterboxd traffic.
+    """
+    unique: list[tuple[str, str | None]] = []
+    seen: set[tuple[str, str]] = set()
+    for film in films:
+        title = str(film.get("title") or "").strip()
+        year = str(film.get("year") or "").strip()
+        if not title:
+            continue
+        key = (title, year)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append((title, year or None))
+    if not unique:
+        return
+
+    from app.services.tmdb_client import (
+        fetch_comprehensive_film_details,
+        resolve_tmdb_id,
+    )
+
+    ids = await asyncio.gather(*[
+        resolve_tmdb_id(session, title, year, None)
+        for title, year in unique
+    ])
+    detail_ids = [tmdb_id for tmdb_id in ids if tmdb_id is not None]
+    if not detail_ids:
+        return
+    await asyncio.gather(*[
+        fetch_comprehensive_film_details(session, tmdb_id)
+        for tmdb_id in detail_ids
+    ])
 
 
 def _date_in_period(value: Any, start_date: date, end_date: date) -> bool:
@@ -272,6 +332,13 @@ async def _scrape_and_analyze_inner(
     # The outer wrapper already emitted scrape_started; this is the same run.
     period = analysis_period
     scrape_started = monotonic()
+    warm_task: asyncio.Task | None = None
+
+    async def _start_tmdb_warm(partial) -> None:
+        nonlocal warm_task
+        films, _, _ = _window_inputs(partial, period, start_date, end_date)
+        warm_task = asyncio.create_task(_warm_film_tmdb_cache(session, films))
+
     sources = await scrape_profile_sources(
         username,
         max_pages=max_pages,
@@ -279,8 +346,14 @@ async def _scrape_and_analyze_inner(
         trace_callback=trace_callback,
         diary_cutoff=start_date,
         include_grid=analysis_period == "lifetime",
+        on_films_ready=_start_tmdb_warm,
     )
     scrape_seconds = round(monotonic() - scrape_started, 1)
+    if warm_task is not None:
+        try:
+            await warm_task
+        except Exception:
+            logger.warning("TMDB cache warm failed for %s", username, exc_info=True)
     if trace_callback:
         trace_callback(
             "scrape_done",
@@ -301,21 +374,7 @@ async def _scrape_and_analyze_inner(
         sources.review_count, sources.film_count, len(sources.reviews),
     )
 
-    diary = sources.diary
-    reviews = sources.reviews
-    if start_date is not None:
-        diary = [
-            film
-            for film in diary
-            if _date_in_period(film.get("watch_date"), start_date, end_date)
-        ]
-        reviews = [
-            review
-            for review in reviews
-            if _date_in_period(review.get("date"), start_date, end_date)
-        ]
-
-    films = merge_scraped_films(diary, sources.grid if period == "lifetime" else [])
+    films, diary, reviews = _window_inputs(sources, period, start_date, end_date)
     csv_dicts = diary_to_csv_dicts(films)
     if not films or not csv_dicts["watched"]:
         # Classify against the *unfiltered* scrape. Blaming the period whenever
@@ -344,8 +403,9 @@ async def _scrape_and_analyze_inner(
         # Only the lifetime pass gets a second "last 12 months" computation —
         # a bounded request (month/year) is already a windowed view, so a
         # second window on top of it would be redundant. Reuses the same
-        # scraped diary/reviews already in memory (no re-scrape) and the same
-        # TMDB disk cache warmed by the pass above, so this is cheap.
+        # scraped diary/reviews already in memory (no re-scrape). The TMDB
+        # disk cache was warmed while reviews were still loading, so this
+        # pass does not take those slots again.
         if period == "lifetime":
             try:
                 year_start, year_end = analysis_period_bounds("year", today=end_date)

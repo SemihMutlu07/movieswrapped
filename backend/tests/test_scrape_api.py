@@ -282,6 +282,157 @@ async def test_scrape_pipeline_windowing_and_provenance(monkeypatch):
     assert stats["analysis_period"]["key"] == "lifetime"
 
 
+@pytest.mark.asyncio
+async def test_tmdb_warm_starts_before_reviews_finish(monkeypatch):
+    """Film TMDB fetches share the wall clock with the review branch."""
+    import time
+
+    events: list[tuple[str, float]] = []
+
+    def diary(*_args, **_kwargs):
+        return [{
+            "title": "Film A",
+            "year": "2024",
+            "rating": 5,
+            "watch_date": "2024-06-01",
+        }]
+
+    def reviews(*_args, **_kwargs):
+        time.sleep(0.25)
+        events.append(("reviews_done", time.monotonic()))
+        return [{
+            "title": "Film A",
+            "year": "2024",
+            "date": "2024-06-01",
+            "review_text": "A full sentence",
+        }]
+
+    async def resolve(_session, _title, _year, _uri):
+        events.append(("resolve", time.monotonic()))
+        await asyncio.sleep(0.05)
+        return 11
+
+    async def details(_session, tmdb_id):
+        events.append(("details", time.monotonic()))
+        return {"tmdb_id": tmdb_id}
+
+    captured: dict[str, str] = {}
+
+    async def analysis(_session, csv_files, task_id=None):
+        import pandas as pd
+
+        captured["review"] = str(pd.read_csv(csv_files["reviews.csv"])["Review"].iloc[0])
+        return {
+            "total_films": 1,
+            "all_films": [{"title": "Film A", "poster_path": "/a.jpg"}],
+            "review_analysis": {"reviews": [{"text": captured["review"]}]},
+        }
+
+    monkeypatch.setattr(scraper, "_sync_scrape_diary", diary)
+    monkeypatch.setattr(scraper, "_sync_scrape_films_grid", lambda *_a, **_k: [])
+    monkeypatch.setattr(scraper, "_sync_scrape_overview", lambda *_a, **_k: (1, 0, [], None))
+    monkeypatch.setattr(scraper, "_sync_scrape_reviews", reviews)
+    monkeypatch.setattr("app.services.tmdb_client.resolve_tmdb_id", resolve)
+    monkeypatch.setattr("app.services.tmdb_client.fetch_comprehensive_film_details", details)
+    monkeypatch.setattr(
+        "app.services.scrape_pipeline.process_comprehensive_letterboxd_data",
+        analysis,
+    )
+
+    started = time.monotonic()
+    stats = await scrape_and_analyze(object(), "user1", analysis_period="lifetime")
+    elapsed = time.monotonic() - started
+
+    resolve_at = next(stamp for name, stamp in events if name == "resolve")
+    reviews_at = next(stamp for name, stamp in events if name == "reviews_done")
+    assert resolve_at < reviews_at
+    assert captured["review"] == "A full sentence"
+    assert stats["scraped_reviews_with_text"] == 1
+    assert elapsed < 0.5
+
+
+@pytest.mark.asyncio
+async def test_warm_film_cache_is_reused_by_the_same_tmdb_calls(tmp_path, monkeypatch):
+    from app.services import tmdb_client
+    from app.services.scrape_pipeline import _warm_film_tmdb_cache
+
+    monkeypatch.setattr(tmdb_client, "CACHE_DIR", tmp_path)
+    calls: list[str] = []
+
+    class _Response:
+        def __init__(self, payload):
+            self.status = 200
+            self.headers = {}
+            self._payload = payload
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc):
+            return False
+
+        def raise_for_status(self):
+            return None
+
+        async def json(self):
+            return self._payload
+
+    def _get(url, params=None):
+        del params
+        calls.append(url)
+        if url.endswith("search/movie"):
+            payload = {
+                "results": [{
+                    "id": 11,
+                    "title": "Film A",
+                    "original_title": "Film A",
+                    "release_date": "2024-05-01",
+                    "vote_count": 10,
+                    "popularity": 1,
+                }]
+            }
+        elif url.endswith("/credits"):
+            payload = {"id": 11, "crew": [], "cast": []}
+        elif url.endswith("/keywords"):
+            payload = {"id": 11, "keywords": []}
+        else:
+            payload = {
+                "id": 11,
+                "title": "Film A",
+                "genres": [],
+                "production_countries": [],
+                "production_companies": [],
+                "release_date": "2024-05-01",
+            }
+        return _Response(payload)
+
+    session = MagicMock()
+    session.get.side_effect = _get
+
+    await _warm_film_tmdb_cache(session, [{"title": "Film A", "year": "2024"}])
+    warmed = len(calls)
+    assert warmed == 4
+
+    resolved = await tmdb_client.resolve_tmdb_id(session, "Film A", "2024", None)
+    await tmdb_client.fetch_comprehensive_film_details(session, resolved)
+    assert resolved == 11
+    assert len(calls) == warmed
+
+
+@pytest.mark.asyncio
+async def test_profile_scrape_still_raises_diary_http_error(monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("Letterboxd returned HTTP 502 for 'user'")
+
+    monkeypatch.setattr(scraper, "_sync_scrape_diary", boom)
+    monkeypatch.setattr(scraper, "_sync_scrape_films_grid", lambda *_a, **_k: [])
+    monkeypatch.setattr(scraper, "_sync_scrape_overview", lambda *_a, **_k: (0, 0, [], None))
+    monkeypatch.setattr(scraper, "_sync_scrape_reviews", lambda *_a, **_k: [])
+
+    with pytest.raises(RuntimeError, match="HTTP 502"):
+        await scraper.scrape_profile_sources("user", max_pages=1, include_reviews=True)
+
+
 # ---- scraper HTTP error handling --------------------------------------------
 
 

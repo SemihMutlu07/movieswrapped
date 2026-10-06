@@ -10,6 +10,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import date
 from functools import partial
+import inspect
 import logging
 import os
 import re
@@ -978,6 +979,59 @@ async def scrape_reviews(username: str, max_pages: int = MAX_PAGES) -> list[dict
     )
 
 
+def _fatal_film_source_error(
+    diary_res: Any,
+    grid_res: Any,
+    include_grid: bool,
+) -> Optional[BaseException]:
+    """Return the same film-source failure scrape_profile_sources raises today."""
+    for res in (diary_res, grid_res):
+        if isinstance(res, (RuntimeError, requests.RequestException)):
+            return res
+        if isinstance(res, ValueError):
+            msg = str(res)
+            if "Letterboxd is blocking" in msg or "Letterboxd rate limit" in msg:
+                return res
+
+    diary_failed = isinstance(diary_res, BaseException)
+    grid_failed = isinstance(grid_res, BaseException)
+    if diary_failed and (grid_failed or not include_grid):
+        if isinstance(grid_res, (ValueError, RuntimeError, requests.RequestException)):
+            return grid_res
+        if isinstance(diary_res, BaseException):
+            return diary_res
+    return None
+
+
+def _film_lists_from_results(
+    username: str,
+    diary_res: Any,
+    grid_res: Any,
+) -> tuple[list[dict], list[dict]]:
+    diary_failed = isinstance(diary_res, BaseException)
+    grid_failed = isinstance(grid_res, BaseException)
+    if diary_failed:
+        logger.warning("Diary scrape failed for %s (using grid only): %s", username, diary_res)
+    if grid_failed:
+        logger.warning("Grid scrape failed for %s (using diary only): %s", username, grid_res)
+    diary = [] if diary_failed else diary_res
+    grid = [] if grid_failed else grid_res
+    return diary, grid
+
+
+def _overview_fields(overview_res: Any) -> tuple[int, int, list[dict], Optional[str]]:
+    if isinstance(overview_res, BaseException):
+        return 0, 0, [], None
+    return overview_res
+
+
+def _review_list(username: str, reviews_res: Any) -> list[dict]:
+    if isinstance(reviews_res, BaseException):
+        logger.warning("Review scrape failed for %s: %s", username, reviews_res)
+        return []
+    return reviews_res
+
+
 async def scrape_profile_sources(
     username: str,
     max_pages: int = MAX_PAGES,
@@ -985,8 +1039,16 @@ async def scrape_profile_sources(
     trace_callback: Optional[TraceCallback] = None,
     diary_cutoff: Optional[date] = None,
     include_grid: bool = True,
+    on_films_ready: Optional[Callable[[ProfileScrapeSources], Any]] = None,
 ) -> ProfileScrapeSources:
-    """Scrape diary, grid, overview (and optionally reviews) concurrently."""
+    """Scrape diary, grid, overview (and optionally reviews) concurrently.
+
+    `on_films_ready` runs once diary, grid, and overview have settled and
+    before this function waits for reviews. It is awaited then, so it must
+    schedule any long work and return. The sources it receives have reviews=[].
+    A callback error is logged and does not fail the scrape. Letterboxd
+    pagination and page delay are unchanged.
+    """
     loop = _get_loop()
     diary_call = (
         partial(_sync_scrape_diary, username, max_pages, None, trace_callback)
@@ -1011,62 +1073,60 @@ async def scrape_profile_sources(
     if grid_fut is not None:
         futures.append(grid_fut)
     futures.append(overview_fut)
+    review_fut = None
     if include_reviews:
-        futures.append(
-            loop.run_in_executor(
-                None,
-                partial(_sync_scrape_reviews, username, max_pages, None, trace_callback, False),
-            )
+        review_fut = loop.run_in_executor(
+            None,
+            partial(_sync_scrape_reviews, username, max_pages, None, trace_callback, False),
         )
 
-    results = await asyncio.gather(*futures, return_exceptions=True)
-    diary_res = results[0]
+    film_results = await asyncio.gather(*futures, return_exceptions=True)
+    diary_res = film_results[0]
     if include_grid:
-        grid_res, overview_res = results[1], results[2]
-        reviews_res = results[3] if include_reviews else []
+        grid_res, overview_res = film_results[1], film_results[2]
     else:
         grid_res = []
-        overview_res = results[1]
-        reviews_res = results[2] if include_reviews else []
+        overview_res = film_results[1]
 
-    # Fail fast if any film source hit a block, rate limit, or unexpected HTTP error
-    for res in (diary_res, grid_res):
-        if isinstance(res, (RuntimeError, requests.RequestException)):
-            raise res
-        if isinstance(res, ValueError):
-            msg = str(res)
-            if "Letterboxd is blocking" in msg or "Letterboxd rate limit" in msg:
-                raise res
+    fatal = _fatal_film_source_error(diary_res, grid_res, include_grid)
+    if fatal is None:
+        diary, grid = _film_lists_from_results(username, diary_res, grid_res)
+        film_count, review_count, favorite_films, profile_avatar_url = _overview_fields(overview_res)
+        if on_films_ready is not None:
+            ready = ProfileScrapeSources(
+                diary=diary,
+                grid=grid,
+                review_count=review_count,
+                film_count=film_count,
+                reviews=[],
+                favorite_films=favorite_films,
+                profile_avatar_url=profile_avatar_url,
+            )
+            try:
+                warmed = on_films_ready(ready)
+                if inspect.isawaitable(warmed):
+                    await warmed
+            except Exception:
+                logger.warning("Film-ready callback failed for %s", username, exc_info=True)
 
-    diary_failed = isinstance(diary_res, BaseException)
-    grid_failed = isinstance(grid_res, BaseException)
-    if diary_failed and (grid_failed or not include_grid):
-        raise grid_res if isinstance(grid_res, (ValueError, RuntimeError, requests.RequestException)) else diary_res
-    if diary_failed:
-        logger.warning("Diary scrape failed for %s (using grid only): %s", username, diary_res)
-    if grid_failed:
-        logger.warning("Grid scrape failed for %s (using diary only): %s", username, grid_res)
-    diary = [] if diary_failed else diary_res
-    grid = [] if grid_failed else grid_res
-
-    film_count, review_count, favorite_films, profile_avatar_url = (0, 0, [], None)
-    if not isinstance(overview_res, BaseException):
-        film_count, review_count, favorite_films, profile_avatar_url = overview_res
-
-    if isinstance(reviews_res, BaseException):
-        logger.warning("Review scrape failed for %s: %s", username, reviews_res)
+    if review_fut is not None:
+        reviews_res = (await asyncio.gather(review_fut, return_exceptions=True))[0]
+    else:
         reviews_res = []
 
+    if fatal is not None:
+        raise fatal
+    reviews = _review_list(username, reviews_res)
     logger.info(
         "Parallel profile scrape complete for %s: diary=%d grid=%d films=%d reviews=%d scraped_reviews=%d",
-        username, len(diary), len(grid), film_count, review_count, len(reviews_res),
+        username, len(diary), len(grid), film_count, review_count, len(reviews),
     )
     return ProfileScrapeSources(
         diary=diary,
         grid=grid,
         review_count=review_count,
         film_count=film_count,
-        reviews=reviews_res,
+        reviews=reviews,
         favorite_films=favorite_films,
         profile_avatar_url=profile_avatar_url,
     )
