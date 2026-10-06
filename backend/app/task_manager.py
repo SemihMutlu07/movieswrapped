@@ -101,14 +101,19 @@ def update_task_progress(
     message: str,
     progress: int = 0,
     total: int = 0,
+    *,
+    metrics: Optional[Dict[str, Any]] = None,
 ) -> None:
     task = _tasks.get(task_id)
+    event_metrics: Dict[str, Any] = {"progress": progress, "total": total}
+    if metrics:
+        event_metrics.update(metrics)
     if task:
         task.stage = stage
         task.message = message
         task.progress = progress
         task.total = total
-        append_task_event(task_id, stage, message, metrics={"progress": progress, "total": total})
+        append_task_event(task_id, stage, message, metrics=event_metrics)
     logger.info("[%s] %s: %s (%d/%d)", task_id[:8], stage, message, progress, total)
 
 
@@ -149,17 +154,27 @@ def set_task_done(task_id: str, result: Any, telemetry: Optional[Dict[str, Any]]
         _apply_telemetry(task, telemetry)
 
 
-def set_task_failed(task_id: str, error: str, telemetry: Optional[Dict[str, Any]] = None) -> None:
+def set_task_failed(
+    task_id: str,
+    error: str,
+    telemetry: Optional[Dict[str, Any]] = None,
+    *,
+    error_code: Optional[str] = None,
+    error_type: Optional[str] = None,
+    error_stage: Optional[str] = None,
+) -> None:
     task = _tasks.get(task_id)
     if task:
         task.status = "failed"
         task.error = error
-        task.stage = "error"
+        task.stage = error_stage or "error"
         task.message = error
         task.failed_at = datetime.now(timezone.utc)
         task.duration_seconds = _seconds_between(task.created_at, task.failed_at)
+        task.error_code = error_code
+        task.error_type = error_type or error_code
+        task.error_stage = error_stage or "error"
         _apply_telemetry(task, telemetry)
-
 
 async def cleanup_loop() -> None:
     """Remove terminal tasks after retention."""

@@ -3,8 +3,37 @@ export interface LetterboxdStats {
   total_countries?: number;
   average_rating?: number;
   favorite_genre?: { name: string; count: number } | null;
+  analysis_period?: AnalysisPeriodMetadata;
+  scraped_username?: string;
   [key: string]: unknown;
 }
+
+export type AnalysisPeriod = 'month' | 'year' | 'lifetime';
+
+export interface AnalysisPeriodMetadata {
+  key: AnalysisPeriod;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface ScrapeProfileResult {
+  status: string;
+  stats: LetterboxdStats;
+  task_id?: string;
+}
+
+export type ScrapeTraceEvent = {
+  stage?: string;
+  message?: string;
+  metrics?: Record<string, unknown>;
+  elapsed_seconds?: number;
+};
+
+export type ScrapeProgress = {
+  stage?: string;
+  message?: string;
+  trace_events?: ScrapeTraceEvent[];
+};
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000').replace(/\/$/, '');
 
@@ -34,6 +63,10 @@ const ERROR_CODE_HINTS: Record<string, string> = {
   corrupt_zip: 'The ZIP file could not be read. Re-download the export from Letterboxd.',
   unsafe_archive: 'The ZIP structure was not recognized. Re-download the export from Letterboxd and upload the original file.',
   task_not_found: 'The analysis job expired or the server restarted. Upload again.',
+  scraper_unavailable: 'All available scraper slots are full. Try again in 30–60 seconds or use ZIP upload for a guaranteed result.',
+  scrape_blocked: 'Letterboxd blocked the scrape request (bot detection / cloud IP). Use ZIP upload instead.',
+  user_not_found: 'Letterboxd returned a 404 for this username, or the profile is private. Double-check spelling and that the profile is public.',
+  scrape_timeout: 'The scrape did not finish within the timeout. It may be stuck or overloaded. Try again.',
 };
 
 export { ERROR_CODE_HINTS };
@@ -101,7 +134,7 @@ async function parseApiFailure(r: Response, context: string, fallbackMessage: st
 async function pollTask<T = { status: string; stats: LetterboxdStats }>(
   taskId: string,
   pollToken: string,
-  opts: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+  opts: { intervalMs?: number; timeoutMs?: number; onProgress?: (p: ScrapeProgress) => void; signal?: AbortSignal } = {},
 ): Promise<T> {
   const intervalMs = opts.intervalMs ?? 2000;
   const timeoutMs = opts.timeoutMs ?? 600_000;
@@ -148,10 +181,13 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
     if (task.status === 'failed') {
       const error = new Error(task.error || 'Analysis failed on the server');
       if (task.error_code) {
-        (error as Error & { code?: string }).code = task.error_code;
+        (error as Error & { code?: string; error_code?: string }).code = task.error_code;
+        (error as Error & { code?: string; error_code?: string }).error_code = task.error_code;
       }
       throw error;
     }
+
+    opts.onProgress?.({ stage: task.stage, message: task.message, trace_events: task.trace_events });
 
     await new Promise<void>((resolve, reject) => {
       if (signal?.aborted) {
@@ -207,6 +243,47 @@ export async function analyzeFiles(
       throw new DOMException('Aborted', 'AbortError');
     }
     throw handleApiError(error, 'file analysis');
+  }
+}
+
+export async function scrapeProfile(
+  username: string,
+  analysisPeriod: AnalysisPeriod = 'lifetime',
+  signal?: AbortSignal,
+  onProgress?: (p: ScrapeProgress) => void,
+): Promise<ScrapeProfileResult> {
+  const url = `${API_BASE}/api/scrape-profile`;
+
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, period: analysisPeriod, analysis_period: analysisPeriod }),
+      signal,
+    });
+
+    if (!r.ok) {
+      throw await parseApiFailure(r, 'profile scraping', `scrape ${r.status}`);
+    }
+
+    const data = await r.json();
+
+    // 202 Accepted direct task or async job without immediate stats
+    if (data && data.task_id && !data.stats) {
+      const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, { onProgress, signal });
+      return { ...result, task_id: data.task_id };
+    }
+
+    if (!data || data.status === 'error') {
+      throw new Error(data?.detail || 'Scraping failed');
+    }
+
+    return data as ScrapeProfileResult;
+  } catch (error) {
+    if (signal?.aborted || isAbortError(error) || (error instanceof DOMException && error.name === 'AbortError')) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+    throw handleApiError(error, 'profile scraping');
   }
 }
 

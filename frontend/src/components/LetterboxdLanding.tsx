@@ -4,7 +4,15 @@ import JSZip from 'jszip';
 import { useRouter } from 'next/navigation';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Upload, Sparkles, PartyPopper, ChevronDown } from 'lucide-react';
-import { analyzeFiles, parseLetterboxdUsername, testBackend, isLetterboxdExportFilename, fileLooksLikeZip } from '@/lib/api';
+import {
+  analyzeFiles,
+  parseLetterboxdUsername,
+  scrapeProfile,
+  testBackend,
+  isLetterboxdExportFilename,
+  fileLooksLikeZip,
+  type ScrapeProgress,
+} from '@/lib/api';
 import { persistStats } from '@/lib/stats-storage';
 import { startAnalysis, finishAnalysis, buildSummaryForPersistence } from '@/lib/supabase/analysis_runs';
 import { upsertUserSession } from '@/lib/supabase/sessions';
@@ -19,7 +27,61 @@ import ErrorBanner from '@/components/ErrorBanner';
 import LoadingScreen from '@/components/landing/LoadingScreen';
 import UploadZone from '@/components/landing/UploadZone';
 import ExportInstructions from '@/components/landing/ExportInstructions';
+import ScrapeStoryWait from '@/components/landing/ScrapeStoryWait';
 import { usePhoneLayout } from '@/hooks/usePhoneLayout';
+
+const USERNAME_PLACEHOLDER_EXAMPLES = [
+  'semihmutsuz',
+  'watchthemengo',
+  'denisvilleneuve',
+  'meryl_streep',
+  'quentintarantino',
+  'timothee_chalamet',
+  'christophernolan',
+  'zendaya',
+];
+
+function useTypewriterPlaceholder(examples: string[], active: boolean): string {
+  const [placeholder, setPlaceholder] = useState(examples[0] ?? '');
+
+  useEffect(() => {
+    if (!active || examples.length === 0) return;
+
+    let wordIndex = 0;
+    let charIndex = 0;
+    let deleting = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const tick = () => {
+      const word = examples[wordIndex];
+      if (!deleting) {
+        charIndex += 1;
+        setPlaceholder(word.slice(0, charIndex));
+        if (charIndex === word.length) {
+          deleting = true;
+          timeoutId = setTimeout(tick, 1400);
+          return;
+        }
+        timeoutId = setTimeout(tick, 90);
+      } else {
+        charIndex -= 1;
+        setPlaceholder(word.slice(0, charIndex));
+        if (charIndex === 0) {
+          deleting = false;
+          wordIndex = (wordIndex + 1) % examples.length;
+          timeoutId = setTimeout(tick, 400);
+          return;
+        }
+        timeoutId = setTimeout(tick, 40);
+      }
+    };
+
+    timeoutId = setTimeout(tick, 90);
+    return () => clearTimeout(timeoutId);
+  }, [active, examples]);
+
+  return active ? placeholder : (examples[0] ?? '');
+}
 
 function localizeLandingError(error: NormalizedError, t: (key: import('@/i18n/catalogs').MessageKey) => string): NormalizedError {
   if (error.title === 'prepare_folder') {
@@ -48,6 +110,18 @@ function localizeLandingError(error: NormalizedError, t: (key: import('@/i18n/ca
     backend_unreachable: ['landing.error.backendUnreachable.title', 'landing.error.backendUnreachable.message', 'landing.error.backendUnreachable.action'],
     tmdb_timeout: ['landing.error.tmdbTimeout.title', 'landing.error.tmdbTimeout.message', 'landing.error.tmdbTimeout.action'],
     tmdb_rate_limited: ['landing.error.rateLimited.title', 'landing.error.rateLimited.message', 'landing.error.rateLimited.action'],
+    no_username: ['landing.error.noUsername.title', 'landing.error.noUsername.message'],
+    invalid_username: ['landing.error.invalidUsername.title', 'landing.error.invalidUsername.message'],
+    invalid_analysis_period: ['landing.error.invalidPeriod.title', 'landing.error.invalidPeriod.message', 'landing.error.invalidPeriod.action'],
+    no_films: ['landing.error.noFilms.title', 'landing.error.noFilms.message', 'landing.error.noFilms.action'],
+    no_films_in_period: ['landing.error.noFilmsPeriod.title', 'landing.error.noFilmsPeriod.message', 'landing.error.noFilmsPeriod.action'],
+    user_not_found: ['landing.error.userNotFound.title', 'landing.error.userNotFound.message', 'landing.error.userNotFound.action'],
+    scrape_failed: ['landing.error.scrapeFailed.title', 'landing.error.scrapeFailed.message', 'landing.error.scrapeFailed.action'],
+    scrape_blocked: ['landing.error.scrapeBlocked.title', 'landing.error.scrapeBlocked.message', 'landing.error.scrapeBlocked.action'],
+    scraper_unavailable: ['landing.error.scraperUnavailable.title', 'landing.error.scraperUnavailable.message', 'landing.error.scraperUnavailable.action'],
+    queue_full: ['landing.error.queueFull.title', 'landing.error.queueFull.message', 'landing.error.queueFull.action'],
+    desktop_worker_offline: ['landing.error.desktopOffline.title', 'landing.error.desktopOffline.message', 'landing.error.desktopOffline.action'],
+    desktop_worker_paused: ['landing.error.desktopPaused.title', 'landing.error.desktopPaused.message', 'landing.error.desktopPaused.action'],
     stats_too_large: ['landing.error.statsTooLarge.title', 'landing.error.statsTooLarge.message', 'landing.error.statsTooLarge.action'],
   } as const;
   const copy = messages[error.reason as keyof typeof messages];
@@ -68,6 +142,16 @@ export default function LetterboxdLanding() {
   const isPhone = usePhoneLayout();
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<NormalizedError | null>(null);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [usernameFocused, setUsernameFocused] = useState(false);
+  const [isScraping, setIsScraping] = useState(false);
+  const [activeScrapeUsername, setActiveScrapeUsername] = useState('');
+  const [scrapeProgress, setScrapeProgress] = useState<ScrapeProgress | null>(null);
+  const [scrapeResultReady, setScrapeResultReady] = useState(false);
+  const storyDestinationRef = useRef<string | null>(null);
+  const lastActionRef = useRef<'upload' | 'scrape' | null>(null);
+  const uploadSectionRef = useRef<HTMLElement | null>(null);
+  const usernamePlaceholder = useTypewriterPlaceholder(USERNAME_PLACEHOLDER_EXAMPLES, true);
   const [backendOffline, setBackendOffline] = useState(false);
   const analysisGeneration = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -140,6 +224,7 @@ export default function LetterboxdLanding() {
     }
 
     lastUploadRef.current = filesArray;
+    lastActionRef.current = 'upload';
     setIsUploading(true);
     setError(null);
     analysisGeneration.current += 1;
@@ -326,24 +411,194 @@ export default function LetterboxdLanding() {
     }
   }, [locale, router, zipFiles]);
 
+  const handleScrape = useCallback(async () => {
+    let raw = usernameInput.trim();
+
+    const urlMatch = raw.match(/(?:https?:\/\/)?(?:www\.)?letterboxd\.com\/([a-zA-Z0-9_]+)/);
+    if (urlMatch) {
+      raw = urlMatch[1];
+    }
+
+    const username = raw.replace(/^@/, '').toLowerCase();
+    if (!username) {
+      setError({ title: 'No username', message: 'Please enter your Letterboxd username.', reason: 'no_username' });
+      return;
+    }
+    if (!/^[a-z0-9_]+$/.test(username)) {
+      setError({
+        title: 'Invalid username',
+        message: 'Letterboxd usernames can only contain lowercase letters, numbers, and underscores. You can also paste your full Letterboxd profile URL.',
+        reason: 'invalid_username',
+      });
+      return;
+    }
+
+    lastActionRef.current = 'scrape';
+    setActiveScrapeUsername(username);
+    setIsScraping(true);
+    setScrapeProgress(null);
+    setScrapeResultReady(false);
+    setError(null);
+    analysisGeneration.current += 1;
+    const generation = analysisGeneration.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const stillCurrent = () => generation === analysisGeneration.current && !controller.signal.aborted;
+
+    trackEvent('analyze_started', { method: 'scrape', analysis_period: 'lifetime' });
+    const destination = storyPath(username, locale);
+    storyDestinationRef.current = destination;
+    router.prefetch(destination);
+
+    const sessionId = ensureSessionId();
+    const hasPersistenceConsent = getConsent() === 'accept';
+    let analysisRun: { id: string } | null = null;
+    let startedAt = 0;
+
+    try {
+      if (hasPersistenceConsent) {
+        try {
+          const runId = crypto?.randomUUID?.();
+          analysisRun = await startAnalysis({ id: runId, session_id: sessionId, username });
+        } catch {
+          /* analytics failure is non-fatal */
+        }
+      }
+
+      if (!stillCurrent()) return;
+      startedAt = performance.now();
+      const result = await scrapeProfile(username, 'lifetime', controller.signal, (p) => {
+        if (stillCurrent()) {
+          setScrapeProgress(p);
+        }
+      });
+      const durationMs = performance.now() - startedAt;
+      if (!stillCurrent()) return;
+
+      const returnedUsername = result.stats.scraped_username?.trim().toLowerCase();
+      if (returnedUsername && returnedUsername !== username) {
+        throw new Error(`Username mismatch: requested @${username}, got @${returnedUsername}`);
+      }
+
+      setUsername(username);
+      const { dropped } = persistStats(result.stats);
+      if (dropped.length > 0) {
+        trackEvent('stats_storage_degraded', {
+          dropped_count: dropped.length,
+          dropped_fields: dropped.join(','),
+        });
+      }
+
+      trackConsentedEvent('analyze_succeeded', {
+        total_films: result.stats.total_films,
+        duration_ms: Math.round(durationMs),
+        method: 'scrape',
+      });
+      trackFilmStats({
+        total_films: result.stats.total_films,
+        total_countries: result.stats.total_countries,
+        average_rating: result.stats.average_rating,
+      });
+
+      if (analysisRun) {
+        void (async () => {
+          try {
+            await finishAnalysis({
+              id: analysisRun.id,
+              ok: true,
+              task_id: result.task_id ?? null,
+              summary: buildSummaryForPersistence(result.stats as Record<string, unknown>),
+            });
+            await upsertUserSession({
+              session_id: sessionId,
+              username,
+              consent: 'accept',
+              film_count: result.stats.total_films || null,
+              favorite_genre: result.stats.favorite_genre?.name || null,
+            });
+          } catch {
+            /* analytics failure is non-fatal */
+          }
+        })();
+      }
+
+      if (!stillCurrent()) return;
+      setScrapeResultReady(true);
+    } catch (err) {
+      if (!stillCurrent() || (err instanceof DOMException && err.name === 'AbortError') || (err instanceof Error && err.name === 'AbortError')) {
+        return;
+      }
+      console.error('[scrape] analysis failed:', err);
+      const normalized = normalizeError(err);
+      if (analysisRun) {
+        try {
+          await finishAnalysis({
+            id: analysisRun.id,
+            ok: false,
+            error_message: normalized.message,
+            error_code: normalized.reason,
+          });
+        } catch {
+          /* silent */
+        }
+      }
+      trackEvent('analyze_failed', {
+        reason: normalized.reason,
+        duration_ms: startedAt > 0 ? Math.round(performance.now() - startedAt) : 0,
+        method: 'scrape',
+      });
+      setError(normalized);
+      setIsScraping(false);
+      setActiveScrapeUsername('');
+    }
+  }, [locale, router, usernameInput]);
+
+  const handleStoryReady = useCallback(() => {
+    const destination = storyDestinationRef.current;
+    if (!destination) return;
+    storyDestinationRef.current = null;
+    router.push(destination);
+  }, [router]);
+
   const handleCancel = useCallback(() => {
     analysisGeneration.current += 1;
     abortRef.current?.abort();
+    abortRef.current = null;
+    storyDestinationRef.current = null;
     setIsUploading(false);
+    setIsScraping(false);
+    setActiveScrapeUsername('');
+    setScrapeProgress(null);
+    setScrapeResultReady(false);
     setError(null);
   }, []);
 
   const handleRetry = useCallback(() => {
-    const files = lastUploadRef.current;
     setError(null);
-    if (!files?.length) return;
-    void handleFiles(files);
-  }, [handleFiles]);
+    if (lastActionRef.current === 'scrape' && usernameInput.trim()) {
+      void handleScrape();
+    } else if (lastUploadRef.current?.length) {
+      void handleFiles(lastUploadRef.current);
+    }
+  }, [handleFiles, handleScrape, usernameInput]);
 
   const translatedError = error ? localizeLandingError(error, t) : null;
 
   if (isUploading) {
     return <LoadingScreen onCancel={handleCancel} typicalSeconds={45} />;
+  }
+
+  if (isScraping) {
+    return (
+      <ScrapeStoryWait
+        username={activeScrapeUsername}
+        onCancel={handleCancel}
+        events={scrapeProgress?.trace_events}
+        resultReady={scrapeResultReady}
+        onStoryReady={handleStoryReady}
+      />
+    );
   }
 
   return (
@@ -378,8 +633,63 @@ export default function LetterboxdLanding() {
               {t('landing.contributors.thanks')}
             </p>
           </section>
+          <section aria-label={t('landing.username.section')}>
+            <div
+              className="rounded-2xl p-5 sm:p-6 text-center backdrop-blur-sm"
+              style={{ borderWidth: 1, borderColor: '#1f262e', backgroundColor: 'rgba(27, 28, 30, 0.4)' }}
+            >
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                {t('landing.username.title')}
+              </h2>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleScrape();
+                }}
+                className="mx-auto mt-5 max-w-md space-y-3"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <label className="relative flex-1">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base font-semibold text-white/40">@</span>
+                    <input
+                      type="text"
+                      name="username"
+                      value={usernameInput}
+                      onChange={(e) => setUsernameInput(e.target.value)}
+                      onFocus={() => setUsernameFocused(true)}
+                      onBlur={() => setUsernameFocused(false)}
+                      placeholder={usernamePlaceholder}
+                      autoComplete="username"
+                      spellCheck={false}
+                      className="w-full rounded-xl py-3 pl-9 pr-4 text-base font-semibold text-white placeholder:text-white/40 placeholder:font-normal focus:outline-none transition-shadow"
+                      style={{
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 127, 0, 0.4)',
+                        backgroundColor: 'rgba(30, 37, 45, 0.7)',
+                        boxShadow: usernameFocused ? '0 0 0 2px rgba(255, 127, 0, 0.6)' : undefined,
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={!usernameInput.trim()}
+                    className="rounded-xl px-6 py-3 text-base font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed"
+                    style={
+                      usernameInput.trim()
+                        ? { backgroundColor: '#ff7f00', color: '#1b1c1e' }
+                        : { backgroundColor: '#1f262e', color: 'rgba(255,255,255,0.4)' }
+                    }
+                  >
+                    {t('landing.username.analyze')} →
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
 
           <section
+            ref={uploadSectionRef}
             aria-label={t('landing.upload.modalTitle')}
             className="rounded-2xl p-5 sm:p-6 backdrop-blur-sm"
             style={{ borderWidth: 1, borderColor: '#1f262e', backgroundColor: 'rgba(27, 28, 30, 0.4)' }}
@@ -398,7 +708,12 @@ export default function LetterboxdLanding() {
           </section>
 
           {translatedError && (
-            <ErrorBanner error={translatedError} onDismiss={() => setError(null)} onRetry={handleRetry} />
+            <ErrorBanner
+              error={translatedError}
+              onDismiss={() => setError(null)}
+              onRetry={handleRetry}
+              onUpload={() => uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            />
           )}
 
           <section aria-label={t('landing.howItWorks.label')} className="grid grid-cols-1 gap-3 sm:grid-cols-3">

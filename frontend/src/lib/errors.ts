@@ -199,7 +199,11 @@ export function normalizeError(err: unknown): NormalizedError {
   }
 
   // Scrape blocked by Letterboxd bot detection (cloud IP)
-  if (/scrape_blocked|letterboxd is blocking|rate limit hit/i.test(raw)) {
+  if (
+    code === 'scrape_blocked' ||
+    code === 'rate_limit_exceeded' ||
+    /scrape_blocked|letterboxd is blocking|rate limit hit/i.test(raw)
+  ) {
     return {
       title: 'Letterboxd access blocked',
       message: raw || 'Letterboxd has temporarily blocked automated profile access.',
@@ -239,7 +243,7 @@ export function normalizeError(err: unknown): NormalizedError {
   }
 
   // Scrape-specific: user truly not found vs blocked
-  if (/user_not_found/i.test(raw)) {
+  if (code === 'user_not_found' || /user_not_found/i.test(raw)) {
     return {
       title: 'Profile not found',
       message: raw || 'This Letterboxd user could not be found.',

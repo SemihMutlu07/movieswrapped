@@ -11,7 +11,7 @@ import uuid
 import zipfile
 import secrets
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
@@ -20,6 +20,11 @@ from app import task_manager
 from app.routes.feedback import _parse_letterboxd_username
 from app.services.analysis import process_comprehensive_letterboxd_data
 from app.services.run_log import persist_run
+from app.services.scrape_pipeline import (
+    ScrapeAnalysisEmpty,
+    normalize_analysis_period,
+    scrape_and_analyze,
+)
 from app.security import client_key, enforce_rate_limit
 
 logger = logging.getLogger("letterboxd_wrapped.analyze")
@@ -259,6 +264,154 @@ async def analyze_data(request: Request, files: List[UploadFile] = File(...)):
     return JSONResponse(status_code=202, content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending"})
 
 
+async def _run_scrape(
+    task_id: str,
+    session,
+    username: str,
+    analysis_period: str = "lifetime",
+) -> None:
+    def _trace(stage: str, message: str, metrics: Optional[dict[str, Any]] = None) -> None:
+        task_manager.update_task_progress(task_id, stage, message, metrics=metrics)
+
+    try:
+        task_manager.set_task_running(task_id)
+        stats = await scrape_and_analyze(
+            session,
+            username,
+            analysis_period=analysis_period,
+            trace_callback=_trace,
+            task_id=task_id,
+        )
+        task = task_manager.get_task_state(task_id)
+        trace_events = task.trace_events if task else None
+        task_manager.set_task_done(task_id, {"status": "success", "stats": stats})
+        persist_run(username, "scrape", stats, ok=True, task_id=task_id, trace_events=trace_events)
+    except ScrapeAnalysisEmpty as exc:
+        if exc.period_empty:
+            error_code = "no_films_in_period"
+            msg = f"No diary films found for @{username} in the selected period."
+        elif exc.scraper_ok:
+            error_code = "analysis_failed"
+            msg = f"Scraped @{username} but analysis pipeline returned empty. Please try again."
+        else:
+            error_code = "no_films"
+            msg = f"No public films found for @{username}. The profile may be private, empty, or temporarily blocked by Letterboxd."
+        task_manager.set_task_failed(
+            task_id,
+            msg,
+            error_code=error_code,
+            error_type=error_code,
+            error_stage="scrape",
+        )
+        task = task_manager.get_task_state(task_id)
+        trace_events = task.trace_events if task else None
+        persist_run(
+            username,
+            "scrape",
+            {},
+            ok=False,
+            error_message=msg,
+            error_type=error_code,
+            error_stage="scrape",
+            task_id=task_id,
+            trace_events=trace_events,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "rate limit" in msg:
+            error_code = "rate_limit_exceeded"
+        elif "Letterboxd is blocking" in msg:
+            error_code = "scrape_blocked"
+        else:
+            error_code = "user_not_found"
+            msg = f"Letterboxd profile '@{username}' was not found or could not be read."
+        task_manager.set_task_failed(
+            task_id,
+            msg,
+            error_code=error_code,
+            error_type=error_code,
+            error_stage="scrape",
+        )
+        task = task_manager.get_task_state(task_id)
+        trace_events = task.trace_events if task else None
+        persist_run(
+            username,
+            "scrape",
+            {},
+            ok=False,
+            error_message=msg,
+            error_type=error_code,
+            error_stage="scrape",
+            task_id=task_id,
+            trace_events=trace_events,
+        )
+    except Exception as exc:
+        logger.exception("Scraping failed for %s: %s", username, exc)
+        msg = f"Letterboxd returned an unexpected response for @{username}. Try again later."
+        task_manager.set_task_failed(
+            task_id,
+            msg,
+            error_code="scrape_failed",
+            error_type="scrape_failed",
+            error_stage="scrape",
+        )
+        task = task_manager.get_task_state(task_id)
+        trace_events = task.trace_events if task else None
+        persist_run(
+            username,
+            "scrape",
+            {},
+            ok=False,
+            error_message=str(exc),
+            error_type="scrape_failed",
+            error_stage="scrape",
+            task_id=task_id,
+            trace_events=trace_events,
+        )
+
+
+@router.post("/api/scrape-profile", status_code=202)
+async def scrape_profile(request: Request):
+    """
+    Scrape a public Letterboxd profile and run the analysis pipeline asynchronously.
+    Returns 202 Accepted with a task_id and poll_token for progress polling.
+    """
+    enforce_rate_limit(request, "scrape_profile", limit=5, window=600)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_json", "message": "Request body must be valid JSON."},
+        )
+    raw_username = str(body.get("username") or "").strip()
+    username = raw_username.lower()
+    if not username or not re.match(r"^[a-z0-9_]+$", username):
+        logger.warning("scrape-profile invalid_username: raw=%r sanitized=%r", raw_username, username if username else "<empty>")
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_username", "message": "Please enter a valid Letterboxd username."},
+        )
+    raw_period = body.get("period") or body.get("analysis_period")
+    try:
+        analysis_period = normalize_analysis_period(raw_period)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_analysis_period", "message": str(exc)},
+        ) from exc
+
+    task_id = task_manager.create_task_state(client_key(request))
+    session = request.app.state.aiohttp_session
+    asyncio.create_task(_run_scrape(task_id, session, username, analysis_period))
+
+    task = task_manager.get_task_state(task_id)
+    return JSONResponse(
+        status_code=202,
+        content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending"},
+    )
+
+
 @router.get("/api/progress/{task_id}")
 async def get_task_progress(task_id: str, request: Request):
     """Poll analysis progress and retrieve the final result when done."""
@@ -289,4 +442,5 @@ async def get_task_progress(task_id: str, request: Request):
         "error_type": task.error_type,
         "error_stage": task.error_stage,
         "error_code": task.error_code,
+        "trace_events": task.trace_events,
     }

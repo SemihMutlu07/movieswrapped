@@ -6,7 +6,14 @@ import { I18nProvider } from '@/i18n/I18nProvider';
 const apiMocks = vi.hoisted(() => ({
   analyzeFiles: vi.fn(),
   parseLetterboxdUsername: vi.fn(),
+  scrapeProfile: vi.fn(),
   testBackend: vi.fn(),
+}));
+
+const analyticsMocks = vi.hoisted(() => ({
+  trackEvent: vi.fn(),
+  trackConsentedEvent: vi.fn(),
+  trackFilmStats: vi.fn(),
 }));
 
 const analysisRunMocks = vi.hoisted(() => ({
@@ -34,17 +41,15 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...actual,
     analyzeFiles: apiMocks.analyzeFiles,
     parseLetterboxdUsername: apiMocks.parseLetterboxdUsername,
+    scrapeProfile: apiMocks.scrapeProfile,
     testBackend: apiMocks.testBackend,
   };
 });
 
 vi.mock('@/lib/supabase/analysis_runs', () => analysisRunMocks);
 vi.mock('@/lib/supabase/sessions', () => sessionMocks);
-vi.mock('@/lib/analytics', () => ({
-  trackEvent: vi.fn(),
-  trackConsentedEvent: vi.fn(),
-  trackFilmStats: vi.fn(),
-}));
+vi.mock('@/lib/analytics', () => analyticsMocks);
+
 
 import LetterboxdLanding from './LetterboxdLanding';
 
@@ -64,6 +69,14 @@ describe('LetterboxdLanding persistence', () => {
     analysisRunMocks.startAnalysis.mockResolvedValue({ id: 'run-1' });
     analysisRunMocks.finishAnalysis.mockResolvedValue(undefined);
     sessionMocks.upsertUserSession.mockResolvedValue(undefined);
+    apiMocks.scrapeProfile.mockResolvedValue({
+      status: 'success',
+      stats: {
+        scraped_username: 'alice',
+        total_films: 12,
+        favorite_genre: { name: 'Drama', count: 4 },
+      },
+    });
   });
 
   afterEach(() => {
@@ -98,6 +111,179 @@ describe('LetterboxdLanding persistence', () => {
     await user.upload(input, file);
     await waitFor(() => expect(apiMocks.analyzeFiles).toHaveBeenCalled());
   }
+  async function submitUsername(username = 'alice') {
+    const user = userEvent.setup();
+    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    const input = document.querySelector('input[name="username"]') as HTMLInputElement;
+    await user.type(input, username);
+    await user.click(screen.getByRole('button', { name: /Analyze/i }));
+    return { user, input };
+  }
+
+  it('persists final stats to session storage and navigates to story on successful scrape', async () => {
+    let storedAtNavigation: Record<string, unknown> | null = null;
+    routerMocks.push.mockImplementationOnce(() => {
+      storedAtNavigation = JSON.parse(sessionStorage.getItem('letterboxdStats') ?? 'null');
+    });
+
+    await submitUsername('alice');
+
+    await waitFor(() => {
+      expect(apiMocks.scrapeProfile).toHaveBeenCalledWith(
+        'alice',
+        'lifetime',
+        expect.any(AbortSignal),
+        expect.any(Function),
+      );
+    });
+
+    expect(analyticsMocks.trackEvent).toHaveBeenCalledWith(
+      'analyze_started',
+      expect.not.objectContaining({ username: expect.anything() }),
+    );
+    expect(analyticsMocks.trackEvent).toHaveBeenCalledWith(
+      'analyze_started',
+      { method: 'scrape', analysis_period: 'lifetime' },
+    );
+
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith('/en/story?u=alice'));
+    expect(storedAtNavigation).toMatchObject({ scraped_username: 'alice', total_films: 12 });
+    expect(sessionStorage.getItem('username')).toBe('alice');
+
+    expect(analysisRunMocks.startAnalysis).toHaveBeenCalledOnce();
+    expect(analysisRunMocks.finishAnalysis).toHaveBeenCalledOnce();
+    expect(sessionMocks.upsertUserSession).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'alice', consent: 'accept' }),
+    );
+  });
+
+  it('displays submitted normalized username in ScrapeStoryWait without changing stored identity before success', async () => {
+    sessionStorage.setItem('username', 'bob');
+    sessionStorage.setItem('lb_username', 'bob');
+
+    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    apiMocks.scrapeProfile.mockReturnValue(promise);
+
+    await submitUsername('https://letterboxd.com/alice/');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('scrape-story-wait')).toBeInTheDocument();
+    });
+    expect(screen.getByText('@alice')).toBeInTheDocument();
+    expect(screen.queryByText('@bob')).not.toBeInTheDocument();
+
+    expect(sessionStorage.getItem('username')).toBe('bob');
+
+    await act(async () => {
+      resolveScrape({
+        status: 'success',
+        stats: { scraped_username: 'alice', total_films: 12 },
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith('/en/story?u=alice'));
+    expect(sessionStorage.getItem('username')).toBe('alice');
+  });
+
+  it('suppresses late stats and navigation when scrape is cancelled', async () => {
+    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    let signal: AbortSignal | undefined;
+    apiMocks.scrapeProfile.mockImplementation((_u: string, _p: string, s?: AbortSignal) => {
+      signal = s;
+      return promise;
+    });
+
+    const { user } = await submitUsername('alice');
+
+    await waitFor(() => expect(screen.getByTestId('scrape-story-wait')).toBeInTheDocument());
+    expect(signal?.aborted).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByTestId('scrape-story-wait')).not.toBeInTheDocument();
+    expect(document.querySelector('input[name="username"]')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveScrape({
+        status: 'success',
+        stats: { scraped_username: 'alice', total_films: 12 },
+      });
+      await Promise.resolve();
+    });
+
+    expect(routerMocks.push).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('letterboxdStats')).toBeNull();
+  });
+
+  it('rejects returned username that does not match requested username', async () => {
+    apiMocks.scrapeProfile.mockResolvedValue({
+      status: 'success',
+      stats: {
+        scraped_username: 'eve',
+        total_films: 12,
+      },
+    });
+
+    await submitUsername('alice');
+
+    await waitFor(() => {
+      expect(screen.getByText(/Username mismatch/i)).toBeInTheDocument();
+    });
+
+    expect(routerMocks.push).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('letterboxdStats')).toBeNull();
+    expect(document.querySelector('input[name="username"]')).toBeInTheDocument();
+  });
+
+  it('displays localized error banner when scrape fails with known error', async () => {
+    const error = new Error('Letterboxd returned 404');
+    (error as Error & { code?: string }).code = 'user_not_found';
+    apiMocks.scrapeProfile.mockRejectedValue(error);
+
+    await submitUsername('nonexistent_user');
+
+    await waitFor(() => {
+      expect(screen.getByText(/Profile not found/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('scrape-story-wait')).not.toBeInTheDocument();
+    expect(routerMocks.push).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('letterboxdStats')).toBeNull();
+  });
+
+  it('does not open story on intermediate trace events without final result', async () => {
+    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    let reportProgress!: (progress: { trace_events: { stage: string }[] }) => void;
+    apiMocks.scrapeProfile.mockImplementation(
+      (_u: string, _p: string, _s?: AbortSignal, onProgress?: (p: { trace_events: { stage: string }[] }) => void) => {
+        reportProgress = onProgress!;
+        return promise;
+      },
+    );
+
+    await submitUsername('alice');
+    await waitFor(() => expect(screen.getByTestId('scrape-story-wait')).toBeInTheDocument());
+
+    await act(async () => {
+      reportProgress({ trace_events: [{ stage: 'analysis_done' }, { stage: 'postback_started' }] });
+      await Promise.resolve();
+    });
+
+    expect(routerMocks.push).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('letterboxdStats')).toBeNull();
+
+    await act(async () => {
+      resolveScrape({
+        status: 'success',
+        stats: { scraped_username: 'alice', total_films: 12 },
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith('/en/story?u=alice'));
+    expect(sessionStorage.getItem('letterboxdStats')).not.toBeNull();
+  });
 
   it('persists the analysis and user session without a stored consent decision', async () => {
     await uploadExport();
@@ -112,12 +298,12 @@ describe('LetterboxdLanding persistence', () => {
   });
 
   it('does not open the story when analysis finishes after cancel', async () => {
-    let resolveAnalyze: (value: unknown) => void = () => undefined;
+    const { promise, resolve: resolveAnalyze } = Promise.withResolvers<unknown>();
     let signal: AbortSignal | undefined;
-    apiMocks.analyzeFiles.mockImplementation((_form: FormData, opts?: { signal?: AbortSignal }) => new Promise((resolve) => {
+    apiMocks.analyzeFiles.mockImplementation((_form: FormData, opts?: { signal?: AbortSignal }) => {
       signal = opts?.signal;
-      resolveAnalyze = resolve;
-    }));
+      return promise;
+    });
     const user = userEvent.setup();
     render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
     const file = new File(['Name,Year\nAftersun,2022\n'], 'letterboxd-alice.zip', { type: 'application/zip' });

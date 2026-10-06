@@ -37,6 +37,7 @@ python-dotenv==1.2.2
 python-multipart==0.0.32
 pytz==2026.3.post1
 requests==2.33.0
+cloudscraper
 beautifulsoup4==4.13.4
 soupsieve
 lxml==6.1.0
