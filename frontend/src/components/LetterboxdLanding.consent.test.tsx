@@ -53,6 +53,14 @@ vi.mock('@/lib/analytics', () => analyticsMocks);
 
 import LetterboxdLanding from './LetterboxdLanding';
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 describe('LetterboxdLanding persistence', () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -161,7 +169,7 @@ describe('LetterboxdLanding persistence', () => {
     sessionStorage.setItem('username', 'bob');
     sessionStorage.setItem('lb_username', 'bob');
 
-    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveScrape } = deferred<unknown>();
     apiMocks.scrapeProfile.mockReturnValue(promise);
 
     await submitUsername('https://letterboxd.com/alice/');
@@ -187,7 +195,7 @@ describe('LetterboxdLanding persistence', () => {
   });
 
   it('suppresses late stats and navigation when scrape is cancelled', async () => {
-    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveScrape } = deferred<unknown>();
     let signal: AbortSignal | undefined;
     apiMocks.scrapeProfile.mockImplementation((_u: string, _p: string, s?: AbortSignal) => {
       signal = s;
@@ -253,7 +261,7 @@ describe('LetterboxdLanding persistence', () => {
   });
 
   it('does not open story on intermediate trace events without final result', async () => {
-    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveScrape } = deferred<unknown>();
     let reportProgress!: (progress: { trace_events: { stage: string }[] }) => void;
     apiMocks.scrapeProfile.mockImplementation(
       (_u: string, _p: string, _s?: AbortSignal, onProgress?: (p: { trace_events: { stage: string }[] }) => void) => {
@@ -298,7 +306,7 @@ describe('LetterboxdLanding persistence', () => {
   });
 
   it('does not open the story when analysis finishes after cancel', async () => {
-    const { promise, resolve: resolveAnalyze } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveAnalyze } = deferred<unknown>();
     let signal: AbortSignal | undefined;
     apiMocks.analyzeFiles.mockImplementation((_form: FormData, opts?: { signal?: AbortSignal }) => {
       signal = opts?.signal;
