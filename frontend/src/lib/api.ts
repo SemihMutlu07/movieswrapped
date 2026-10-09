@@ -270,7 +270,12 @@ export async function scrapeProfile(
 
     // 202 Accepted direct task or async job without immediate stats
     if (data && data.task_id && !data.stats) {
-      const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, { onProgress, signal });
+      // Blocked scrapes fail in ~1s; poll faster than the 2s analyze interval.
+      const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, {
+        onProgress,
+        signal,
+        intervalMs: 400,
+      });
       return { ...result, task_id: data.task_id };
     }
 

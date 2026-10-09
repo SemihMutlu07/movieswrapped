@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeError } from './errors';
+import { needsZipFallback, normalizeError } from './errors';
 
 describe('normalizeError network failures', () => {
   it('maps Failed to fetch to backend_unreachable', () => {
@@ -36,5 +36,19 @@ describe('normalizeError desktop worker offline', () => {
 
     expect(normalized.reason).toBe('queue_full');
     expect(normalized.action).toMatch(/ZIP/i);
+  });
+});
+
+describe('needsZipFallback', () => {
+  it('routes blocked and scraper-unavailable failures to ZIP upload', () => {
+    expect(needsZipFallback('scrape_blocked')).toBe(true);
+    expect(needsZipFallback('scraper_unavailable')).toBe(true);
+    expect(needsZipFallback('queue_full')).toBe(true);
+  });
+
+  it('does not hide retry for profile-not-found or upload errors', () => {
+    expect(needsZipFallback('user_not_found')).toBe(false);
+    expect(needsZipFallback('no_files_selected')).toBe(false);
+    expect(needsZipFallback('unknown_error')).toBe(false);
   });
 });

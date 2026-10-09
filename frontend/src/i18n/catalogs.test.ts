@@ -28,6 +28,14 @@ describe('i18n catalogs and routing', () => {
     }
   });
 
+  it('treats username scrape as best-effort, not the guaranteed path', () => {
+    expect(en['landing.username.title']).toMatch(/or try a public username/i);
+    expect(en['landing.username.hint']).toMatch(/ZIP upload is the reliable path/i);
+    expect(tr['landing.username.hint']).toMatch(/ZIP/i);
+    expect(en['landing.howItWorks.enter.title']).toMatch(/upload your export/i);
+    expect(en['landing.error.scrapeBlocked.action']).toMatch(/export ZIP/i);
+  });
+
   it('uses Turkish only for Turkish browser locales', () => {
     expect(localeFromLanguage('tr-TR')).toBe('tr');
     expect(localeFromLanguage('en-US')).toBe('en');
