@@ -107,6 +107,31 @@ function pickObject(value: unknown, keys: string[]): Record<string, unknown> | n
     );
 }
 
+function optionalTrimmedString(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+}
+
+/** Public RSS identity only — checksum + latest guid/date, never feed items. */
+function slimRssFingerprint(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const source = value as Record<string, unknown>;
+    const checksum = optionalTrimmedString(source.checksum);
+    const latestGuid = optionalTrimmedString(source.latest_guid ?? source.rss_latest_guid);
+    const latestWatched = optionalTrimmedString(
+        source.latest_watched_date ?? source.rss_latest_watched_date,
+    );
+    if (!checksum && !latestGuid && !latestWatched) return null;
+    const slim: Record<string, unknown> = { preview_only: true };
+    if (checksum) slim.checksum = checksum;
+    if (latestGuid) slim.latest_guid = latestGuid;
+    if (latestWatched) slim.latest_watched_date = latestWatched;
+    const itemCount = finiteNumber(source.item_count);
+    if (itemCount !== null) slim.item_count = itemCount;
+    return slim;
+}
+
 /** Keep only aggregate fields used by analysis listings and cross-user metrics. */
 function buildPersistedDetails(stats: Record<string, unknown>): Record<string, unknown> {
     return safeJsonSanitize({
@@ -136,6 +161,7 @@ function buildPersistedDetails(stats: Record<string, unknown>): Record<string, u
             "period_description",
         ]),
         review_metrics: buildReviewMetrics(stats) ?? undefined,
+        rss: slimRssFingerprint(stats.rss) ?? undefined,
     });
 }
 
@@ -216,6 +242,26 @@ export type AnalysisFinishInput = {
     finished_at?: string | null;
 };
 
+export type RssFingerprintFields = {
+    rss_checksum: string | null;
+    rss_latest_guid: string | null;
+    rss_latest_watched_date: string | null;
+};
+
+export type CachedAnalysisRun = RssFingerprintFields & {
+    id: string;
+    session_id: string;
+    username: string;
+    summary: Record<string, unknown>;
+    details: Record<string, unknown>;
+    finished_at: string | null;
+    total_films: number | null;
+    sinefil_meter: number | null;
+    cinematic_persona: string | null;
+    average_rating: number | null;
+    total_countries: number | null;
+};
+
 export async function startAnalysis(input: AnalysisStartInput & { id?: string }) {
     const supabase = getSupabase();
     const payload = {
@@ -249,7 +295,7 @@ function extractMetrics(summaryPayload: Record<string, unknown> | null): {
     cinematic_persona: string | null;
     average_rating: number | null;
     total_countries: number | null;
-} {
+} & RssFingerprintFields {
     // Reuse the shared details accessor (handles null + legacy-flat summaries).
     // Producers always emit sinefil_meter/cinematic_persona as objects, so a single
     // typed cast + optional chaining is enough — no bare-scalar fallbacks needed.
@@ -259,7 +305,9 @@ function extractMetrics(summaryPayload: Record<string, unknown> | null): {
         cinematic_persona?: { persona?: string | null } | null;
         average_rating?: number | null;
         total_countries?: number | null;
+        rss?: unknown;
     } | null;
+    const rss = slimRssFingerprint(details?.rss ?? null);
 
     return {
         total_films: details?.total_films ?? null,
@@ -267,6 +315,9 @@ function extractMetrics(summaryPayload: Record<string, unknown> | null): {
         cinematic_persona: details?.cinematic_persona?.persona ?? null,
         average_rating: details?.average_rating ?? null,
         total_countries: details?.total_countries ?? null,
+        rss_checksum: optionalTrimmedString(rss?.checksum),
+        rss_latest_guid: optionalTrimmedString(rss?.latest_guid),
+        rss_latest_watched_date: optionalTrimmedString(rss?.latest_watched_date),
     };
 }
 
@@ -304,6 +355,9 @@ export async function finishAnalysis(input: AnalysisFinishInput) {
         cinematic_persona: metrics.cinematic_persona,
         average_rating: metrics.average_rating,
         total_countries: metrics.total_countries,
+        rss_checksum: metrics.rss_checksum,
+        rss_latest_guid: metrics.rss_latest_guid,
+        rss_latest_watched_date: metrics.rss_latest_watched_date,
     };
     if (analysisVersion) {
         updatePayload.analysis_version = analysisVersion;
@@ -319,6 +373,78 @@ export async function finishAnalysis(input: AnalysisFinishInput) {
         throw error;
     }
 
+}
+
+/**
+ * Same-session cached wrap only. Requires both session_id and username —
+ * a username-only read would serve another person's aggregates.
+ */
+export async function lookupCachedAnalysis(input: {
+    session_id: string;
+    username: string;
+}): Promise<CachedAnalysisRun | null> {
+    const sessionId = input.session_id.trim();
+    const username = input.username.trim().toLowerCase();
+    if (!sessionId || !username) return null;
+
+    const supabase = getSupabase();
+    const { data, error } = await safeSupabaseCall(() =>
+        supabase
+            .from("analysis_runs")
+            .select(
+                "id, session_id, username, summary, finished_at, total_films, sinefil_meter, cinematic_persona, average_rating, total_countries, rss_checksum, rss_latest_guid, rss_latest_watched_date",
+            )
+            .eq("session_id", sessionId)
+            .eq("username", username)
+            .eq("ok", true)
+            .not("summary", "is", null)
+            .order("finished_at", { ascending: false })
+            .limit(1),
+    );
+
+    if (error || !Array.isArray(data) || data.length === 0) return null;
+
+    const row = data[0] as Record<string, unknown>;
+    const rowSession = optionalTrimmedString(row.session_id);
+    const rowUsername = optionalTrimmedString(row.username)?.toLowerCase() ?? null;
+    if (rowSession !== sessionId || rowUsername !== username) return null;
+
+    const summary =
+        row.summary && typeof row.summary === "object" && !Array.isArray(row.summary)
+            ? (row.summary as Record<string, unknown>)
+            : null;
+    const details = getDetailsFromSummary(summary);
+    if (!summary || !details) return null;
+
+    const rss = slimRssFingerprint(details.rss);
+    return {
+        id: String(row.id ?? ""),
+        session_id: rowSession,
+        username: rowUsername,
+        summary,
+        details,
+        finished_at: optionalTrimmedString(row.finished_at),
+        total_films: finiteNumber(row.total_films) ?? finiteNumber(details.total_films),
+        sinefil_meter: finiteNumber(row.sinefil_meter),
+        cinematic_persona: optionalTrimmedString(row.cinematic_persona),
+        average_rating: finiteNumber(row.average_rating),
+        total_countries: finiteNumber(row.total_countries),
+        rss_checksum: optionalTrimmedString(row.rss_checksum) ?? optionalTrimmedString(rss?.checksum),
+        rss_latest_guid: optionalTrimmedString(row.rss_latest_guid) ?? optionalTrimmedString(rss?.latest_guid),
+        rss_latest_watched_date:
+            optionalTrimmedString(row.rss_latest_watched_date) ??
+            optionalTrimmedString(rss?.latest_watched_date),
+    };
+}
+
+/** Seed sessionStorage with persisted aggregates and an explicit cached flag. */
+export function statsFromCachedRun(run: CachedAnalysisRun, username: string): Record<string, unknown> {
+    return {
+        ...run.details,
+        scraped_username: username,
+        _cached: true,
+        source: "cache",
+    };
 }
 
 /** Minimum number of scored runs before we trust a percentile enough to show it. */
