@@ -34,6 +34,8 @@ describe('i18n catalogs and routing', () => {
     expect(tr['landing.username.hint']).toMatch(/ZIP/i);
     expect(en['landing.howItWorks.enter.title']).toMatch(/upload your export/i);
     expect(en['landing.error.scrapeBlocked.action']).toMatch(/export ZIP/i);
+    expect(en['landing.storyWait.rssPreview']).toMatch(/RSS preview, not a full library/i);
+    expect(tr['landing.storyWait.rssPreview']).toMatch(/RSS/i);
   });
 
   it('uses Turkish only for Turkish browser locales', () => {
