@@ -94,10 +94,8 @@ export interface StatsData {
   poster_game_score?: number;
   /** Rounds played (correct + given-up) in the poster-guessing game. */
   poster_game_rounds?: number;
-  /** Data source for this Wrapped. "scrape" = full profile scrape, "csv" = upload, "cache" = same-session aggregates. */
+  /** Data source for this Wrapped. "scrape" = full profile scrape, "csv" = upload. */
   source?: string;
-  /** True when results were restored from analysis_runs instead of a new ZIP/scrape. */
-  _cached?: boolean;
   /** Number of films in the sample (scrape mode). */
   recent_films_count?: number;
   /** Exactness metadata; present on sample stats to label precision. */

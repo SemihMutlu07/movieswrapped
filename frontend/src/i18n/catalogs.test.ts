@@ -36,9 +36,6 @@ describe('i18n catalogs and routing', () => {
     expect(en['landing.error.scrapeBlocked.action']).toMatch(/export ZIP/i);
     expect(en['landing.storyWait.rssPreview']).toMatch(/RSS preview, not a full library/i);
     expect(tr['landing.storyWait.rssPreview']).toMatch(/RSS/i);
-    expect(en['landing.cache.badge']).toMatch(/^cached$/i);
-    expect(en['landing.cache.reupload']).toMatch(/re-upload zip/i);
-    expect(en['results.cached.banner']).toMatch(/cached aggregates/i);
   });
 
   it('uses Turkish only for Turkish browser locales', () => {

@@ -113,7 +113,7 @@ const storedStats = {
   ],
 };
 
-function storeStats(stats: Record<string, unknown> = storedStats) {
+function storeStats(stats = storedStats) {
   sessionStorage.setItem('letterboxdStats', JSON.stringify(stats));
 }
 
@@ -212,12 +212,6 @@ describe('ResultsPage stored-result contracts', () => {
     expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reviews' })).toBeInTheDocument();
     expect(within(spy).queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
-  });
-
-  it('labels restored session aggregates as cached', async () => {
-    storeStats({ ...storedStats, _cached: true });
-    render(<I18nProvider locale="en"><ResultsPage /></I18nProvider>);
-    expect(await screen.findByTestId('cached-results-banner')).toHaveTextContent(/cached aggregates/i);
   });
 
   it('opens feedback only once after repeated completed share downloads', async () => {
