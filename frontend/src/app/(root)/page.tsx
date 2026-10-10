@@ -20,6 +20,7 @@ export default function LocaleEntryPage() {
           Opening Movies Wrapped…
         </p>
         <noscript>
+          <meta httpEquiv="refresh" content="0;url=/en" />
           <p className="mt-4 flex gap-3">
             <Link className="underline" href="/en">English</Link>
             <Link className="underline" href="/tr">Türkçe</Link>

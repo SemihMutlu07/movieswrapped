@@ -2,40 +2,46 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 import RootDocument from '@/app/RootDocument';
+import {
+  DEFAULT_HREF,
+  OG_SHARE_IMAGE,
+  hreflangLanguages,
+  seoByLocale,
+} from '@/lib/seo';
+
+const copy = seoByLocale.en;
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://movieswrapped.com'),
-  title: 'Movies Wrapped - Your Year in Film from Letterboxd',
-  description:
-    'Movies Wrapped turns your Letterboxd watch history into a personal year-in-film dossier: film statistics, rating personality, favorite directors and actors, review analysis, and your cinema scale.',
+  title: copy.title,
+  description: copy.description,
   alternates: {
-    canonical: '/',
-    languages: { en: '/en', tr: '/tr' },
+    canonical: DEFAULT_HREF,
+    languages: hreflangLanguages,
   },
   openGraph: {
     type: 'website',
-    url: 'https://movieswrapped.com/',
+    url: `https://movieswrapped.com${DEFAULT_HREF}`,
     siteName: 'Movies Wrapped',
-    title: 'Movies Wrapped - Your Year in Film from Letterboxd',
-    description:
-      'Turn your Letterboxd watch history into a personal year-in-film dossier.',
+    title: copy.title,
+    description: copy.description,
     images: [
       {
-        url: '/assets/Sosyal%20Medya%20Logo%20-%20Dark.png',
+        url: OG_SHARE_IMAGE,
         width: 1080,
         height: 1080,
-        alt: 'Movies Wrapped — your year in film from Letterboxd',
+        alt: copy.ogAlt,
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Movies Wrapped - Your Year in Film from Letterboxd',
-    description: 'Turn your Letterboxd watch history into a personal year-in-film dossier.',
-    images: ['/assets/Sosyal%20Medya%20Logo%20-%20Dark.png'],
+    title: copy.title,
+    description: copy.description,
+    images: [OG_SHARE_IMAGE],
   },
-  // Root chooser is a JS redirect — do not index this page.
-  // Search engines should follow the canonical (/) and hreflang alternates.
+  // Production 301s `/` → `/en`. This HTML is a local/dev fallback, not the
+  // indexed homepage — crawlers should use the canonical `/en` instead.
   robots: { index: false, follow: true },
 };
 
@@ -47,4 +53,3 @@ export const viewport: Viewport = {
 export default function RootChooserLayout({ children }: { children: ReactNode }) {
   return <RootDocument locale="en">{children}</RootDocument>;
 }
-

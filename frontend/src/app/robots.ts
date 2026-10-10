@@ -1,10 +1,13 @@
 import type { MetadataRoute } from 'next';
 
+import { SITE_URL } from '@/lib/seo';
+
+// Source of truth for /robots.txt (no public/robots.txt copy).
 // Static export requires explicitly static data routes.
 export const dynamic = 'force-static';
 
 export default function robots(): MetadataRoute.Robots {
-  const siteUrl = 'https://movieswrapped.com';
+  const siteUrl = SITE_URL;
 
   // Personal results pages must never be indexed — they contain a user's
   // private Letterboxd analysis. The rest of the site is open to everyone,

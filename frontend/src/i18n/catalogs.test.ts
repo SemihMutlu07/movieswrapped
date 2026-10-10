@@ -9,6 +9,11 @@ describe('i18n catalogs and routing', () => {
     expect(Object.keys(tr).sort()).toEqual(Object.keys(en).sort());
   });
 
+  it('names Letterboxd Wrapped 2026 in the landing h1', () => {
+    expect(en['landing.hero.title']).toContain('Letterboxd Wrapped 2026');
+    expect(tr['landing.hero.title']).toContain('Letterboxd Wrapped 2026');
+  });
+
   it('keeps the mobile landing hint on desktop without saying computer', () => {
     expect(en['landing.desktopHint']).toMatch(/desktop/i);
     expect(tr['landing.desktopHint']).toMatch(/desktop/i);
