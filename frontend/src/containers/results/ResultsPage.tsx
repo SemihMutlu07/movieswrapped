@@ -168,21 +168,11 @@ export default function ResultsPage() {
   }, [stats, cineScore]);
 
   const chrome = (
-    <>
-      <ResultsTopBar
-        hasYearWindow={Boolean(stats?.last_12_months)}
-        statsWindow={statsWindow}
-        onStatsWindowChange={handleStatsWindowChange}
-      />
-      {stats?._cached ? (
-        <div
-          data-testid="cached-results-banner"
-          className="border-b border-orange-400/25 bg-orange-400/10 px-4 py-2 text-center text-sm text-orange-200"
-        >
-          {t('results.cached.banner')}
-        </div>
-      ) : null}
-    </>
+    <ResultsTopBar
+      hasYearWindow={Boolean(stats?.last_12_months)}
+      statsWindow={statsWindow}
+      onStatsWindowChange={handleStatsWindowChange}
+    />
   );
 
   if (loading) {

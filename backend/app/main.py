@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.task_manager import cleanup_loop
-from app.routes import analyze, feedback, rss, tmdb
+from app.routes import analyze, feedback, tmdb
 from app import admin, supabase_ops
 from app.services.run_log import cleanup_expired_runs
 
@@ -99,7 +99,6 @@ def create_app() -> FastAPI:
     app.include_router(analyze.router)
     app.include_router(tmdb.router)
     app.include_router(feedback.router)
-    app.include_router(rss.router)
 
     @app.get("/")
     async def root():

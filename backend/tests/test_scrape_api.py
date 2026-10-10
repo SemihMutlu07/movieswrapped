@@ -9,7 +9,6 @@ from httpx import ASGITransport, AsyncClient
 
 from app import task_manager
 from app.services import scraper
-from app.services.letterboxd_rss import RssUnavailable
 from app.services.scrape_pipeline import (
     ScrapeAnalysisEmpty,
     analysis_period_bounds,
@@ -268,14 +267,6 @@ async def test_scrape_pipeline_windowing_and_provenance(monkeypatch):
     monkeypatch.setattr(
         "app.services.scrape_pipeline.process_comprehensive_letterboxd_data",
         fake_analysis,
-    )
-    monkeypatch.setattr(
-        "app.services.scrape_pipeline.fetch_profile_rss",
-        MagicMock(side_effect=RssUnavailable("fixture")),
-    )
-    monkeypatch.setattr(
-        "app.services.scrape_pipeline.probe_profile_access",
-        lambda _username: None,
     )
 
     stats = await scrape_and_analyze(object(), "user1", analysis_period="lifetime")

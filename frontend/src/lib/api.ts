@@ -313,53 +313,6 @@ export async function testBackend(retries = 2, delayMs = 1000) {
   }
 }
 
-export type RssFingerprint = {
-  username: string;
-  checksum: string;
-  latest_guid: string | null;
-  latest_watched_date: string | null;
-  item_count: number;
-  preview_only: true;
-  feed_cap?: number;
-};
-
-/** Public RSS identity only. Never a library and never an HTML scrape. */
-export async function fetchRssFingerprint(
-  username: string,
-  signal?: AbortSignal,
-): Promise<RssFingerprint> {
-  const url = `${API_BASE}/api/rss-fingerprint`;
-  try {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username }),
-      signal,
-    });
-    if (!r.ok) {
-      throw await parseApiFailure(r, 'RSS fingerprint', `rss-fingerprint ${r.status}`);
-    }
-    const data = await r.json();
-    if (!data || typeof data !== 'object' || data.preview_only !== true) {
-      throw new Error('Invalid RSS fingerprint response');
-    }
-    return {
-      username: typeof data.username === 'string' ? data.username : username,
-      checksum: typeof data.checksum === 'string' ? data.checksum : '',
-      latest_guid: typeof data.latest_guid === 'string' ? data.latest_guid : null,
-      latest_watched_date: typeof data.latest_watched_date === 'string' ? data.latest_watched_date : null,
-      item_count: typeof data.item_count === 'number' ? data.item_count : 0,
-      preview_only: true,
-      feed_cap: typeof data.feed_cap === 'number' ? data.feed_cap : undefined,
-    };
-  } catch (error) {
-    if (signal?.aborted || isAbortError(error) || (error instanceof DOMException && error.name === 'AbortError')) {
-      throw new DOMException('Aborted', 'AbortError');
-    }
-    throw handleApiError(error, 'RSS fingerprint');
-  }
-}
-
 export async function parseLetterboxdUsername(filename: string) {
   try {
     const url = `${API_BASE}/api/parse-username`;

@@ -6,12 +6,10 @@ Scrapes Letterboxd HTML and runs the analysis pipeline over synthesized CSVs.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import shutil
 from calendar import monthrange
 from datetime import date, datetime, timezone
-from functools import partial
 from time import monotonic
 import uuid
 from pathlib import Path
@@ -19,15 +17,9 @@ from typing import Any, Callable, Optional
 
 from app.services.analysis import process_comprehensive_letterboxd_data
 from app.services.review_analysis import enrich_scraped_reviews
-from app.services.letterboxd_rss import (
-    RssUnavailable,
-    fetch_profile_rss,
-    rss_fingerprint_metrics,
-)
 from app.services.scraper import (
     diary_to_csv_dicts,
     merge_scraped_films,
-    probe_profile_access,
     scrape_profile_sources,
 )
 from app.services.tmdb_telemetry import TmdbCollector, collecting, current as tmdb_collector_current
@@ -279,23 +271,6 @@ async def _scrape_and_analyze_inner(
 ) -> dict:
     # The outer wrapper already emitted scrape_started; this is the same run.
     period = analysis_period
-    loop = asyncio.get_running_loop()
-    rss = None
-    try:
-        rss = await loop.run_in_executor(None, partial(fetch_profile_rss, username))
-    except RssUnavailable as exc:
-        logger.info("Official RSS unavailable for %s (%s); continuing with HTML scrape", username, exc)
-
-    # HTML probe before emitting RSS posters so a Cloudflare block never
-    # paints a wait-story preview and then fails.
-    await loop.run_in_executor(None, partial(probe_profile_access, username))
-    if rss is not None and trace_callback:
-        trace_callback(
-            "rss_preview",
-            "Public RSS preview (recent diary only, not a full library)",
-            rss_fingerprint_metrics(rss),
-        )
-
     scrape_started = monotonic()
     sources = await scrape_profile_sources(
         username,
@@ -304,7 +279,6 @@ async def _scrape_and_analyze_inner(
         trace_callback=trace_callback,
         diary_cutoff=start_date,
         include_grid=analysis_period == "lifetime",
-        skip_probe=True,
     )
     scrape_seconds = round(monotonic() - scrape_started, 1)
     if trace_callback:
@@ -401,9 +375,6 @@ async def _scrape_and_analyze_inner(
         # Per-job TMDB observability: aggregate counters + stage timings for
         # exactly this run. Integers only — no usernames, titles, queries or keys.
         stats["tmdb_telemetry"] = collector.snapshot()
-        if rss is not None:
-            stats["rss"] = rss_fingerprint_metrics(rss)
-            stats["rss"].pop("sample", None)
         return stats
     finally:
         if request_dir is not None:

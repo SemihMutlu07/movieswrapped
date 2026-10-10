@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildSummaryForPersistence, finishAnalysis, lookupCachedAnalysis, statsFromCachedRun } from './analysis_runs';
+import { describe, expect, it, vi } from 'vitest';
+import { buildSummaryForPersistence, finishAnalysis } from './analysis_runs';
 
 // Supabase client is mocked at module level; finishAnalysis uses it via getSupabase().
 vi.mock('@/lib/supabaseClient', () => ({
@@ -8,38 +8,16 @@ vi.mock('@/lib/supabaseClient', () => ({
 }));
 
 let capturedPayload: Record<string, unknown> | null = null;
-let capturedLookupEqs: { col: string; val: unknown }[] = [];
-let selectRows: Record<string, unknown>[] = [];
-let fromCalls = 0;
-
 const supabaseMock = {
-  from: () => {
-    fromCalls += 1;
-    const lookupChain: {
-      eq: (col: string, val: unknown) => unknown;
-      not: () => unknown;
-      order: () => unknown;
-      limit: () => Promise<{ data: Record<string, unknown>[]; error: null }>;
-    } = {
-      eq: (col: string, val: unknown) => {
-        capturedLookupEqs.push({ col, val });
-        return lookupChain;
-      },
-      not: () => lookupChain,
-      order: () => lookupChain,
-      limit: () => Promise.resolve({ data: selectRows, error: null }),
-    };
-    return {
-      update: (payload: Record<string, unknown>) => {
-        capturedPayload = payload;
-        return {
-          eq: () => ({ select: () => Promise.resolve({ error: null }) }),
-        };
-      },
-      insert: () => Promise.resolve({ error: null }),
-      select: () => lookupChain,
-    };
-  },
+  from: () => ({
+    update: (payload: Record<string, unknown>) => {
+      capturedPayload = payload;
+      return {
+        eq: () => ({ select: () => Promise.resolve({ error: null }) }),
+      };
+    },
+    insert: () => Promise.resolve({ error: null }),
+  }),
 };
 
 describe('buildSummaryForPersistence', () => {
@@ -127,13 +105,6 @@ describe('buildSummaryForPersistence', () => {
 });
 
 describe('finishAnalysis', () => {
-  beforeEach(() => {
-    capturedPayload = null;
-    capturedLookupEqs = [];
-    selectRows = [];
-    fromCalls = 0;
-  });
-
   it('writes task_id, error_code and analysis_version alongside the summary', async () => {
     capturedPayload = null;
 
@@ -169,110 +140,5 @@ describe('finishAnalysis', () => {
 
     expect(capturedPayload).toMatchObject({ ok: false, error_code: 'scrape_failed' });
     expect(capturedPayload).not.toHaveProperty('analysis_version'); // DB default stays
-  });
-
-  it('writes RSS fingerprint columns from persisted summary details', async () => {
-    const summary = buildSummaryForPersistence({
-      total_films: 8,
-      rss: {
-        checksum: 'abc123',
-        latest_guid: 'letterboxd-review-1000',
-        latest_watched_date: '2026-10-09',
-        item_count: 50,
-        sample: [{ title: 'Secret Film' }],
-      },
-    });
-
-    await finishAnalysis({ id: 'run-rss', ok: true, summary });
-
-    expect(capturedPayload).toMatchObject({
-      rss_checksum: 'abc123',
-      rss_latest_guid: 'letterboxd-review-1000',
-      rss_latest_watched_date: '2026-10-09',
-    });
-    expect(JSON.stringify(summary)).not.toContain('Secret Film');
-  });
-});
-
-describe('lookupCachedAnalysis', () => {
-  beforeEach(() => {
-    capturedLookupEqs = [];
-    selectRows = [];
-    fromCalls = 0;
-  });
-
-  it('refuses a username-only lookup', async () => {
-    const result = await lookupCachedAnalysis({ session_id: '', username: 'alice' });
-    expect(result).toBeNull();
-    expect(fromCalls).toBe(0);
-  });
-
-  it('always filters by session_id and username together', async () => {
-    selectRows = [{
-      id: 'run-1',
-      session_id: 'sess-a',
-      username: 'alice',
-      ok: true,
-      summary: { details: { total_films: 12 } },
-      finished_at: '2026-10-09T00:00:00Z',
-      total_films: 12,
-      rss_latest_guid: 'letterboxd-review-1000',
-      rss_latest_watched_date: '2026-10-09',
-    }];
-
-    const result = await lookupCachedAnalysis({ session_id: 'sess-a', username: 'Alice' });
-    expect(capturedLookupEqs).toEqual(
-      expect.arrayContaining([
-        { col: 'session_id', val: 'sess-a' },
-        { col: 'username', val: 'alice' },
-        { col: 'ok', val: true },
-      ]),
-    );
-    expect(result).toMatchObject({
-      session_id: 'sess-a',
-      username: 'alice',
-      total_films: 12,
-      rss_latest_guid: 'letterboxd-review-1000',
-    });
-  });
-
-  it('does not return a row owned by a different session', async () => {
-    selectRows = [{
-      id: 'run-1',
-      session_id: 'other-sess',
-      username: 'alice',
-      summary: { details: { total_films: 12 } },
-      rss_latest_guid: 'letterboxd-review-1000',
-    }];
-
-    const result = await lookupCachedAnalysis({ session_id: 'sess-a', username: 'alice' });
-    expect(result).toBeNull();
-  });
-});
-
-describe('statsFromCachedRun', () => {
-  it('marks restored aggregates as cached', () => {
-    const stats = statsFromCachedRun({
-      id: 'run-1',
-      session_id: 'sess-a',
-      username: 'alice',
-      summary: { details: { total_films: 12 } },
-      details: { total_films: 12, sinefil_meter: { score: 70 } },
-      finished_at: '2026-10-09T00:00:00Z',
-      total_films: 12,
-      sinefil_meter: 70,
-      cinematic_persona: 'The Explorer',
-      average_rating: 3.8,
-      total_countries: 4,
-      rss_checksum: 'abc',
-      rss_latest_guid: 'g1',
-      rss_latest_watched_date: '2026-10-09',
-    }, 'alice');
-    expect(stats).toMatchObject({
-      total_films: 12,
-      scraped_username: 'alice',
-      _cached: true,
-      source: 'cache',
-    });
   });
 });

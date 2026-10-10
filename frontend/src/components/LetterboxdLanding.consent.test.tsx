@@ -20,16 +20,6 @@ const analysisRunMocks = vi.hoisted(() => ({
   startAnalysis: vi.fn(),
   finishAnalysis: vi.fn(),
   buildSummaryForPersistence: vi.fn((stats: Record<string, unknown>) => ({ details: stats })),
-  statsFromCachedRun: vi.fn((run: { details: Record<string, unknown> }, username: string) => ({
-    ...run.details,
-    scraped_username: username,
-    _cached: true,
-  })),
-}));
-
-const cacheMocks = vi.hoisted(() => ({
-  maybeOfferCachedRun: vi.fn(),
-  attachLiveRssFingerprint: vi.fn(),
 }));
 
 const sessionMocks = vi.hoisted(() => ({
@@ -57,7 +47,6 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 vi.mock('@/lib/supabase/analysis_runs', () => analysisRunMocks);
-vi.mock('@/lib/returning-user-cache', () => cacheMocks);
 vi.mock('@/lib/supabase/sessions', () => sessionMocks);
 vi.mock('@/lib/analytics', () => analyticsMocks);
 
@@ -87,8 +76,6 @@ describe('LetterboxdLanding persistence', () => {
     });
     analysisRunMocks.startAnalysis.mockResolvedValue({ id: 'run-1' });
     analysisRunMocks.finishAnalysis.mockResolvedValue(undefined);
-    cacheMocks.maybeOfferCachedRun.mockResolvedValue(null);
-    cacheMocks.attachLiveRssFingerprint.mockResolvedValue(undefined);
     sessionMocks.upsertUserSession.mockResolvedValue(undefined);
     apiMocks.scrapeProfile.mockResolvedValue({
       status: 'success',
@@ -404,43 +391,6 @@ describe('LetterboxdLanding persistence', () => {
     expect(apiMocks.scrapeProfile).toHaveBeenCalledTimes(1);
     expect(document.getElementById('upload-zone-input')).toBeTruthy();
     expect(scrollIntoView).toHaveBeenCalled();
-  });
-
-  it('offers cached aggregates without a new HTML scrape when this session still matches RSS', async () => {
-    cacheMocks.maybeOfferCachedRun.mockResolvedValue({
-      id: 'run-9',
-      session_id: 'sess-a',
-      username: 'alice',
-      summary: { details: { total_films: 42 } },
-      details: { total_films: 42 },
-      finished_at: '2026-10-09T00:00:00Z',
-      total_films: 42,
-      sinefil_meter: 70,
-      cinematic_persona: 'The Explorer',
-      average_rating: 3.8,
-      total_countries: 12,
-      rss_checksum: 'abc',
-      rss_latest_guid: 'letterboxd-review-1000',
-      rss_latest_watched_date: '2026-10-09',
-    });
-
-    const { user } = await submitUsername('alice');
-
-    await waitFor(() => {
-      expect(screen.getByTestId('cached-run-offer')).toBeInTheDocument();
-    });
-    expect(screen.getByTestId('cached-run-badge')).toHaveTextContent(/cached/i);
-    expect(screen.getByRole('button', { name: /re-upload zip/i })).toBeInTheDocument();
-    expect(apiMocks.scrapeProfile).not.toHaveBeenCalled();
-    expect(routerMocks.push).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: /view cached wrap/i }));
-    expect(routerMocks.push).toHaveBeenCalledWith('/en/results?u=alice');
-    expect(JSON.parse(sessionStorage.getItem('letterboxdStats') ?? '{}')).toMatchObject({
-      total_films: 42,
-      _cached: true,
-      scraped_username: 'alice',
-    });
   });
 
   it('renders the FAQ section with all six questions from the catalog', () => {
