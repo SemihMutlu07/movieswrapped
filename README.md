@@ -61,7 +61,7 @@ Username scrape, watchlist jobs, and the desktop worker live on `archive/scrape`
 git clone https://github.com/SemihMutlu07/letterboxd_wrapped.git
 cd letterboxd_wrapped
 
-# Backend
+# Backend (Python 3.11–3.14)
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
