@@ -246,6 +246,43 @@ export async function analyzeFiles(
   }
 }
 
+export async function importScrape(
+  payload: { user: string; films: unknown[]; diary: unknown[] },
+  signal?: AbortSignal,
+  onProgress?: (p: ScrapeProgress) => void,
+): Promise<ScrapeProfileResult> {
+  const url = `${API_BASE}/api/import-scrape`;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    if (!r.ok) {
+      throw await parseApiFailure(r, 'profile import', `import ${r.status}`);
+    }
+    const data = await r.json();
+    if (data && data.task_id && !data.stats) {
+      const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, {
+        onProgress,
+        signal,
+        intervalMs: 400,
+      });
+      return { ...result, task_id: data.task_id };
+    }
+    if (!data || data.status === 'error') {
+      throw new Error(data?.detail || 'Import failed');
+    }
+    return data as ScrapeProfileResult;
+  } catch (error) {
+    if (signal?.aborted || isAbortError(error) || (error instanceof DOMException && error.name === 'AbortError')) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+    throw handleApiError(error, 'profile import');
+  }
+}
+
 export async function scrapeProfile(
   username: string,
   analysisPeriod: AnalysisPeriod = 'lifetime',

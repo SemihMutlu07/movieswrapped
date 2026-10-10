@@ -6,10 +6,12 @@ Scrapes Letterboxd HTML and runs the analysis pipeline over synthesized CSVs.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 from calendar import monthrange
 from datetime import date, datetime, timezone
+from functools import partial
 from time import monotonic
 import uuid
 from pathlib import Path
@@ -18,8 +20,10 @@ from typing import Any, Callable, Optional
 from app.services.analysis import process_comprehensive_letterboxd_data
 from app.services.review_analysis import enrich_scraped_reviews
 from app.services.scraper import (
+    ProfileScrapeSources,
     diary_to_csv_dicts,
     merge_scraped_films,
+    probe_profile_access,
     scrape_profile_sources,
 )
 from app.services.tmdb_telemetry import TmdbCollector, collecting, current as tmdb_collector_current
@@ -223,6 +227,7 @@ async def scrape_and_analyze(
     trace_callback: Optional[TraceCallback] = None,
     analysis_period: str = "lifetime",
     task_id: Optional[str] = None,
+    imported: Optional[ProfileScrapeSources] = None,
 ) -> dict:
     """Scrape a public profile and run the full analysis pipeline.
 
@@ -254,6 +259,7 @@ async def scrape_and_analyze(
             start_date=start_date,
             end_date=end_date,
             task_id=task_id,
+            imported=imported,
         )
 
 
@@ -268,18 +274,26 @@ async def _scrape_and_analyze_inner(
     start_date=None,
     end_date=None,
     task_id: Optional[str] = None,
+    imported: Optional[ProfileScrapeSources] = None,
 ) -> dict:
     # The outer wrapper already emitted scrape_started; this is the same run.
     period = analysis_period
+    loop = asyncio.get_running_loop()
     scrape_started = monotonic()
-    sources = await scrape_profile_sources(
-        username,
-        max_pages=max_pages,
-        include_reviews=True,
-        trace_callback=trace_callback,
-        diary_cutoff=start_date,
-        include_grid=analysis_period == "lifetime",
-    )
+    if imported is None:
+        # Fail closed on Cloudflare before diary and grid pagination.
+        await loop.run_in_executor(None, partial(probe_profile_access, username))
+        sources = await scrape_profile_sources(
+            username,
+            max_pages=max_pages,
+            include_reviews=True,
+            trace_callback=trace_callback,
+            diary_cutoff=start_date,
+            include_grid=analysis_period == "lifetime",
+            skip_probe=True,
+        )
+    else:
+        sources = imported
     scrape_seconds = round(monotonic() - scrape_started, 1)
     if trace_callback:
         trace_callback(

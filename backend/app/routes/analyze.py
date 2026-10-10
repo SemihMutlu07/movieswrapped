@@ -25,6 +25,7 @@ from app.services.scrape_pipeline import (
     normalize_analysis_period,
     scrape_and_analyze,
 )
+from app.services.scraper import sources_from_bookmarklet
 from app.security import client_key, enforce_rate_limit
 
 logger = logging.getLogger("letterboxd_wrapped.analyze")
@@ -269,6 +270,7 @@ async def _run_scrape(
     session,
     username: str,
     analysis_period: str = "lifetime",
+    imported=None,
 ) -> None:
     def _trace(stage: str, message: str, metrics: Optional[dict[str, Any]] = None) -> None:
         task_manager.update_task_progress(task_id, stage, message, metrics=metrics)
@@ -281,6 +283,7 @@ async def _run_scrape(
             analysis_period=analysis_period,
             trace_callback=_trace,
             task_id=task_id,
+            imported=imported,
         )
         task = task_manager.get_task_state(task_id)
         trace_events = task.trace_events if task else None
@@ -405,6 +408,62 @@ async def scrape_profile(request: Request):
     session = request.app.state.aiohttp_session
     asyncio.create_task(_run_scrape(task_id, session, username, analysis_period))
 
+    task = task_manager.get_task_state(task_id)
+    return JSONResponse(
+        status_code=202,
+        content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending"},
+    )
+
+
+MAX_IMPORT_ITEMS = 20_000
+
+
+@router.post("/api/import-scrape", status_code=202)
+async def import_scrape(request: Request):
+    """Analyze bookmarklet JSON (films + diary) without hitting Letterboxd HTML."""
+    enforce_rate_limit(request, "import_scrape", limit=5, window=600)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_json", "message": "Request body must be valid JSON."},
+        )
+    data = body.get("data") if isinstance(body.get("data"), dict) else body
+    raw_username = str((data or {}).get("user") or body.get("username") or "").strip()
+    username = raw_username.lower()
+    if not username or not re.match(r"^[a-z0-9_]+$", username):
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_username", "message": "Please enter a valid Letterboxd username."},
+        )
+    films = data.get("films") if isinstance(data.get("films"), list) else []
+    diary = data.get("diary") if isinstance(data.get("diary"), list) else []
+    if len(films) + len(diary) > MAX_IMPORT_ITEMS:
+        raise HTTPException(
+            status_code=413,
+            detail={"error_code": "payload_too_large", "message": "Import contains too many items."},
+        )
+    if not films and not diary:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "no_films", "message": "Import JSON has no films or diary entries."},
+        )
+    raw_period = body.get("period") or body.get("analysis_period")
+    try:
+        analysis_period = normalize_analysis_period(raw_period)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_analysis_period", "message": str(exc)},
+        ) from exc
+
+    imported = sources_from_bookmarklet({"films": films, "diary": diary})
+    task_id = task_manager.create_task_state(client_key(request))
+    session = request.app.state.aiohttp_session
+    asyncio.create_task(
+        _run_scrape(task_id, session, username, analysis_period, imported=imported)
+    )
     task = task_manager.get_task_state(task_id)
     return JSONResponse(
         status_code=202,

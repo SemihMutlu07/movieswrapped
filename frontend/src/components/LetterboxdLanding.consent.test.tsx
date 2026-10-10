@@ -153,6 +153,14 @@ describe('LetterboxdLanding persistence', () => {
       'analyze_started',
       { method: 'scrape', analysis_period: 'lifetime' },
     );
+    expect(analyticsMocks.trackEvent).toHaveBeenCalledWith(
+      'scrape_started',
+      { method: 'scrape' },
+    );
+    expect(analyticsMocks.trackEvent).toHaveBeenCalledWith(
+      'scrape_done',
+      expect.objectContaining({ method: 'scrape', films: 12, diary: 0 }),
+    );
 
     await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith('/en/story?u=alice'));
     expect(storedAtNavigation).toMatchObject({ scraped_username: 'alice', total_films: 12 });

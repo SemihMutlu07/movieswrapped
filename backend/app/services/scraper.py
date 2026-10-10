@@ -1,23 +1,28 @@
-"""Letterboxd public profile scraper (HTML parsing via cloudscraper + BeautifulSoup).
+"""Letterboxd public profile scraper (HTML parsing via httpx + curl_cffi + BeautifulSoup).
 
-Scrapes public watched films, diary entries, profile overview, and reviews.
-Review liker identity pages stay off the wrapped critical path.
+Films grid pages use plain httpx. Diary pages use curl_cffi with Safari
+impersonation. Cloudflare/403 fails immediately so the product can send
+the user to ZIP upload.
 """
 
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date
 from functools import partial
 import logging
 import os
 import re
+import threading
 import time
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
 
-import cloudscraper
+from curl_cffi import requests as cffi_requests
+from curl_cffi.requests.exceptions import RequestException as CurlRequestException
+import httpx
 import requests
 from bs4 import BeautifulSoup
 
@@ -27,7 +32,7 @@ BASE_URL = "https://letterboxd.com"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
@@ -37,6 +42,10 @@ PAGE_DELAY = float(os.getenv("LETTERBOXD_PAGE_DELAY", "0.25"))
 MAX_PAGES = int(os.getenv("LETTERBOXD_MAX_PAGES", "60"))  # safety cap (~3000 films)
 LIKER_MAX_PAGES = int(os.getenv("LETTERBOXD_LIKER_MAX_PAGES", "20"))
 PREVIEW_ITEM_LIMIT = 8
+GRID_CONCURRENCY = max(1, int(os.getenv("LETTERBOXD_GRID_CONCURRENCY", "3")))
+FETCH_RETRIES = max(1, int(os.getenv("LETTERBOXD_FETCH_RETRIES", "3")))
+RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+SAFARI_IMPERSONATE = os.getenv("LETTERBOXD_SAFARI_IMPERSONATE", "safari")
 
 # Terminal messages — never retry these from the same cloud IP.
 BLOCKED_MESSAGE = (
@@ -73,23 +82,130 @@ class ProfileScrapeSources:
     profile_avatar_url: Optional[str] = None
 
 
-def _new_session() -> requests.Session:
-    """Letterboxd sits behind Cloudflare. Plain requests sessions get challenged."""
-    session = cloudscraper.create_scraper()
-    session.headers.update(HEADERS)
-    return session
+class LetterboxdSession:
+    """Two transports, one duck-typed .get/.close used by the rest of this module.
+
+    Grid and overview use plain httpx. Diary (Cloudflare) uses curl_cffi Safari.
+    Tests may still pass a MagicMock with .get/.close; _fetch forwards to it.
+    """
+
+    def __init__(self) -> None:
+        self.plain = httpx.Client(headers=HEADERS, timeout=15.0, follow_redirects=True)
+        self.safari = cffi_requests.Session(impersonate=SAFARI_IMPERSONATE)
+        self.safari.headers.update(HEADERS)
+        self._plain_lock = threading.Lock()
+        self._safari_lock = threading.Lock()
+
+    def get(self, url: str, timeout: int = 10):
+        kind = _kind_for_url(url)
+        last_error: Exception | None = None
+        for attempt in range(FETCH_RETRIES):
+            try:
+                if kind == "safari":
+                    with self._safari_lock:
+                        response = self.safari.get(url, timeout=timeout)
+                else:
+                    with self._plain_lock:
+                        response = self.plain.get(url, timeout=timeout)
+            except (httpx.HTTPError, CurlRequestException, OSError) as exc:
+                last_error = exc
+                if attempt + 1 >= FETCH_RETRIES:
+                    raise
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            status = getattr(response, "status_code", 0)
+            body = getattr(response, "text", "") or ""
+            if status in RETRYABLE_STATUS and attempt + 1 < FETCH_RETRIES:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            if _is_cloudflare_block(body) or status == 403:
+                return response
+            return response
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"Letterboxd request failed for {url}")
+
+    def close(self) -> None:
+        try:
+            self.plain.close()
+        finally:
+            try:
+                self.safari.close()
+            except Exception:
+                pass
 
 
-def _warm_session(session: requests.Session) -> None:
+def _kind_for_url(url: str) -> str:
+    path = urlparse(url).path.lower()
+    if "/films/diary" in path:
+        return "safari"
+    return "plain"
+
+
+def _new_session() -> LetterboxdSession:
+    return LetterboxdSession()
+
+
+def _warm_session(session: Any) -> None:
     try:
-        session.get(BASE_URL, timeout=10)
+        if isinstance(session, LetterboxdSession):
+            session.safari.get(BASE_URL, timeout=10)
+        elif hasattr(session, "get"):
+            session.get(BASE_URL, timeout=10)
     except Exception:
         pass
     time.sleep(0.3)
 
 
-def _fetch(session: requests.Session, url: str, timeout: int = 10):
+def _fetch(session: Any, url: str, timeout: int = 10):
+    """Fetch one Letterboxd page. Tests monkeypatch this function."""
     return session.get(url, timeout=timeout)
+
+
+def _last_page(soup: BeautifulSoup) -> int:
+    last = 1
+    for anchor in soup.select(".paginate-pages a, .paginate-page a"):
+        try:
+            value = int(anchor.get_text(strip=True))
+        except (TypeError, ValueError):
+            continue
+        if value > last:
+            last = value
+    return last
+
+
+def sources_from_bookmarklet(payload: dict[str, Any]) -> ProfileScrapeSources:
+    """Adapt bookmarklet /import JSON into the scraper film dicts."""
+    raw_films = payload.get("films") if isinstance(payload.get("films"), list) else []
+    raw_diary = payload.get("diary") if isinstance(payload.get("diary"), list) else []
+
+    def as_film(item: Any, *, diary: bool) -> dict | None:
+        if not isinstance(item, dict):
+            return None
+        title = str(item.get("title") or "").strip()
+        if not title:
+            return None
+        year_val = item.get("year")
+        year = str(year_val).strip() if year_val not in (None, "") else ""
+        watch_date = ""
+        if diary:
+            watch_date = str(item.get("watchedDate") or item.get("watch_date") or "").strip()
+        rating = item.get("rating")
+        if isinstance(rating, (int, float)):
+            rating_val: Optional[float] = float(rating)
+        else:
+            rating_val = None
+        return {
+            "title": title,
+            "year": year,
+            "rating": rating_val,
+            "watch_date": watch_date,
+            "slug": str(item.get("slug") or ""),
+        }
+
+    grid = [row for row in (as_film(item, diary=False) for item in raw_films) if row]
+    diary = [row for row in (as_film(item, diary=True) for item in raw_diary) if row]
+    return ProfileScrapeSources(diary=diary, grid=grid, film_count=len(grid))
 
 
 def _is_cloudflare_block(body: str) -> bool:
@@ -116,16 +232,23 @@ def _raise_for_letterboxd_gate(response, username: str, *, missing_is_not_found:
         raise RuntimeError(f"Letterboxd returned HTTP {status} for '{username}'")
 
 
-def _probe_profile_access(username: str, session: Optional[requests.Session] = None) -> None:
-    """Single GET of /{username}/ before any diary/grid/review pagination.
+def probe_profile_access(username: str, session: Optional[Any] = None) -> None:
+    """Public alias used by the scrape pipeline before diary and grid pagination."""
+    _probe_profile_access(username, session=session)
 
-    Distinguishes missing profiles (404) from Cloudflare/bot blocks so the
-    product can send the user to ZIP upload instead of spinning a wait story.
+
+def _probe_profile_access(username: str, session: Optional[Any] = None) -> None:
+    """Single GET of /{username}/films/page/1/ before diary/grid pagination.
+
+    The films grid is the plain-httpx path. Probing the profile homepage
+    would fail closed on Cloudflare even when the grid is readable.
+    Distinguishes missing profiles (404) from bot blocks so the product
+    can send the user to ZIP upload.
     """
     owns_session = session is None
     s = session or _new_session()
     try:
-        r = _fetch(s, f"{BASE_URL}/{username}/", timeout=10)
+        r = _fetch(s, f"{BASE_URL}/{username}/films/page/1/", timeout=10)
         _raise_for_letterboxd_gate(r, username, missing_is_not_found=True)
     finally:
         if owns_session:
@@ -260,6 +383,49 @@ def _parse_grid_items(soup: BeautifulSoup) -> list[dict]:
     """Parse film grid items from Letterboxd grid pages."""
     films: list[dict] = []
 
+    # Strategy 0: bookmarklet-compatible grid (li.griditem / li.poster-container
+    # with data-item-slug and rated-N). Ratings live on the tile, not only on
+    # the legacy LazyPoster wrapper.
+    for li in soup.select("li.griditem, li.poster-container"):
+        poster = li.select_one("[data-item-slug], [data-film-slug]")
+        if not poster:
+            continue
+        item_name = str(poster.get("data-item-name") or poster.get("data-film-name") or "")
+        slug = str(poster.get("data-item-slug") or poster.get("data-film-slug") or "")
+        m = re.match(r"^(.+) \((\d{4})\)$", item_name)
+        if m:
+            title, year = m.group(1), m.group(2)
+        else:
+            title, year = item_name, ""
+        if not title:
+            img = li.find("img")
+            alt = str(img.get("alt") or "").strip() if img else ""
+            m = re.match(r"^(.+)\s*\((\d{4})\)$", alt)
+            if m:
+                title, year = m.group(1).strip(), m.group(2)
+            else:
+                title = alt
+        rating = _parse_rating(li.select_one('span.rating[class*="rated-"], span.rating'))
+        poster_url = ""
+        if poster.has_attr("data-poster-url"):
+            poster_url = str(poster.get("data-poster-url") or "")
+        if not poster_url:
+            img = poster.find("img") or li.find("img")
+            if img:
+                poster_url = str(img.get("data-src") or img.get("src") or "")
+        poster_url = _normalize_poster_url(poster_url)
+        if title:
+            films.append({
+                "title": title,
+                "year": year,
+                "rating": rating,
+                "watch_date": "",
+                "slug": slug,
+                "poster_url": poster_url,
+            })
+    if films:
+        return films
+
     # Strategy 1: legacy selector (pre-mid 2025)
     for li in soup.select("li.griditem"):
         poster = li.select_one('div[data-component-class="LazyPoster"]')
@@ -275,7 +441,7 @@ def _parse_grid_items(soup: BeautifulSoup) -> list[dict]:
         else:
             title, year = item_name, ""
 
-        rating = _parse_rating(li.select_one("span.rating"))
+        rating = _parse_rating(li.select_one('span.rating[class*="rated-"], span.rating'))
 
         poster_url = ""
         if poster.has_attr("data-poster-url"):
@@ -327,11 +493,12 @@ def _parse_grid_items(soup: BeautifulSoup) -> list[dict]:
                 if m:
                     slug = m.group(1)
 
+        rating = _parse_rating(container.select_one('span.rating[class*="rated-"], span.rating'))
         if title:
             films.append({
                 "title": title,
                 "year": year,
-                "rating": None,
+                "rating": rating,
                 "watch_date": "",
                 "slug": slug,
                 "poster_url": poster_url,
@@ -584,14 +751,42 @@ def _crawl_likers_into(
     )
 
 
+def _diary_page_url(username: str, page: int) -> str:
+    return f"{BASE_URL}/{username}/films/diary/page/{page}/"
+
+
+def _grid_page_url(username: str, page: int) -> str:
+    return f"{BASE_URL}/{username}/films/page/{page}/"
+
+
+def _checked_page(session: Any, url: str, username: str, page: int, *, kind: str):
+    r = _fetch(session, url, timeout=10)
+    if r.status_code == 404:
+        logger.warning("%s page %d: 404 for %s", kind, page, username)
+        if page == 1:
+            raise ValueError(f"User '{username}' not found")
+        return None
+    if r.status_code == 403:
+        logger.error("Letterboxd returned 403 for %s %s page %d — bot detection blocked", username, kind, page)
+    if r.status_code == 429:
+        logger.warning("Letterboxd rate-limited %s request for %s page %d", kind, username, page)
+    if _is_cloudflare_block(r.text):
+        logger.warning("%s page %d: Cloudflare block for %s", kind.capitalize(), page, username)
+    _raise_for_letterboxd_gate(r, username, missing_is_not_found=False)
+    if r.status_code != 200:
+        logger.warning("%s page %d: unexpected status %d for %s", kind.capitalize(), page, r.status_code, username)
+        raise RuntimeError(f"Letterboxd returned HTTP {r.status_code} for '{username}'")
+    return r
+
+
 def _sync_scrape_diary(
     username: str,
     max_pages: int,
-    session: Optional[requests.Session] = None,
+    session: Optional[Any] = None,
     trace_callback: Optional[TraceCallback] = None,
     cutoff_date: Optional[date] = None,
 ) -> list[dict]:
-    """Synchronous diary scraper."""
+    """Synchronous diary scraper (curl_cffi Safari via LetterboxdSession)."""
     owns_session = session is None
     logger.info("Starting diary scrape for %s (max_pages=%d)", username, max_pages)
     s = session or _new_session()
@@ -603,42 +798,31 @@ def _sync_scrape_diary(
     monotonic_dates = True
 
     try:
-        for page in range(1, max_pages + 1):
-            url = f"{BASE_URL}/{username}/films/diary/page/{page}/"
-            logger.debug("Diary page %d: GET %s", page, url)
-            r = _fetch(s, url, timeout=10)
+        r = _checked_page(s, _diary_page_url(username, 1), username, 1, kind="diary")
+        if r is None:
+            logger.info("Diary scrape complete for %s: %d films", username, 0)
+            _trace(trace_callback, "diary_done", "Diary scrape completed", {"films": 0, "sample": []})
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        films = _parse_diary_rows(soup)
+        logger.info("Diary page %d parsed %d films for %s", 1, len(films), username)
+        _trace(
+            trace_callback,
+            "diary_page",
+            "Diary page 1 parsed",
+            {"page": 1, "films": len(films), "status_code": r.status_code},
+        )
+        all_films.extend(films)
+        last_page = _last_page(soup)
+        known_last = last_page > 1
+        remaining = range(2, min(last_page if known_last else max_pages, max_pages) + 1)
+        if not films and not known_last:
+            remaining = range(2, 2)
 
-            if r.status_code == 404:
-                logger.warning("Diary page %d: 404 for %s", page, username)
-                if page == 1:
-                    raise ValueError(f"User '{username}' not found")
-                break
-            if r.status_code == 403:
-                logger.error("Letterboxd returned 403 for %s diary page %d — bot detection blocked", username, page)
-            if r.status_code == 429:
-                logger.warning("Letterboxd rate-limited diary request for %s page %d", username, page)
-            if _is_cloudflare_block(r.text):
-                logger.warning("Diary page %d: Cloudflare block for %s", page, username)
-            _raise_for_letterboxd_gate(r, username, missing_is_not_found=False)
-            if r.status_code != 200:
-                logger.warning("Diary page %d: unexpected status %d for %s", page, r.status_code, username)
-                raise RuntimeError(f"Letterboxd returned HTTP {r.status_code} for '{username}'")
-            soup = BeautifulSoup(r.text, "html.parser")
-            films = _parse_diary_rows(soup)
-            logger.info("Diary page %d parsed %d films for %s", page, len(films), username)
-            _trace(
-                trace_callback,
-                "diary_page",
-                f"Diary page {page} parsed",
-                {"page": page, "films": len(films), "status_code": r.status_code},
-            )
-
-            if not films:
-                break
-
-            all_films.extend(films)
+        def _note_dates(page_films: list[dict]) -> bool:
+            nonlocal last_seen_date, monotonic_dates
             parsed_dates: list[date] = []
-            for film in films:
+            for film in page_films:
                 try:
                     parsed_date = date.fromisoformat(str(film.get("watch_date") or ""))
                 except ValueError:
@@ -648,11 +832,10 @@ def _sync_scrape_diary(
                     monotonic_dates = False
                 last_seen_date = parsed_date
                 parsed_dates.append(parsed_date)
-
             if (
                 cutoff_date is not None
                 and monotonic_dates
-                and len(parsed_dates) == len(films)
+                and len(parsed_dates) == len(page_films)
                 and parsed_dates
                 and parsed_dates[-1] < cutoff_date
             ):
@@ -660,10 +843,35 @@ def _sync_scrape_diary(
                     trace_callback,
                     "diary_period_complete",
                     "Diary period boundary reached",
-                    {"page": page, "cutoff_date": cutoff_date.isoformat()},
+                    {"cutoff_date": cutoff_date.isoformat()},
                 )
-                break
+                return True
+            return False
+
+        if films and _note_dates(films):
+            remaining = range(2, 2)
+
+        for page in remaining:
             time.sleep(PAGE_DELAY)
+            r = _checked_page(s, _diary_page_url(username, page), username, page, kind="diary")
+            if r is None:
+                break
+            soup = BeautifulSoup(r.text, "html.parser")
+            films = _parse_diary_rows(soup)
+            logger.info("Diary page %d parsed %d films for %s", page, len(films), username)
+            _trace(
+                trace_callback,
+                "diary_page",
+                f"Diary page {page} parsed",
+                {"page": page, "films": len(films), "status_code": r.status_code},
+            )
+            if not films:
+                if known_last:
+                    continue
+                break
+            all_films.extend(films)
+            if _note_dates(films):
+                break
     finally:
         if owns_session:
             s.close()
@@ -678,13 +886,29 @@ def _sync_scrape_diary(
     return all_films
 
 
+def _fetch_grid_page(session: Any, username: str, page: int, trace_callback: Optional[TraceCallback]) -> list[dict]:
+    r = _checked_page(session, _grid_page_url(username, page), username, page, kind="grid")
+    if r is None:
+        return []
+    soup = BeautifulSoup(r.text, "html.parser")
+    films = _parse_grid_items(soup)
+    logger.info("Grid page %d parsed %d films for %s", page, len(films), username)
+    _trace(
+        trace_callback,
+        "grid_page",
+        f"Grid page {page} parsed",
+        {"page": page, "films": len(films), "status_code": r.status_code},
+    )
+    return films
+
+
 def _sync_scrape_films_grid(
     username: str,
     max_pages: int,
-    session: Optional[requests.Session] = None,
+    session: Optional[Any] = None,
     trace_callback: Optional[TraceCallback] = None,
 ) -> list[dict]:
-    """Synchronous full-watched grid scraper."""
+    """Synchronous full-watched grid scraper (plain httpx via LetterboxdSession)."""
     owns_session = session is None
     logger.info("Starting grid scrape for %s (max_pages=%d)", username, max_pages)
     s = session or _new_session()
@@ -694,40 +918,49 @@ def _sync_scrape_films_grid(
     all_films: list[dict] = []
 
     try:
-        for page in range(1, max_pages + 1):
-            url = f"{BASE_URL}/{username}/films/page/{page}/"
-            logger.debug("Grid page %d: GET %s", page, url)
-            r = _fetch(s, url, timeout=10)
-
-            if r.status_code == 404:
-                logger.warning("Grid page %d: 404 for %s", page, username)
-                if page == 1:
-                    raise ValueError(f"User '{username}' not found")
-                break
-            if r.status_code == 403:
-                logger.error("Letterboxd returned 403 for %s page %d — bot detection blocked", username, page)
-            if r.status_code == 429:
-                logger.warning("Letterboxd rate-limited request for %s page %d", username, page)
-            if _is_cloudflare_block(r.text):
-                logger.warning("Grid page %d: Cloudflare block for %s", page, username)
-            _raise_for_letterboxd_gate(r, username, missing_is_not_found=False)
-            if r.status_code != 200:
-                logger.warning("Grid page %d: unexpected status %d for %s", page, r.status_code, username)
-                raise RuntimeError(f"Letterboxd returned HTTP {r.status_code} for '{username}'")
+        r = _checked_page(s, _grid_page_url(username, 1), username, 1, kind="grid")
+        if r is None:
+            films = []
+            last_page = 1
+        else:
             soup = BeautifulSoup(r.text, "html.parser")
             films = _parse_grid_items(soup)
-            logger.info("Grid page %d parsed %d films for %s", page, len(films), username)
+            last_page = _last_page(soup)
+            logger.info("Grid page %d parsed %d films for %s", 1, len(films), username)
             _trace(
                 trace_callback,
                 "grid_page",
-                f"Grid page {page} parsed",
-                {"page": page, "films": len(films), "status_code": r.status_code},
+                "Grid page 1 parsed",
+                {"page": 1, "films": len(films), "status_code": r.status_code},
             )
-            if not films:
-                break
+        all_films.extend(films)
+        known_last = last_page > 1
+        remaining = list(range(2, min(last_page if known_last else max_pages, max_pages) + 1))
+        if not films and not known_last:
+            remaining = []
 
-            all_films.extend(films)
-            time.sleep(PAGE_DELAY)
+        if known_last and remaining:
+            errors: list[BaseException] = []
+            with ThreadPoolExecutor(max_workers=GRID_CONCURRENCY) as pool:
+                futures = []
+                for index, page in enumerate(remaining):
+                    if index:
+                        time.sleep(PAGE_DELAY)
+                    futures.append(pool.submit(_fetch_grid_page, s, username, page, trace_callback))
+                for future in as_completed(futures):
+                    try:
+                        all_films.extend(future.result())
+                    except BaseException as exc:
+                        errors.append(exc)
+                if errors:
+                    raise errors[0]
+        else:
+            for page in remaining:
+                time.sleep(PAGE_DELAY)
+                page_films = _fetch_grid_page(s, username, page, trace_callback)
+                if not page_films:
+                    break
+                all_films.extend(page_films)
     finally:
         if owns_session:
             s.close()
@@ -993,11 +1226,13 @@ async def scrape_profile_sources(
     trace_callback: Optional[TraceCallback] = None,
     diary_cutoff: Optional[date] = None,
     include_grid: bool = True,
+    skip_probe: bool = False,
 ) -> ProfileScrapeSources:
     """Scrape diary, grid, overview (and optionally reviews) concurrently."""
     loop = _get_loop()
     # One profile GET first. Cloudflare/403 must not fan out into diary+grid+reviews.
-    await loop.run_in_executor(None, partial(_probe_profile_access, username))
+    if not skip_probe:
+        await loop.run_in_executor(None, partial(_probe_profile_access, username))
     diary_call = (
         partial(_sync_scrape_diary, username, max_pages, None, trace_callback)
         if diary_cutoff is None
@@ -1041,7 +1276,7 @@ async def scrape_profile_sources(
 
     # Fail fast if any film source hit a block, rate limit, or unexpected HTTP error
     for res in (diary_res, grid_res):
-        if isinstance(res, (RuntimeError, requests.RequestException)):
+        if isinstance(res, (RuntimeError, requests.RequestException, httpx.HTTPError, OSError)):
             raise res
         if isinstance(res, ValueError):
             msg = str(res)

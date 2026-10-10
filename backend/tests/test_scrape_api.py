@@ -320,7 +320,7 @@ def test_probe_profile_access_cloudflare_is_terminal(monkeypatch):
     monkeypatch.setattr(scraper, "_fetch", fake_fetch)
     with pytest.raises(ValueError, match="blocking automated access"):
         scraper._probe_profile_access("public_user")
-    assert calls == ["https://letterboxd.com/public_user/"]
+    assert calls == ["https://letterboxd.com/public_user/films/page/1/"]
 
 
 def test_probe_profile_access_challenge_html_is_terminal(monkeypatch):
@@ -407,3 +407,85 @@ def test_scraper_reviews_http_block_and_rate_limit(monkeypatch):
     monkeypatch.setattr(scraper, "_fetch", lambda *args, **kwargs: resp_500)
     with pytest.raises(RuntimeError, match="Letterboxd returned HTTP 500"):
         scraper._sync_scrape_reviews("user", 1, session=session)
+
+
+def test_kind_for_url_routes_diary_to_safari():
+    assert scraper._kind_for_url("https://letterboxd.com/dave/films/diary/page/2/") == "safari"
+    assert scraper._kind_for_url("https://letterboxd.com/dave/films/page/2/") == "plain"
+    assert scraper._kind_for_url("https://letterboxd.com/dave/") == "plain"
+
+
+def test_last_page_reads_paginate_links():
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(
+        '<div class="paginate-pages"><a>1</a><a>2</a><a>14</a></div>',
+        "html.parser",
+    )
+    assert scraper._last_page(soup) == 14
+    assert scraper._last_page(BeautifulSoup("<div></div>", "html.parser")) == 1
+
+
+def test_parse_grid_items_reads_ratings_from_tile():
+    from bs4 import BeautifulSoup
+
+    html = """
+    <ul>
+      <li class="griditem">
+        <div data-item-slug="heat" data-item-name="Heat (1995)"></div>
+        <span class="rating rated-9">★★★★½</span>
+      </li>
+    </ul>
+    """
+    films = scraper._parse_grid_items(BeautifulSoup(html, "html.parser"))
+    assert films == [
+        {
+            "title": "Heat",
+            "year": "1995",
+            "rating": 4.5,
+            "watch_date": "",
+            "slug": "heat",
+            "poster_url": "",
+        }
+    ]
+
+
+def test_sources_from_bookmarklet_maps_watched_date():
+    sources = scraper.sources_from_bookmarklet({
+        "films": [{"title": "Heat", "year": 1995, "rating": 4.5, "slug": "heat"}],
+        "diary": [{
+            "title": "Heat",
+            "year": 1995,
+            "rating": 4.5,
+            "watchedDate": "2024-01-02",
+            "slug": "heat",
+        }],
+    })
+    assert sources.film_count == 1
+    assert sources.grid[0]["title"] == "Heat"
+    assert sources.diary[0]["watch_date"] == "2024-01-02"
+    assert sources.diary[0]["rating"] == 4.5
+
+
+@pytest.mark.asyncio
+async def test_import_scrape_route_submission(client: AsyncClient):
+    with patch("app.routes.analyze._run_scrape", new=AsyncMock()):
+        r = await client.post(
+            "/api/import-scrape",
+            json={
+                "user": "dave",
+                "films": [{"title": "Heat", "year": 1995}],
+                "diary": [],
+            },
+        )
+        assert r.status_code == 202
+        data = r.json()
+        assert "task_id" in data
+        assert data["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_import_scrape_rejects_empty_payload(client: AsyncClient):
+    r = await client.post("/api/import-scrape", json={"user": "dave", "films": [], "diary": []})
+    assert r.status_code == 400
+    assert r.json()["detail"]["error_code"] == "no_films"
