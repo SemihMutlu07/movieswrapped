@@ -14,10 +14,17 @@ import {
   type ScrapeProgress,
 } from '@/lib/api';
 import { persistStats } from '@/lib/stats-storage';
-import { startAnalysis, finishAnalysis, buildSummaryForPersistence } from '@/lib/supabase/analysis_runs';
+import {
+  startAnalysis,
+  finishAnalysis,
+  buildSummaryForPersistence,
+  statsFromCachedRun,
+  type CachedAnalysisRun,
+} from '@/lib/supabase/analysis_runs';
+import { attachLiveRssFingerprint, maybeOfferCachedRun } from '@/lib/returning-user-cache';
 import { upsertUserSession } from '@/lib/supabase/sessions';
 import { ensureSessionId, getUsername, setUsername, getConsent } from '@/lib/session-id';
-import { storyPath } from '@/lib/routes';
+import { resultPath, storyPath } from '@/lib/routes';
 import { trackEvent, trackConsentedEvent, trackFilmStats } from '@/lib/analytics';
 import { needsZipFallback, normalizeError, type NormalizedError } from '@/lib/errors';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -28,6 +35,7 @@ import LoadingScreen from '@/components/landing/LoadingScreen';
 import UploadZone from '@/components/landing/UploadZone';
 import ExportInstructions from '@/components/landing/ExportInstructions';
 import ScrapeStoryWait from '@/components/landing/ScrapeStoryWait';
+import CachedRunOffer from '@/components/landing/CachedRunOffer';
 import { usePhoneLayout } from '@/hooks/usePhoneLayout';
 
 const USERNAME_PLACEHOLDER_EXAMPLES = [
@@ -153,9 +161,12 @@ export default function LetterboxdLanding() {
   const uploadSectionRef = useRef<HTMLElement | null>(null);
   const usernamePlaceholder = useTypewriterPlaceholder(USERNAME_PLACEHOLDER_EXAMPLES, true);
   const [backendOffline, setBackendOffline] = useState(false);
+  const [cachedOffer, setCachedOffer] = useState<{ username: string; run: CachedAnalysisRun } | null>(null);
+  const [isCheckingCache, setIsCheckingCache] = useState(false);
   const analysisGeneration = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const lastUploadRef = useRef<File[] | null>(null);
+  const skipCacheRef = useRef(false);
 
   useEffect(() => {
     const testBackendConnectivity = async () => {
@@ -347,7 +358,15 @@ export default function LetterboxdLanding() {
       const durationMs = performance.now() - startedAt;
       if (!stillCurrent()) return;
 
-      if (detectedUsername) setUsername(detectedUsername);
+      if (detectedUsername) {
+        setUsername(detectedUsername);
+        await attachLiveRssFingerprint(
+          result.stats as Record<string, unknown>,
+          detectedUsername,
+          controller.signal,
+        );
+      }
+      if (!stillCurrent()) return;
       const { dropped } = persistStats(result.stats);
       if (dropped.length > 0) {
         trackEvent('stats_storage_degraded', {
@@ -434,10 +453,6 @@ export default function LetterboxdLanding() {
     }
 
     lastActionRef.current = 'scrape';
-    setActiveScrapeUsername(username);
-    setIsScraping(true);
-    setScrapeProgress(null);
-    setScrapeResultReady(false);
     setError(null);
     analysisGeneration.current += 1;
     const generation = analysisGeneration.current;
@@ -446,12 +461,36 @@ export default function LetterboxdLanding() {
     abortRef.current = controller;
     const stillCurrent = () => generation === analysisGeneration.current && !controller.signal.aborted;
 
+    const sessionId = ensureSessionId();
+    if (!skipCacheRef.current) {
+      setIsCheckingCache(true);
+      try {
+        const cached = await maybeOfferCachedRun({ session_id: sessionId, username });
+        if (!stillCurrent()) return;
+        if (cached) {
+          setCachedOffer({ username, run: cached });
+          setIsCheckingCache(false);
+          trackEvent('cache_offered');
+          return;
+        }
+      } catch {
+        /* cache miss is non-fatal; fall through to scrape */
+      }
+      if (!stillCurrent()) return;
+      setIsCheckingCache(false);
+    }
+    skipCacheRef.current = false;
+    setCachedOffer(null);
+    setActiveScrapeUsername(username);
+    setIsScraping(true);
+    setScrapeProgress(null);
+    setScrapeResultReady(false);
+
     trackEvent('analyze_started', { method: 'scrape', analysis_period: 'lifetime' });
     const destination = storyPath(username, locale);
     storyDestinationRef.current = destination;
     router.prefetch(destination);
 
-    const sessionId = ensureSessionId();
     const hasPersistenceConsent = getConsent() === 'accept';
     let analysisRun: { id: string } | null = null;
     let startedAt = 0;
@@ -566,13 +605,34 @@ export default function LetterboxdLanding() {
     abortRef.current?.abort();
     abortRef.current = null;
     storyDestinationRef.current = null;
+    skipCacheRef.current = false;
     setIsUploading(false);
     setIsScraping(false);
+    setIsCheckingCache(false);
+    setCachedOffer(null);
     setActiveScrapeUsername('');
     setScrapeProgress(null);
     setScrapeResultReady(false);
     setError(null);
   }, []);
+
+  const handleViewCached = useCallback(() => {
+    if (!cachedOffer) return;
+    setUsername(cachedOffer.username);
+    persistStats(statsFromCachedRun(cachedOffer.run, cachedOffer.username));
+    router.push(resultPath(cachedOffer.username, locale));
+  }, [cachedOffer, locale, router]);
+
+  const handleReuploadFromCache = useCallback(() => {
+    setCachedOffer(null);
+    uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const handleAnalyzeLiveFromCache = useCallback(() => {
+    skipCacheRef.current = true;
+    setCachedOffer(null);
+    void handleScrape();
+  }, [handleScrape]);
 
   const handleRetry = useCallback(() => {
     if (error && needsZipFallback(error.reason)) {
@@ -672,6 +732,16 @@ export default function LetterboxdLanding() {
             />
           )}
 
+          {cachedOffer && (
+            <CachedRunOffer
+              username={cachedOffer.username}
+              run={cachedOffer.run}
+              onViewCached={handleViewCached}
+              onReuploadZip={handleReuploadFromCache}
+              onAnalyzeLive={handleAnalyzeLiveFromCache}
+            />
+          )}
+
           <section aria-label={t('landing.username.section')}>
             <div
               className="rounded-2xl p-5 sm:p-6 text-center backdrop-blur-sm"
@@ -715,7 +785,7 @@ export default function LetterboxdLanding() {
                   </label>
                   <button
                     type="submit"
-                    disabled={!usernameInput.trim()}
+                    disabled={!usernameInput.trim() || isCheckingCache}
                     className="rounded-xl px-6 py-3 text-base font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed"
                     style={
                       usernameInput.trim()
