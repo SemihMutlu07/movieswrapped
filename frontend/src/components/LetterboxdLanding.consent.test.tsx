@@ -53,6 +53,14 @@ vi.mock('@/lib/analytics', () => analyticsMocks);
 
 import LetterboxdLanding from './LetterboxdLanding';
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 describe('LetterboxdLanding persistence', () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -161,7 +169,7 @@ describe('LetterboxdLanding persistence', () => {
     sessionStorage.setItem('username', 'bob');
     sessionStorage.setItem('lb_username', 'bob');
 
-    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveScrape } = deferred<unknown>();
     apiMocks.scrapeProfile.mockReturnValue(promise);
 
     await submitUsername('https://letterboxd.com/alice/');
@@ -187,7 +195,7 @@ describe('LetterboxdLanding persistence', () => {
   });
 
   it('suppresses late stats and navigation when scrape is cancelled', async () => {
-    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveScrape } = deferred<unknown>();
     let signal: AbortSignal | undefined;
     apiMocks.scrapeProfile.mockImplementation((_u: string, _p: string, s?: AbortSignal) => {
       signal = s;
@@ -253,7 +261,7 @@ describe('LetterboxdLanding persistence', () => {
   });
 
   it('does not open story on intermediate trace events without final result', async () => {
-    const { promise, resolve: resolveScrape } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveScrape } = deferred<unknown>();
     let reportProgress!: (progress: { trace_events: { stage: string }[] }) => void;
     apiMocks.scrapeProfile.mockImplementation(
       (_u: string, _p: string, _s?: AbortSignal, onProgress?: (p: { trace_events: { stage: string }[] }) => void) => {
@@ -298,7 +306,7 @@ describe('LetterboxdLanding persistence', () => {
   });
 
   it('does not open the story when analysis finishes after cancel', async () => {
-    const { promise, resolve: resolveAnalyze } = Promise.withResolvers<unknown>();
+    const { promise, resolve: resolveAnalyze } = deferred<unknown>();
     let signal: AbortSignal | undefined;
     apiMocks.analyzeFiles.mockImplementation((_form: FormData, opts?: { signal?: AbortSignal }) => {
       signal = opts?.signal;
@@ -355,6 +363,34 @@ describe('LetterboxdLanding persistence', () => {
       expect(screen.queryByText(/Analyzing your films/i)).not.toBeInTheDocument();
     });
     expect(screen.getByText(/analysis server appears to be offline/i)).toBeInTheDocument();
+  });
+
+  it('presents ZIP export before username scrape', () => {
+    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    const exportCta = screen.getByRole('link', { name: /open letterboxd export/i });
+    const usernameHeading = screen.getByRole('heading', { name: /or try a public username/i });
+    expect(exportCta.compareDocumentPosition(usernameHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/ZIP upload is the reliable path/i)).toBeInTheDocument();
+  });
+
+  it('sends a blocked scrape to ZIP upload without a retry loop', async () => {
+    const error = new Error('Letterboxd is blocking automated access to this profile.');
+    (error as Error & { code?: string }).code = 'scrape_blocked';
+    apiMocks.scrapeProfile.mockRejectedValue(error);
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    await submitUsername('alice');
+
+    await waitFor(() => {
+      expect(screen.getByText(/Letterboxd access blocked/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /upload export zip/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('scrape-story-wait')).not.toBeInTheDocument();
+    expect(apiMocks.scrapeProfile).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('upload-zone-input')).toBeTruthy();
+    expect(scrollIntoView).toHaveBeenCalled();
   });
 
   it('renders the FAQ section with all six questions from the catalog', () => {

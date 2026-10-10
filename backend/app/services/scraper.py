@@ -38,6 +38,15 @@ MAX_PAGES = int(os.getenv("LETTERBOXD_MAX_PAGES", "60"))  # safety cap (~3000 fi
 LIKER_MAX_PAGES = int(os.getenv("LETTERBOXD_LIKER_MAX_PAGES", "20"))
 PREVIEW_ITEM_LIMIT = 8
 
+# Terminal messages — never retry these from the same cloud IP.
+BLOCKED_MESSAGE = (
+    "Letterboxd is blocking automated access to this profile. "
+    "Please download your Letterboxd export and upload it for the best experience."
+)
+RATE_LIMIT_MESSAGE = (
+    "Letterboxd rate limit hit. Please wait a moment and try again, or use the export upload option."
+)
+
 TraceCallback = Callable[[str, str, Optional[dict[str, Any]]], None]
 
 
@@ -91,6 +100,36 @@ def _is_cloudflare_block(body: str) -> bool:
         ("Just a moment" in body[:500] and "challenges.cloudflare.com" in body[:1000])
         or "Attention Required! | Cloudflare" in body[:500]
     )
+
+
+def _raise_for_letterboxd_gate(response, username: str, *, missing_is_not_found: bool) -> None:
+    """Raise once for 403 / 429 / Cloudflare / unexpected HTTP. No retries."""
+    status = getattr(response, "status_code", 0)
+    body = getattr(response, "text", "") or ""
+    if status == 404 and missing_is_not_found:
+        raise ValueError(f"User '{username}' not found")
+    if status == 403 or _is_cloudflare_block(body):
+        raise ValueError(BLOCKED_MESSAGE)
+    if status == 429:
+        raise ValueError(RATE_LIMIT_MESSAGE)
+    if missing_is_not_found and status != 200:
+        raise RuntimeError(f"Letterboxd returned HTTP {status} for '{username}'")
+
+
+def _probe_profile_access(username: str, session: Optional[requests.Session] = None) -> None:
+    """Single GET of /{username}/ before any diary/grid/review pagination.
+
+    Distinguishes missing profiles (404) from Cloudflare/bot blocks so the
+    product can send the user to ZIP upload instead of spinning a wait story.
+    """
+    owns_session = session is None
+    s = session or _new_session()
+    try:
+        r = _fetch(s, f"{BASE_URL}/{username}/", timeout=10)
+        _raise_for_letterboxd_gate(r, username, missing_is_not_found=True)
+    finally:
+        if owns_session:
+            s.close()
 
 
 def _parse_rating(rating_span) -> Optional[float]:
@@ -576,21 +615,11 @@ def _sync_scrape_diary(
                 break
             if r.status_code == 403:
                 logger.error("Letterboxd returned 403 for %s diary page %d — bot detection blocked", username, page)
-                raise ValueError(
-                    "Letterboxd is blocking automated access to this profile. "
-                    "Please download your Letterboxd export and upload it for the best experience."
-                )
             if r.status_code == 429:
                 logger.warning("Letterboxd rate-limited diary request for %s page %d", username, page)
-                raise ValueError(
-                    "Letterboxd rate limit hit. Please wait a moment and try again, or use the export upload option."
-                )
             if _is_cloudflare_block(r.text):
                 logger.warning("Diary page %d: Cloudflare block for %s", page, username)
-                raise ValueError(
-                    "Letterboxd is blocking automated access to this profile. "
-                    "Please download your Letterboxd export and upload it for the best experience."
-                )
+            _raise_for_letterboxd_gate(r, username, missing_is_not_found=False)
             if r.status_code != 200:
                 logger.warning("Diary page %d: unexpected status %d for %s", page, r.status_code, username)
                 raise RuntimeError(f"Letterboxd returned HTTP {r.status_code} for '{username}'")
@@ -677,21 +706,11 @@ def _sync_scrape_films_grid(
                 break
             if r.status_code == 403:
                 logger.error("Letterboxd returned 403 for %s page %d — bot detection blocked", username, page)
-                raise ValueError(
-                    "Letterboxd is blocking automated access to this profile. "
-                    "Please download your Letterboxd export and upload it for the best experience."
-                )
             if r.status_code == 429:
                 logger.warning("Letterboxd rate-limited request for %s page %d", username, page)
-                raise ValueError(
-                    "Letterboxd rate limit hit. Please wait a moment and try again, or use the export upload option."
-                )
             if _is_cloudflare_block(r.text):
                 logger.warning("Grid page %d: Cloudflare block for %s", page, username)
-                raise ValueError(
-                    "Letterboxd is blocking automated access to this profile. "
-                    "Please download your Letterboxd export and upload it for the best experience."
-                )
+            _raise_for_letterboxd_gate(r, username, missing_is_not_found=False)
             if r.status_code != 200:
                 logger.warning("Grid page %d: unexpected status %d for %s", page, r.status_code, username)
                 raise RuntimeError(f"Letterboxd returned HTTP {r.status_code} for '{username}'")
@@ -745,21 +764,9 @@ def _sync_scrape_reviews(
             if r.status_code == 404:
                 logger.info("Review scrape: page %d 404 for %s (stop)", page, username)
                 break
-            if r.status_code == 403:
-                raise ValueError(
-                    "Letterboxd is blocking automated access to this profile. "
-                    "Please download your Letterboxd export and upload it for the best experience."
-                )
-            if r.status_code == 429:
-                raise ValueError(
-                    "Letterboxd rate limit hit. Please wait a moment and try again, or use the export upload option."
-                )
             if _is_cloudflare_block(r.text):
                 logger.warning("Review scrape: page %d Cloudflare block for %s", page, username)
-                raise ValueError(
-                    "Letterboxd is blocking automated access to this profile. "
-                    "Please download your Letterboxd export and upload it for the best experience."
-                )
+            _raise_for_letterboxd_gate(r, username, missing_is_not_found=False)
             if r.status_code != 200:
                 logger.warning("Review scrape: page %d unexpected status %d for %s", page, r.status_code, username)
                 raise RuntimeError(f"Letterboxd returned HTTP {r.status_code} for '{username}' reviews")
@@ -869,6 +876,7 @@ def _sync_scrape_profile_sources(
     session = _new_session()
     _warm_session(session)
     try:
+        _probe_profile_access(username, session=session)
         film_count, review_count, favorite_films, profile_avatar_url = _sync_scrape_overview(
             username, session=session, trace_callback=trace_callback
         )
@@ -988,6 +996,8 @@ async def scrape_profile_sources(
 ) -> ProfileScrapeSources:
     """Scrape diary, grid, overview (and optionally reviews) concurrently."""
     loop = _get_loop()
+    # One profile GET first. Cloudflare/403 must not fan out into diary+grid+reviews.
+    await loop.run_in_executor(None, partial(_probe_profile_access, username))
     diary_call = (
         partial(_sync_scrape_diary, username, max_pages, None, trace_callback)
         if diary_cutoff is None

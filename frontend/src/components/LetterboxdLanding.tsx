@@ -19,7 +19,7 @@ import { upsertUserSession } from '@/lib/supabase/sessions';
 import { ensureSessionId, getUsername, setUsername, getConsent } from '@/lib/session-id';
 import { storyPath } from '@/lib/routes';
 import { trackEvent, trackConsentedEvent, trackFilmStats } from '@/lib/analytics';
-import { normalizeError, type NormalizedError } from '@/lib/errors';
+import { needsZipFallback, normalizeError, type NormalizedError } from '@/lib/errors';
 import { useI18n } from '@/i18n/I18nProvider';
 import { FAQ_ITEMS } from '@/i18n/faq';
 import { DesktopRequiredNotice } from '@/components/DesktopRequiredNotice';
@@ -575,13 +575,24 @@ export default function LetterboxdLanding() {
   }, []);
 
   const handleRetry = useCallback(() => {
+    if (error && needsZipFallback(error.reason)) {
+      setError(null);
+      uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
     setError(null);
     if (lastActionRef.current === 'scrape' && usernameInput.trim()) {
       void handleScrape();
     } else if (lastUploadRef.current?.length) {
       void handleFiles(lastUploadRef.current);
     }
-  }, [handleFiles, handleScrape, usernameInput]);
+  }, [error, handleFiles, handleScrape, usernameInput]);
+
+  useEffect(() => {
+    if (error && needsZipFallback(error.reason)) {
+      uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [error]);
 
   const translatedError = error ? localizeLandingError(error, t) : null;
 
@@ -633,6 +644,34 @@ export default function LetterboxdLanding() {
               {t('landing.contributors.thanks')}
             </p>
           </section>
+          <section
+            ref={uploadSectionRef}
+            aria-label={t('landing.upload.modalTitle')}
+            className="rounded-2xl p-5 sm:p-6 backdrop-blur-sm"
+            style={{ borderWidth: 1, borderColor: '#1f262e', backgroundColor: 'rgba(27, 28, 30, 0.4)' }}
+          >
+            <ExportInstructions />
+            <div className="mt-6">
+              {isPhone ? (
+                <DesktopRequiredNotice surface="landing" />
+              ) : (
+                <>
+                  <UploadZone onFiles={handleFiles} />
+                  <p className="mt-4 text-center text-xs text-white/40">{t('landing.upload.quickPath')}</p>
+                </>
+              )}
+            </div>
+          </section>
+
+          {translatedError && (
+            <ErrorBanner
+              error={translatedError}
+              onDismiss={() => setError(null)}
+              onRetry={handleRetry}
+              onUpload={() => uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            />
+          )}
+
           <section aria-label={t('landing.username.section')}>
             <div
               className="rounded-2xl p-5 sm:p-6 text-center backdrop-blur-sm"
@@ -641,6 +680,9 @@ export default function LetterboxdLanding() {
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
                 {t('landing.username.title')}
               </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/55">
+                {t('landing.username.hint')}
+              </p>
 
               <form
                 onSubmit={(e) => {
@@ -687,34 +729,6 @@ export default function LetterboxdLanding() {
               </form>
             </div>
           </section>
-
-          <section
-            ref={uploadSectionRef}
-            aria-label={t('landing.upload.modalTitle')}
-            className="rounded-2xl p-5 sm:p-6 backdrop-blur-sm"
-            style={{ borderWidth: 1, borderColor: '#1f262e', backgroundColor: 'rgba(27, 28, 30, 0.4)' }}
-          >
-            <ExportInstructions />
-            <div className="mt-6">
-              {isPhone ? (
-                <DesktopRequiredNotice surface="landing" />
-              ) : (
-                <>
-                  <UploadZone onFiles={handleFiles} />
-                  <p className="mt-4 text-center text-xs text-white/40">{t('landing.upload.quickPath')}</p>
-                </>
-              )}
-            </div>
-          </section>
-
-          {translatedError && (
-            <ErrorBanner
-              error={translatedError}
-              onDismiss={() => setError(null)}
-              onRetry={handleRetry}
-              onUpload={() => uploadSectionRef.current?.scrollIntoView({ behavior: 'smooth' })}
-            />
-          )}
 
           <section aria-label={t('landing.howItWorks.label')} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[

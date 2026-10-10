@@ -307,6 +307,86 @@ def test_scraper_grid_http_failure_raises(monkeypatch):
         scraper._sync_scrape_films_grid("fail_user", 1, session=session)
 
 
+def test_probe_profile_access_cloudflare_is_terminal(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(_session, url, timeout=10):
+        calls.append(url)
+        resp = MagicMock()
+        resp.status_code = 403
+        resp.text = "Forbidden"
+        return resp
+
+    monkeypatch.setattr(scraper, "_fetch", fake_fetch)
+    with pytest.raises(ValueError, match="blocking automated access"):
+        scraper._probe_profile_access("public_user")
+    assert calls == ["https://letterboxd.com/public_user/"]
+
+
+def test_probe_profile_access_challenge_html_is_terminal(monkeypatch):
+    body = "Just a moment..." + ("x" * 80) + "challenges.cloudflare.com"
+    monkeypatch.setattr(
+        scraper, "_fetch", lambda *args, **kwargs: MagicMock(status_code=200, text=body)
+    )
+    with pytest.raises(ValueError, match="blocking automated access"):
+        scraper._probe_profile_access("public_user")
+
+
+def test_probe_profile_access_404_is_not_found(monkeypatch):
+    resp = MagicMock(status_code=404, text="Not Found")
+    monkeypatch.setattr(scraper, "_fetch", lambda *args, **kwargs: resp)
+    with pytest.raises(ValueError, match="not found"):
+        scraper._probe_profile_access("missing_user")
+
+
+def test_scraper_diary_403_does_not_paginate(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(_session, url, timeout=10):
+        calls.append(url)
+        return MagicMock(status_code=403, text="Forbidden")
+
+    monkeypatch.setattr(scraper, "_fetch", fake_fetch)
+    with pytest.raises(ValueError, match="blocking automated access"):
+        scraper._sync_scrape_diary("user", 5, session=MagicMock())
+    assert calls == ["https://letterboxd.com/user/films/diary/page/1/"]
+
+
+def test_scraper_grid_403_does_not_paginate(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(_session, url, timeout=10):
+        calls.append(url)
+        return MagicMock(status_code=403, text="Forbidden")
+
+    monkeypatch.setattr(scraper, "_fetch", fake_fetch)
+    with pytest.raises(ValueError, match="blocking automated access"):
+        scraper._sync_scrape_films_grid("user", 5, session=MagicMock())
+    assert calls == ["https://letterboxd.com/user/films/page/1/"]
+
+
+@pytest.mark.asyncio
+async def test_scrape_profile_sources_does_not_paginate_after_block(monkeypatch):
+    diary_calls = []
+
+    def probe_block(username, session=None):
+        raise ValueError("Letterboxd is blocking automated access to this profile.")
+
+    def diary(*args, **kwargs):
+        diary_calls.append(args)
+        return []
+
+    monkeypatch.setattr(scraper, "_probe_profile_access", probe_block)
+    monkeypatch.setattr(scraper, "_sync_scrape_diary", diary)
+    monkeypatch.setattr(scraper, "_sync_scrape_films_grid", diary)
+    monkeypatch.setattr(scraper, "_sync_scrape_overview", lambda *a, **k: (0, 0, [], None))
+    monkeypatch.setattr(scraper, "_sync_scrape_reviews", diary)
+
+    with pytest.raises(ValueError, match="blocking automated access"):
+        await scraper.scrape_profile_sources("blocked_user", include_reviews=True)
+    assert diary_calls == []
+
+
 def test_scraper_reviews_http_block_and_rate_limit(monkeypatch):
     session = MagicMock()
 

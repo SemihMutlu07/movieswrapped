@@ -55,7 +55,7 @@ export default function ErrorBanner({ error, onDismiss, onRetry, onUpload, onRep
                 {copy.upload}
               </button>
             )}
-            {onRetry && (
+            {onRetry && !zipFirst && (
               <button
                 onClick={onRetry}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-xs font-medium text-white transition-colors"
