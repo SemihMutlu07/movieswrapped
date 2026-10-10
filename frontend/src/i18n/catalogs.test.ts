@@ -33,12 +33,14 @@ describe('i18n catalogs and routing', () => {
     }
   });
 
-  it('treats username scrape as best-effort, not the guaranteed path', () => {
-    expect(en['landing.username.title']).toMatch(/or try a public username/i);
-    expect(en['landing.username.hint']).toMatch(/ZIP upload is the reliable path/i);
+  it('treats username scrape as the live path with bookmarklet and ZIP backups', () => {
+    expect(en['landing.username.title']).toMatch(/type your letterboxd username/i);
+    expect(en['landing.username.hint']).toMatch(/bookmarklet or a ZIP/i);
     expect(en['landing.username.bookmarklet']).toMatch(/bookmarklet/i);
     expect(tr['landing.username.hint']).toMatch(/ZIP/i);
-    expect(en['landing.howItWorks.enter.title']).toMatch(/upload your export/i);
+    expect(en['landing.howItWorks.enter.title']).toMatch(/enter your username/i);
+    expect(en['landing.error.desktopOffline.title']).toMatch(/live scan offline/i);
+    expect(en['landing.error.desktopOffline.action']).toMatch(/bookmarklet/i);
     expect(en['landing.error.scrapeBlocked.action']).toMatch(/export ZIP/i);
   });
 

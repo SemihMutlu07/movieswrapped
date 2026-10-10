@@ -22,12 +22,13 @@ from app.routes.feedback import _parse_letterboxd_username
 from app.routes.worker import WORKER_OFFLINE_MESSAGE
 from app.services.analysis import process_comprehensive_letterboxd_data
 from app.services.run_log import persist_run
+from app.services.scrape_cache import lookup_scrape_cache, store_scrape_cache
 from app.services.scrape_pipeline import (
     ScrapeAnalysisEmpty,
     normalize_analysis_period,
     scrape_and_analyze,
 )
-from app.services.scraper import sources_from_bookmarklet
+from app.services.scraper import classify_letterboxd_error, sources_from_bookmarklet
 from app.security import client_key, enforce_rate_limit
 
 logger = logging.getLogger("letterboxd_wrapped.analyze")
@@ -289,7 +290,8 @@ async def _run_scrape(
         )
         task = task_manager.get_task_state(task_id)
         trace_events = task.trace_events if task else None
-        task_manager.set_task_done(task_id, {"status": "success", "stats": stats})
+        store_scrape_cache(username, analysis_period, stats)
+        task_manager.set_task_done(task_id, {"status": "success", "stats": stats, "queue_wait_ms": 0})
         persist_run(username, "scrape", stats, ok=True, task_id=task_id, trace_events=trace_events)
     except ScrapeAnalysisEmpty as exc:
         if exc.period_empty:
@@ -323,13 +325,9 @@ async def _run_scrape(
         )
     except ValueError as exc:
         msg = str(exc)
-        if "rate limit" in msg:
-            error_code = "rate_limit_exceeded"
-        elif "Letterboxd is blocking" in msg:
-            error_code = "scrape_blocked"
-        else:
-            error_code = "user_not_found"
-            msg = f"Letterboxd profile '@{username}' was not found or could not be read."
+        error_code = classify_letterboxd_error(exc)
+        if error_code == "user_not_found":
+            msg = f"Letterboxd profile '@{username}' was not found."
         task_manager.set_task_failed(
             task_id,
             msg,
@@ -405,6 +403,24 @@ async def scrape_profile(request: Request):
             status_code=400,
             detail={"error_code": "invalid_analysis_period", "message": str(exc)},
         ) from exc
+
+    cached_stats = await lookup_scrape_cache(username, analysis_period)
+    if cached_stats:
+        task_id = task_manager.create_task_state(client_key(request))
+        task = task_manager.get_task_state(task_id)
+        if task:
+            task.kind = "scrape"
+            task.username = username
+            task.cached = True
+            task.options = {"analysis_period": analysis_period, "cached": True}
+        task_manager.set_task_done(
+            task_id,
+            {"status": "success", "stats": cached_stats, "cached": True, "queue_wait_ms": 0},
+        )
+        return JSONResponse(
+            status_code=202,
+            content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending", "cached": True},
+        )
 
     if settings.desktop_worker_enabled:
         if not task_manager.is_worker_online(settings.worker_heartbeat_max_age_seconds):
@@ -519,6 +535,10 @@ async def get_task_progress(task_id: str, request: Request):
     supplied = request.headers.get("X-Task-Token", "")
     if not supplied or not secrets.compare_digest(supplied, task.poll_token):
         raise HTTPException(status_code=403, detail={"error_code": "invalid_task_token", "message": "Invalid task token."})
+    queue = task_manager.scrape_queue_metrics(task)
+    result = task.result
+    if isinstance(result, dict) and task.kind == "scrape" and queue.get("queue_wait_ms") is not None:
+        result = {**result, "queue_wait_ms": queue["queue_wait_ms"]}
     return {
         "task_id": task.task_id,
         "status": task.status,
@@ -526,11 +546,13 @@ async def get_task_progress(task_id: str, request: Request):
         "message": task.message,
         "progress": task.progress,
         "total": task.total,
-        "result": task.result,
+        "result": result,
         "error": task.error,
         "duration_seconds": task.duration_seconds,
         "error_type": task.error_type,
         "error_stage": task.error_stage,
         "error_code": task.error_code,
         "trace_events": task.trace_events,
+        "cached": task.cached,
+        **queue,
     }

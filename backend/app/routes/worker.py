@@ -11,16 +11,17 @@ import secrets
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from app import task_manager
-from app.config import settings
+from app.config import backend_git_sha, settings
 from app.services.run_log import persist_run
+from app.services.scrape_cache import store_scrape_cache
 
 logger = logging.getLogger("letterboxd_wrapped.worker")
 
 router = APIRouter(prefix="/api/worker")
 
 WORKER_OFFLINE_MESSAGE = (
-    "The desktop scraper is offline. Please download your Letterboxd export "
-    "and upload it for the best experience."
+    "Live scan is offline right now. Use the bookmarklet on /import, or download "
+    "your Letterboxd export ZIP and upload it."
 )
 
 
@@ -64,6 +65,13 @@ def _request_telemetry(body: dict) -> dict:
     return telemetry if isinstance(telemetry, dict) else {}
 
 
+def _protocol_int(value: object) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+
+
 @router.post("/heartbeat")
 async def worker_heartbeat(request: Request, x_worker_token: str | None = Header(default=None)):
     require_worker_token(x_worker_token)
@@ -72,8 +80,28 @@ async def worker_heartbeat(request: Request, x_worker_token: str | None = Header
     except Exception:
         body = {}
     body = body if isinstance(body, dict) else {}
+    expected_protocol = settings.worker_protocol_version
+    expected_sha = backend_git_sha() or ""
+    worker_protocol = _protocol_int(body.get("protocol_version"))
+    worker_sha = str(body.get("git_sha") or "").strip()
+    protocol_mismatch = worker_protocol != expected_protocol
+    sha_mismatch = bool(expected_sha and worker_sha and worker_sha != expected_sha)
+    if protocol_mismatch or sha_mismatch:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error_code": "worker_version_mismatch",
+                "expected_protocol_version": expected_protocol,
+                "expected_git_sha": expected_sha,
+                "message": "Worker is stale. git pull and restart the systemd user unit.",
+            },
+        )
     task_manager.record_worker_heartbeat(body)
-    return {"ok": True}
+    return {
+        "ok": True,
+        "protocol_version": expected_protocol,
+        "backend_git_sha": expected_sha,
+    }
 
 
 @router.get("/next")
@@ -127,6 +155,7 @@ async def record_scrape_event(
         if last_stage:
             task.stage = last_stage
             task.message = last_message or last_stage
+        task_manager.persist_task(task)
         return {"ok": True}
 
     stage = str(body.get("stage") or "").strip()
@@ -143,6 +172,7 @@ async def record_scrape_event(
     )
     task.stage = stage
     task.message = message or stage
+    task_manager.persist_task(task)
     return {"ok": True}
 
 
@@ -173,7 +203,14 @@ async def complete_scrape(
             if isinstance(event, dict):
                 task_manager.append_task_event_payload(task_id, event)
     task_manager.append_task_event(task_id, "completed", "Worker posted final stats", level="info")
-    task_manager.set_task_done(task_id, {"status": "success", "stats": stats}, telemetry)
+    wait_ms = int(round((task.queue_wait_seconds or 0) * 1000))
+    period = str((task.options or {}).get("analysis_period") or "lifetime")
+    store_scrape_cache(task.username or str(body.get("username") or ""), period, stats)
+    task_manager.set_task_done(
+        task_id,
+        {"status": "success", "stats": stats, "queue_wait_ms": wait_ms},
+        telemetry,
+    )
     persist_run(task.username, "desktop-worker", stats, ok=True, task_id=task_id, telemetry=telemetry)
     logger.info("Worker completed scrape job %s", task_id)
     return {"ok": True}

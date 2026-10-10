@@ -14,6 +14,15 @@ from app.config import settings
 TOKEN = "test-x370-worker-token"
 
 
+def _hb(worker_id: str = "x370") -> dict:
+    return {
+        "worker_id": worker_id,
+        "protocol_version": settings.worker_protocol_version,
+        "git_sha": "",
+        "max_concurrency": 1,
+    }
+
+
 @pytest.fixture
 async def client():
     with patch.dict("os.environ", {"TMDB_API_KEY": "test-key"}):
@@ -44,7 +53,7 @@ def _headers(token: str = TOKEN) -> dict[str, str]:
 async def test_worker_routes_reject_missing_and_wrong_token(client, worker_auth):
     r = await client.post("/api/worker/heartbeat")
     assert r.status_code == 401
-    r = await client.post("/api/worker/heartbeat", headers=_headers("nope"), json={"worker_id": "x"})
+    r = await client.post("/api/worker/heartbeat", headers=_headers("nope"), json=_hb("x"))
     assert r.status_code == 401
     r = await client.get("/api/worker/next", headers=_headers("nope"))
     assert r.status_code == 401
@@ -70,12 +79,14 @@ async def test_scrape_fails_fast_to_zip_when_worker_offline(client, worker_auth)
     assert r.status_code == 503
     detail = r.json()["detail"]
     assert detail["error_code"] == "desktop_worker_offline"
-    assert "export" in detail["message"].lower()
+    assert "live scan is offline" in detail["message"].lower()
+    assert "bookmarklet" in detail["message"].lower()
+    assert "zip" in detail["message"].lower()
 
 
 @pytest.mark.asyncio
 async def test_stale_heartbeat_fails_fast_to_zip(client, worker_auth):
-    await client.post("/api/worker/heartbeat", headers=_headers(), json={"worker_id": "x370"})
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
     task_manager._last_worker_heartbeat = datetime.now(timezone.utc) - timedelta(seconds=120)
     r = await client.post("/api/scrape-profile", json={"username": "alice"})
     assert r.status_code == 503
@@ -84,7 +95,7 @@ async def test_stale_heartbeat_fails_fast_to_zip(client, worker_auth):
 
 @pytest.mark.asyncio
 async def test_heartbeat_enqueue_claim_complete(client, worker_auth):
-    hb = await client.post("/api/worker/heartbeat", headers=_headers(), json={"worker_id": "x370"})
+    hb = await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
     assert hb.status_code == 200
 
     queued = await client.post("/api/scrape-profile", json={"username": "semihmutsuz", "period": "year"})
@@ -124,7 +135,7 @@ async def test_heartbeat_enqueue_claim_complete(client, worker_auth):
 
 @pytest.mark.asyncio
 async def test_worker_failed_postback(client, worker_auth):
-    await client.post("/api/worker/heartbeat", headers=_headers(), json={"worker_id": "x370"})
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
     queued = await client.post("/api/scrape-profile", json={"username": "blockeduser"})
     task_id = queued.json()["task_id"]
     poll_token = queued.json()["poll_token"]
@@ -147,7 +158,52 @@ async def test_worker_failed_postback(client, worker_auth):
 
 @pytest.mark.asyncio
 async def test_next_returns_null_when_queue_empty(client, worker_auth):
-    await client.post("/api/worker/heartbeat", headers=_headers(), json={"worker_id": "x370"})
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
     r = await client.get("/api/worker/next", headers=_headers())
     assert r.status_code == 200
     assert r.json() == {"job": None}
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_rejects_protocol_mismatch(client, worker_auth):
+    r = await client.post(
+        "/api/worker/heartbeat",
+        headers=_headers(),
+        json={"worker_id": "x370", "protocol_version": 1, "git_sha": "abc"},
+    )
+    assert r.status_code == 409
+    assert r.json()["detail"]["error_code"] == "worker_version_mismatch"
+    assert task_manager.is_worker_online(60) is False
+
+
+@pytest.mark.asyncio
+async def test_progress_includes_queue_position_and_eta(client, worker_auth):
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
+    first = await client.post("/api/scrape-profile", json={"username": "alice"})
+    second = await client.post("/api/scrape-profile", json={"username": "bob"})
+    assert first.status_code == 202
+    token = second.json()["poll_token"]
+    progress = await client.get(
+        f"/api/progress/{second.json()['task_id']}",
+        headers={"X-Task-Token": token},
+    )
+    body = progress.json()
+    assert body["queue_position"] == 2
+    assert body["eta_seconds"] == 15
+
+
+@pytest.mark.asyncio
+async def test_scrape_profile_cache_hit_skips_worker(client, worker_auth):
+    cached = {"total_films": 42, "scraped_username": "alice"}
+    with patch("app.routes.analyze.lookup_scrape_cache", new=AsyncMock(return_value=cached)):
+        r = await client.post("/api/scrape-profile", json={"username": "alice"})
+    assert r.status_code == 202
+    task_id = r.json()["task_id"]
+    poll_token = r.json()["poll_token"]
+    progress = await client.get(f"/api/progress/{task_id}", headers={"X-Task-Token": poll_token})
+    body = progress.json()
+    assert body["status"] == "done"
+    assert body["cached"] is True
+    assert body["result"]["stats"]["total_films"] == 42
+    claimed = await client.get("/api/worker/next", headers=_headers(), params={"worker_id": "x370"})
+    assert claimed.json()["job"] is None

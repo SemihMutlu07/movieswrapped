@@ -60,7 +60,7 @@ WorkingDirectory=$BACKEND
 Environment=PYTHONPATH=$BACKEND
 EnvironmentFile=%h/.config/movieswrapped/worker.env
 ExecStart=$VENV/bin/python -m app.worker.safari_worker
-Restart=on-failure
+Restart=always
 RestartSec=10
 MemoryMax=2G
 
@@ -70,14 +70,19 @@ EOF
 
 systemctl --user daemon-reload
 systemctl --user enable movieswrapped-worker.service
+if command -v loginctl >/dev/null 2>&1; then
+  loginctl enable-linger "$USER" >/dev/null 2>&1 || echo "Could not enable linger automatically — run: loginctl enable-linger $USER"
+fi
+systemctl --user start movieswrapped-worker.service || true
 
 echo
-echo "Installed $UNIT"
+echo "Installed $UNIT (Restart=always, linger enabled when possible)"
 echo "Start:        systemctl --user start movieswrapped-worker.service"
 echo "Status:       systemctl --user status movieswrapped-worker.service"
+echo "Health:       $REPO_ROOT/scripts/check-x370-worker-health.sh"
 echo "Logs:         journalctl --user -u movieswrapped-worker.service -f"
-echo "Linger (boot): loginctl enable-linger \$USER"
 echo
 echo "Render dashboard env (same token as $ENV_FILE):"
 echo "  WORKER_TOKEN=<the value in worker.env>"
 echo "Do not set SCRAPE_TRANSPORT on Render. Render only queues jobs."
+echo "Do not print worker.env — it contains secrets."

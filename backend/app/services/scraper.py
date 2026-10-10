@@ -8,7 +8,6 @@ product can send the user to ZIP upload.
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date
 from functools import partial
@@ -41,7 +40,8 @@ PAGE_DELAY = float(os.getenv("LETTERBOXD_PAGE_DELAY", "0.25"))
 MAX_PAGES = int(os.getenv("LETTERBOXD_MAX_PAGES", "60"))  # safety cap (~3000 films)
 LIKER_MAX_PAGES = int(os.getenv("LETTERBOXD_LIKER_MAX_PAGES", "20"))
 PREVIEW_ITEM_LIMIT = 8
-GRID_CONCURRENCY = max(1, int(os.getenv("LETTERBOXD_GRID_CONCURRENCY", "3")))
+# Serial only on one residential IP. Parallel page loads get Cloudflare-challenged.
+GRID_CONCURRENCY = 1
 FETCH_RETRIES = max(1, int(os.getenv("LETTERBOXD_FETCH_RETRIES", "3")))
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 SAFARI_IMPERSONATE = os.getenv("LETTERBOXD_SAFARI_IMPERSONATE", "safari")
@@ -108,11 +108,11 @@ class LetterboxdSession:
                 continue
             status = getattr(response, "status_code", 0)
             body = getattr(response, "text", "") or ""
-            if status in RETRYABLE_STATUS and attempt + 1 < FETCH_RETRIES:
+            blocked = status == 403 or _is_cloudflare_block(body) or _is_empty_document(body)
+            retryable = status in RETRYABLE_STATUS or blocked
+            if retryable and attempt + 1 < FETCH_RETRIES:
                 time.sleep(1.5 * (attempt + 1))
                 continue
-            if _is_cloudflare_block(body) or status == 403:
-                return response
             return response
         if last_error:
             raise last_error
@@ -191,23 +191,72 @@ def sources_from_bookmarklet(payload: dict[str, Any]) -> ProfileScrapeSources:
     return ProfileScrapeSources(diary=diary, grid=grid, film_count=len(grid))
 
 
+def _is_empty_document(body: str) -> bool:
+    return not (body or "").strip()
+
+
 def _is_cloudflare_block(body: str) -> bool:
-    """Check if the response body is a Cloudflare challenge page."""
+    """HTTP 200 with a Cloudflare challenge is a failure, never a parsed empty grid."""
     if not body:
         return False
+    head = body[:4000]
+    lowered = head.lower()
     return (
-        ("Just a moment" in body[:500] and "challenges.cloudflare.com" in body[:1000])
-        or "Attention Required! | Cloudflare" in body[:500]
+        "just a moment" in lowered
+        or "challenges.cloudflare.com" in lowered
+        or "cf-browser-verification" in lowered
+        or "cdn-cgi/challenge" in lowered
+        or "attention required! | cloudflare" in lowered
     )
 
 
+def _looks_like_letterboxd_film_page(soup: BeautifulSoup) -> bool:
+    return bool(
+        soup.select_one(
+            "ul.poster-list, ul.grid, li.griditem, li.poster-container, "
+            ".film-poster, .profile-header, .profile-statistic, #content-nav"
+        )
+    )
+
+
+def _is_challenge_or_empty_grid(body: str, soup: BeautifulSoup) -> bool:
+    """True when a 200 cannot be trusted as a real films page.
+
+    A genuinely empty library still has Letterboxd chrome. A challenge page,
+    blank document, or truncated HTML does not.
+    """
+    if _is_cloudflare_block(body) or _is_empty_document(body):
+        return True
+    if _parse_grid_items(soup):
+        return False
+    return not _looks_like_letterboxd_film_page(soup)
+
+
+def classify_letterboxd_error(exc: BaseException) -> str:
+    """Map scraper exceptions to honest error codes. Never guess user_not_found."""
+    msg = str(exc)
+    if isinstance(exc, ValueError) and msg.startswith("User '") and msg.endswith("not found"):
+        return "user_not_found"
+    lowered = msg.lower()
+    if "rate limit" in lowered:
+        return "rate_limit_exceeded"
+    if (
+        "blocking automated access" in msg
+        or "just a moment" in lowered
+        or "empty grid" in lowered
+        or "challenge" in lowered
+    ):
+        return "scrape_blocked"
+    return "scrape_failed"
+
+
 def _raise_for_letterboxd_gate(response, username: str, *, missing_is_not_found: bool) -> None:
-    """Raise once for 403 / 429 / Cloudflare / unexpected HTTP. No retries."""
+    """Raise once for 403 / 429 / Cloudflare / empty document / unexpected HTTP."""
     status = getattr(response, "status_code", 0)
     body = getattr(response, "text", "") or ""
     if status == 404 and missing_is_not_found:
         raise ValueError(f"User '{username}' not found")
-    if status == 403 or _is_cloudflare_block(body):
+    if status == 403 or _is_cloudflare_block(body) or (status == 200 and _is_empty_document(body)):
         raise ValueError(BLOCKED_MESSAGE)
     if status == 429:
         raise ValueError(RATE_LIMIT_MESSAGE)
@@ -872,6 +921,8 @@ def _fetch_grid_page(session: Any, username: str, page: int, trace_callback: Opt
     if r is None:
         return []
     soup = BeautifulSoup(r.text, "html.parser")
+    if _is_challenge_or_empty_grid(r.text, soup):
+        raise ValueError(BLOCKED_MESSAGE)
     films = _parse_grid_items(soup)
     logger.info("Grid page %d parsed %d films for %s", page, len(films), username)
     _trace(
@@ -905,6 +956,8 @@ def _sync_scrape_films_grid(
             last_page = 1
         else:
             soup = BeautifulSoup(r.text, "html.parser")
+            if _is_challenge_or_empty_grid(r.text, soup):
+                raise ValueError(BLOCKED_MESSAGE)
             films = _parse_grid_items(soup)
             last_page = _last_page(soup)
             logger.info("Grid page %d parsed %d films for %s", 1, len(films), username)
@@ -920,28 +973,12 @@ def _sync_scrape_films_grid(
         if not films and not known_last:
             remaining = []
 
-        if known_last and remaining:
-            errors: list[BaseException] = []
-            with ThreadPoolExecutor(max_workers=GRID_CONCURRENCY) as pool:
-                futures = []
-                for index, page in enumerate(remaining):
-                    if index:
-                        time.sleep(PAGE_DELAY)
-                    futures.append(pool.submit(_fetch_grid_page, s, username, page, trace_callback))
-                for future in as_completed(futures):
-                    try:
-                        all_films.extend(future.result())
-                    except BaseException as exc:
-                        errors.append(exc)
-                if errors:
-                    raise errors[0]
-        else:
-            for page in remaining:
-                time.sleep(PAGE_DELAY)
-                page_films = _fetch_grid_page(s, username, page, trace_callback)
-                if not page_films:
-                    break
-                all_films.extend(page_films)
+        for page in remaining:
+            time.sleep(PAGE_DELAY)
+            page_films = _fetch_grid_page(s, username, page, trace_callback)
+            if not page_films:
+                break
+            all_films.extend(page_films)
     finally:
         if owns_session:
             s.close()

@@ -21,11 +21,12 @@ describe('normalizeError desktop worker offline', () => {
     const normalized = normalizeError(err);
 
     expect(normalized.reason).toBe('desktop_worker_offline');
-    expect(normalized.title).toBe('Desktop scraper offline');
+    expect(normalized.title).toBe('Live scan offline right now');
+    expect(normalized.action).toMatch(/bookmarklet/i);
   });
 
   it('maps desktop_worker_offline from backend message', () => {
-    const normalized = normalizeError('The desktop scraper is offline right now.');
+    const normalized = normalizeError('Live scan is offline right now. Use the bookmarklet on /import.');
 
     expect(normalized.reason).toBe('desktop_worker_offline');
   });

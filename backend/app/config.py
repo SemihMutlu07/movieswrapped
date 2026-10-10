@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # When set, /api/scrape-profile queues jobs instead of scraping on Render.
     worker_token: str = ""
     worker_heartbeat_max_age_seconds: int = 60
+    # Bump together with app.worker.safari_worker.WORKER_PROTOCOL_VERSION.
+    # A mismatched heartbeat is 409 worker_version_mismatch; the worker git-pulls.
+    worker_protocol_version: int = 5
 
     # Optional: mirror run logs to Supabase so the admin dashboard survives Render
     # restarts (local runs/ is ephemeral there). Anon key only — never service_role.

@@ -14,7 +14,9 @@ from dataclasses import dataclass, field
 import logging
 from pathlib import Path
 import os
+import re
 import socket
+import subprocess
 import sys
 from time import monotonic as time_monotonic
 from typing import Any, Optional
@@ -38,14 +40,19 @@ load_worker_env()
 
 from app.config import settings  # noqa: E402
 from app.services.scrape_pipeline import ScrapeAnalysisEmpty, scrape_and_analyze  # noqa: E402
+from app.services.scraper import classify_letterboxd_error  # noqa: E402
 from app.services.tmdb_telemetry import TmdbCollector, collecting  # noqa: E402
 
 logger = logging.getLogger("letterboxd_wrapped.safari_worker")
 
 POLL_INTERVAL = float(os.getenv("WORKER_POLL_INTERVAL", "5"))
 HEARTBEAT_INTERVAL = float(os.getenv("WORKER_HEARTBEAT_INTERVAL", "30"))
+JOB_GAP_SECONDS = float(os.getenv("WORKER_JOB_GAP_SECONDS", "2"))
 CONTROL_TIMEOUT = aiohttp.ClientTimeout(total=30)
 WORKER_ID = os.getenv("WORKER_ID") or f"x370-{socket.gethostname()}"
+WORKER_PROTOCOL_VERSION = 5
+SYSTEMD_UNIT = os.getenv("WORKER_SYSTEMD_UNIT", "movieswrapped-worker.service")
+_SECRET_RE = re.compile(r"(WORKER_TOKEN|TMDB_API_KEY|Authorization|X-Worker-Token)\s*[=:]\s*\S+", re.I)
 
 
 def _monotonic() -> float:
@@ -106,6 +113,61 @@ class TraceBuffer:
         return list(self.events)
 
 
+def redact_secrets(text: str) -> str:
+    return _SECRET_RE.sub(r"\1=<redacted>", text)
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def current_git_sha(root: Path | None = None) -> str:
+    env_sha = (os.getenv("WORKER_GIT_SHA") or "").strip()
+    if env_sha:
+        return env_sha
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root or repo_root(),
+            text=True,
+            timeout=5,
+            stderr=subprocess.DEVNULL,
+        )
+        return out.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def self_update_and_restart(expected_sha: str, expected_protocol: int) -> None:
+    """git pull --ff-only then restart the systemd --user unit. Never logs secrets."""
+    root = repo_root()
+    logger.info(
+        "Worker version mismatch (protocol=%s expected_sha_prefix=%s); pulling and restarting",
+        expected_protocol,
+        (expected_sha or "")[:12],
+    )
+    try:
+        subprocess.run(["git", "fetch", "origin"], cwd=root, check=False, timeout=60)
+        pull = subprocess.run(["git", "pull", "--ff-only"], cwd=root, check=False, timeout=60)
+        if pull.returncode != 0:
+            logger.error("git pull --ff-only failed; leaving the running worker in place")
+            return
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.error("self-update git failed: %s", redact_secrets(str(exc)))
+        return
+    try:
+        subprocess.Popen(
+            ["systemctl", "--user", "restart", SYSTEMD_UNIT],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        logger.error("systemd restart failed: %s", exc)
+        return
+    raise SystemExit(0)
+
+
 def _failure_payload(username: str, exc: Exception, duration_seconds: float) -> tuple[str, dict[str, Any]]:
     raw = str(exc)
     if isinstance(exc, ScrapeAnalysisEmpty):
@@ -121,18 +183,12 @@ def _failure_payload(username: str, exc: Exception, duration_seconds: float) -> 
                 f"No public films found for @{username}. "
                 "The profile may be private, empty, or temporarily blocked by Letterboxd."
             )
-    elif "blocking automated access" in raw or "Just a moment" in raw:
-        code = "scrape_blocked"
-        message = raw
-    elif "not found" in raw.lower():
-        code = "user_not_found"
-        message = raw
-    elif "rate limit" in raw.lower():
-        code = "rate_limit_exceeded"
-        message = raw
     else:
-        code = "scrape_failed"
-        message = f"Letterboxd returned an unexpected response for @{username}. Try again later."
+        code = classify_letterboxd_error(exc)
+        if code == "scrape_failed":
+            message = f"Letterboxd returned an unexpected response for @{username}. Try again later."
+        else:
+            message = raw
     telemetry = {
         "duration_seconds": duration_seconds,
         "error_code": code,
@@ -150,12 +206,26 @@ async def _post(session: aiohttp.ClientSession, cfg: WorkerConfig, path: str, pa
         async with session.post(
             f"{cfg.base_url}{path}", headers=cfg.headers, json=payload, timeout=CONTROL_TIMEOUT
         ) as resp:
+            if resp.status == 409:
+                detail: dict[str, Any] = {}
+                with suppress(Exception):
+                    body = await resp.json()
+                    if isinstance(body, dict):
+                        nested = body.get("detail")
+                        detail = nested if isinstance(nested, dict) else body
+                if str(detail.get("error_code") or "") == "worker_version_mismatch":
+                    self_update_and_restart(
+                        str(detail.get("expected_git_sha") or ""),
+                        int(detail.get("expected_protocol_version") or WORKER_PROTOCOL_VERSION),
+                    )
+                logger.error("POST %s rejected: HTTP 409", path)
+                return False
             if resp.status != 200:
                 logger.error("POST %s rejected: HTTP %s", path, resp.status)
                 return False
             return True
     except Exception as exc:  # noqa: BLE001
-        logger.error("POST %s failed: %s", path, exc)
+        logger.error("POST %s failed: %s", path, redact_secrets(str(exc)))
         return False
 
 
@@ -164,6 +234,9 @@ def _heartbeat_payload() -> dict[str, Any]:
         "worker_id": WORKER_ID,
         "scrape_transport": SCRAPE_TRANSPORT,
         "max_concurrency": 1,
+        "protocol_version": WORKER_PROTOCOL_VERSION,
+        "git_sha": current_git_sha(),
+        "version": current_git_sha()[:12],
     }
 
 
@@ -180,12 +253,15 @@ async def _claim(session: aiohttp.ClientSession, cfg: WorkerConfig) -> Optional[
         async with session.get(
             url, headers=cfg.headers, params={"worker_id": WORKER_ID}, timeout=CONTROL_TIMEOUT
         ) as resp:
+            if resp.status == 409:
+                logger.error("claim rejected: HTTP 409 (version mismatch)")
+                return None
             if resp.status != 200:
                 logger.error("claim rejected: HTTP %s", resp.status)
                 return None
             body = await resp.json()
     except Exception as exc:  # noqa: BLE001
-        logger.error("claim failed: %s", exc)
+        logger.error("claim failed: %s", redact_secrets(str(exc)))
         return None
     job = body.get("job") if isinstance(body, dict) else None
     return job if isinstance(job, dict) else None
@@ -280,10 +356,12 @@ async def run() -> None:
     cfg = read_config()
     stop = asyncio.Event()
     logger.info(
-        "Safari scrape worker starting — backend=%s worker_id=%s transport=%s",
+        "Safari scrape worker starting — backend=%s worker_id=%s transport=%s protocol=%s sha_prefix=%s",
         cfg.base_url,
         WORKER_ID,
         SCRAPE_TRANSPORT,
+        WORKER_PROTOCOL_VERSION,
+        current_git_sha()[:12],
     )
     timeout = aiohttp.ClientTimeout(total=None)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -296,6 +374,8 @@ async def run() -> None:
                     await asyncio.sleep(POLL_INTERVAL)
                     continue
                 await _process_job(session, cfg, job)
+                if JOB_GAP_SECONDS > 0:
+                    await asyncio.sleep(JOB_GAP_SECONDS)
         except asyncio.CancelledError:
             raise
         finally:

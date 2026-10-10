@@ -119,7 +119,13 @@ export default function ImportLetterboxdPage() {
       persistStats(result.stats);
       const films = Number(result.stats.scraped_film_count ?? result.stats.total_films ?? data.films.length);
       const diary = Number(result.stats.scraped_diary_count ?? data.diary.length);
-      trackEvent('scrape_done', { duration_ms: durationMs, films, diary, method: 'bookmarklet' });
+      trackEvent('scrape_done', {
+        duration_ms: durationMs,
+        films,
+        diary,
+        queue_wait_ms: Number(result.queue_wait_ms ?? 0),
+        method: 'bookmarklet',
+      });
       trackConsentedEvent('analyze_succeeded', {
         total_films: result.stats.total_films,
         duration_ms: durationMs,

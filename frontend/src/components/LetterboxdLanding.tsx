@@ -496,6 +496,7 @@ export default function LetterboxdLanding() {
         duration_ms: Math.round(durationMs),
         films: Number(result.stats.scraped_film_count ?? result.stats.total_films ?? 0),
         diary: Number(result.stats.scraped_diary_count ?? 0),
+        queue_wait_ms: Number(result.queue_wait_ms ?? 0),
         method: 'scrape',
       });
       trackConsentedEvent('analyze_succeeded', {
@@ -614,9 +615,12 @@ export default function LetterboxdLanding() {
       <ScrapeStoryWait
         username={activeScrapeUsername}
         onCancel={handleCancel}
+        queued={(scrapeProgress?.queue_position ?? 0) > 1 || scrapeProgress?.stage === 'queued'}
         events={scrapeProgress?.trace_events}
         resultReady={scrapeResultReady}
         onStoryReady={handleStoryReady}
+        queuePosition={scrapeProgress?.queue_position}
+        etaSeconds={scrapeProgress?.eta_seconds}
       />
     );
   }
