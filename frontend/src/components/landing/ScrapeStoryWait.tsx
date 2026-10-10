@@ -246,9 +246,7 @@ export default function ScrapeStoryWait({ username, onCancel, queued = false, ev
   const countLabel =
     shownCount != null
       ? `${shownCount.toLocaleString()} ${t('landing.loading.filmsFound')}`
-      : reveal.rssItemCount != null
-        ? t('landing.storyWait.rssPreview').replace('{count}', String(reveal.rssItemCount))
-        : null;
+      : null;
   const reviewLabel =
     reveal.reviewsFound != null
       ? t('landing.storyWait.reviewsCount').replace('{count}', String(reveal.reviewsFound))

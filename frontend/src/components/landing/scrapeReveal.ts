@@ -37,17 +37,12 @@ export type ScrapeReveal = {
   analyzing: boolean;
   filmsFound: number | null;
   reviewsFound: number | null;
-  rssItemCount: number | null;
   items: ScrapePreviewItem[];
   posters: ScrapePreviewItem[];
   beat: ScrapeWaitBeat;
 };
 
-const SAMPLE_STAGES: Record<string, true> = {
-  rss_preview: true,
-  diary_done: true,
-  grid_done: true,
-};
+const SAMPLE_STAGES: Record<string, true> = { diary_done: true, grid_done: true };
 // Analysis/postback traces are progress, not proof that the result is stored.
 const ANALYZING_STAGES: Record<string, true> = {
   scrape_done: true,
@@ -127,15 +122,12 @@ export function resolveScrapeReveal(
 ): ScrapeReveal {
   const list = events ?? [];
   const items = itemsFromEvents(list);
-  const rssEvent = [...list].reverse().find((event) => event.stage === 'rss_preview');
-  const rssCount = metricNumber(rssEvent?.metrics, 'item_count') ?? null;
   const base = {
     queued,
     analyzing: list.some((event) => ANALYZING_STAGES[event.stage ?? ''] === true),
     filmsFound: confirmedCount(list, 'diary_page', 'diary_done', 'films')
       ?? confirmedCount(list, 'grid_page', 'grid_done', 'films'),
     reviewsFound: confirmedCount(list, 'reviews_page', 'reviews_done', 'reviews'),
-    rssItemCount: rssCount,
     items,
     posters: items.filter((item) => Boolean(item.poster_url)),
   };
