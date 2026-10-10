@@ -281,7 +281,9 @@ async def _scrape_and_analyze_inner(
     loop = asyncio.get_running_loop()
     scrape_started = monotonic()
     if imported is None:
-        # Fail closed on Cloudflare before diary and grid pagination.
+        # Fail closed on Cloudflare before pagination. Probe, grid, and diary
+        # all use curl_cffi Safari; scrape_profile_sources keeps one session
+        # for the paginated work after this fail-fast check.
         await loop.run_in_executor(None, partial(probe_profile_access, username))
         sources = await scrape_profile_sources(
             username,

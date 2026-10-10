@@ -409,10 +409,67 @@ def test_scraper_reviews_http_block_and_rate_limit(monkeypatch):
         scraper._sync_scrape_reviews("user", 1, session=session)
 
 
-def test_kind_for_url_routes_diary_to_safari():
-    assert scraper._kind_for_url("https://letterboxd.com/dave/films/diary/page/2/") == "safari"
-    assert scraper._kind_for_url("https://letterboxd.com/dave/films/page/2/") == "plain"
-    assert scraper._kind_for_url("https://letterboxd.com/dave/") == "plain"
+def test_letterboxd_session_uses_safari_for_grid_and_diary(monkeypatch):
+    class FakeSafari:
+        def __init__(self, impersonate=None):
+            self.impersonate = impersonate
+            self.headers = {}
+            self.urls: list[str] = []
+
+        def get(self, url, timeout=10):
+            self.urls.append(url)
+            return MagicMock(status_code=200, text="ok")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(scraper.cffi_requests, "Session", FakeSafari)
+    session = scraper.LetterboxdSession()
+    assert not hasattr(session, "plain")
+    assert session.safari.impersonate == scraper.SAFARI_IMPERSONATE
+    session.get("https://letterboxd.com/dave/films/page/1/")
+    session.get("https://letterboxd.com/dave/films/diary/page/1/")
+    assert session.safari.urls == [
+        "https://letterboxd.com/dave/films/page/1/",
+        "https://letterboxd.com/dave/films/diary/page/1/",
+    ]
+    session.close()
+
+
+def test_sync_scrape_profile_sources_shares_one_session(monkeypatch):
+    seen: list[tuple[str, object]] = []
+    session = MagicMock()
+    monkeypatch.setattr(scraper, "_new_session", lambda: session)
+    monkeypatch.setattr(scraper, "_warm_session", lambda s: seen.append(("warm", s)))
+    monkeypatch.setattr(
+        scraper,
+        "_probe_profile_access",
+        lambda username, session=None: seen.append(("probe", session)),
+    )
+    monkeypatch.setattr(
+        scraper,
+        "_sync_scrape_overview",
+        lambda username, session=None, trace_callback=None: (
+            seen.append(("overview", session)) or (0, 0, [], None)
+        ),
+    )
+    monkeypatch.setattr(
+        scraper,
+        "_sync_scrape_diary",
+        lambda username, max_pages, session=None, trace_callback=None, cutoff_date=None: (
+            seen.append(("diary", session)) or []
+        ),
+    )
+    monkeypatch.setattr(
+        scraper,
+        "_sync_scrape_films_grid",
+        lambda username, max_pages, session=None, trace_callback=None: (
+            seen.append(("grid", session)) or []
+        ),
+    )
+    scraper._sync_scrape_profile_sources("dave", 1)
+    assert [name for name, _ in seen] == ["warm", "probe", "overview", "diary", "grid"]
+    assert all(item is session for _, item in seen)
 
 
 def test_last_page_reads_paginate_links():

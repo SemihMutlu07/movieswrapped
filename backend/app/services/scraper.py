@@ -1,8 +1,8 @@
-"""Letterboxd public profile scraper (HTML parsing via httpx + curl_cffi + BeautifulSoup).
+"""Letterboxd public profile scraper (HTML parsing via curl_cffi + BeautifulSoup).
 
-Films grid pages use plain httpx. Diary pages use curl_cffi with Safari
-impersonation. Cloudflare/403 fails immediately so the product can send
-the user to ZIP upload.
+Every Letterboxd HTML request uses one curl_cffi Safari session: access
+check, films grid, and diary. Cloudflare/403 fails immediately so the
+product can send the user to ZIP upload.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from urllib.parse import urlparse
 
 from curl_cffi import requests as cffi_requests
 from curl_cffi.requests.exceptions import RequestException as CurlRequestException
-import httpx
 import requests
 from bs4 import BeautifulSoup
 
@@ -83,31 +82,25 @@ class ProfileScrapeSources:
 
 
 class LetterboxdSession:
-    """Two transports, one duck-typed .get/.close used by the rest of this module.
+    """One curl_cffi Safari client for every Letterboxd HTML request.
 
-    Grid and overview use plain httpx. Diary (Cloudflare) uses curl_cffi Safari.
-    Tests may still pass a MagicMock with .get/.close; _fetch forwards to it.
+    Access check, films grid, and diary must share this session. Residential
+    Cloudflare 403s the grid when it goes out over plain httpx. Tests may
+    still pass a MagicMock with .get/.close; _fetch forwards to it.
     """
 
     def __init__(self) -> None:
-        self.plain = httpx.Client(headers=HEADERS, timeout=15.0, follow_redirects=True)
         self.safari = cffi_requests.Session(impersonate=SAFARI_IMPERSONATE)
         self.safari.headers.update(HEADERS)
-        self._plain_lock = threading.Lock()
-        self._safari_lock = threading.Lock()
+        self._lock = threading.Lock()
 
     def get(self, url: str, timeout: int = 10):
-        kind = _kind_for_url(url)
         last_error: Exception | None = None
         for attempt in range(FETCH_RETRIES):
             try:
-                if kind == "safari":
-                    with self._safari_lock:
-                        response = self.safari.get(url, timeout=timeout)
-                else:
-                    with self._plain_lock:
-                        response = self.plain.get(url, timeout=timeout)
-            except (httpx.HTTPError, CurlRequestException, OSError) as exc:
+                with self._lock:
+                    response = self.safari.get(url, timeout=timeout)
+            except (CurlRequestException, OSError) as exc:
                 last_error = exc
                 if attempt + 1 >= FETCH_RETRIES:
                     raise
@@ -127,19 +120,9 @@ class LetterboxdSession:
 
     def close(self) -> None:
         try:
-            self.plain.close()
-        finally:
-            try:
-                self.safari.close()
-            except Exception:
-                pass
-
-
-def _kind_for_url(url: str) -> str:
-    path = urlparse(url).path.lower()
-    if "/films/diary" in path:
-        return "safari"
-    return "plain"
+            self.safari.close()
+        except Exception:
+            pass
 
 
 def _new_session() -> LetterboxdSession:
@@ -240,10 +223,8 @@ def probe_profile_access(username: str, session: Optional[Any] = None) -> None:
 def _probe_profile_access(username: str, session: Optional[Any] = None) -> None:
     """Single GET of /{username}/films/page/1/ before diary/grid pagination.
 
-    The films grid is the plain-httpx path. Probing the profile homepage
-    would fail closed on Cloudflare even when the grid is readable.
-    Distinguishes missing profiles (404) from bot blocks so the product
-    can send the user to ZIP upload.
+    Uses the same Safari session as grid and diary. Distinguishes missing
+    profiles (404) from bot blocks so the product can send the user to ZIP.
     """
     owns_session = session is None
     s = session or _new_session()
@@ -786,7 +767,7 @@ def _sync_scrape_diary(
     trace_callback: Optional[TraceCallback] = None,
     cutoff_date: Optional[date] = None,
 ) -> list[dict]:
-    """Synchronous diary scraper (curl_cffi Safari via LetterboxdSession)."""
+    """Synchronous diary scraper (same Safari session as grid and access check)."""
     owns_session = session is None
     logger.info("Starting diary scrape for %s (max_pages=%d)", username, max_pages)
     s = session or _new_session()
@@ -908,7 +889,7 @@ def _sync_scrape_films_grid(
     session: Optional[Any] = None,
     trace_callback: Optional[TraceCallback] = None,
 ) -> list[dict]:
-    """Synchronous full-watched grid scraper (plain httpx via LetterboxdSession)."""
+    """Synchronous full-watched grid scraper (same Safari session as diary)."""
     owns_session = session is None
     logger.info("Starting grid scrape for %s (max_pages=%d)", username, max_pages)
     s = session or _new_session()
@@ -1103,31 +1084,47 @@ def _sync_scrape_profile_sources(
     max_pages: int,
     include_reviews: bool = False,
     trace_callback: Optional[TraceCallback] = None,
+    diary_cutoff: Optional[date] = None,
+    include_grid: bool = True,
+    skip_probe: bool = False,
+    session: Optional[Any] = None,
 ) -> ProfileScrapeSources:
-    """Scrape diary and grid in one warmed requests session."""
+    """Scrape diary and grid in one warmed Safari session."""
     logger.info("Starting combined profile scrape for %s (include_reviews=%s)", username, include_reviews)
-    session = _new_session()
-    _warm_session(session)
+    owns_session = session is None
+    s = session or _new_session()
+    if owns_session:
+        _warm_session(s)
     try:
-        _probe_profile_access(username, session=session)
+        if not skip_probe:
+            _probe_profile_access(username, session=s)
         film_count, review_count, favorite_films, profile_avatar_url = _sync_scrape_overview(
-            username, session=session, trace_callback=trace_callback
+            username, session=s, trace_callback=trace_callback
         )
-        if trace_callback:
-            diary = _sync_scrape_diary(username, max_pages, session=session, trace_callback=trace_callback)
-            grid = _sync_scrape_films_grid(username, max_pages, session=session, trace_callback=trace_callback)
-        else:
-            diary = _sync_scrape_diary(username, max_pages, session=session)
-            grid = _sync_scrape_films_grid(username, max_pages, session=session)
+        diary = _sync_scrape_diary(
+            username,
+            max_pages,
+            session=s,
+            trace_callback=trace_callback,
+            cutoff_date=diary_cutoff,
+        )
+        grid = (
+            _sync_scrape_films_grid(username, max_pages, session=s, trace_callback=trace_callback)
+            if include_grid
+            else []
+        )
         reviews: list[dict] = []
         if include_reviews:
             try:
                 # Liker identity pages are a serial tail (up to 20 pages per review).
                 # Wrapped stats use the review text already on the card.
-                if trace_callback:
-                    reviews = _sync_scrape_reviews(username, max_pages, session=session, trace_callback=trace_callback, include_likers=False)
-                else:
-                    reviews = _sync_scrape_reviews(username, max_pages, session=session, include_likers=False)
+                reviews = _sync_scrape_reviews(
+                    username,
+                    max_pages,
+                    session=s,
+                    trace_callback=trace_callback,
+                    include_likers=False,
+                )
             except Exception as exc:
                 logger.warning("Review scrape failed for %s: %s", username, exc)
         logger.info(
@@ -1144,7 +1141,8 @@ def _sync_scrape_profile_sources(
             profile_avatar_url=profile_avatar_url,
         )
     finally:
-        session.close()
+        if owns_session:
+            s.close()
 
 
 def _sync_check_profile(username: str) -> bool:
@@ -1227,93 +1225,23 @@ async def scrape_profile_sources(
     diary_cutoff: Optional[date] = None,
     include_grid: bool = True,
     skip_probe: bool = False,
+    session: Optional[Any] = None,
 ) -> ProfileScrapeSources:
-    """Scrape diary, grid, overview (and optionally reviews) concurrently."""
+    """Scrape diary, grid, overview (and optionally reviews) on one Safari session."""
     loop = _get_loop()
-    # One profile GET first. Cloudflare/403 must not fan out into diary+grid+reviews.
-    if not skip_probe:
-        await loop.run_in_executor(None, partial(_probe_profile_access, username))
-    diary_call = (
-        partial(_sync_scrape_diary, username, max_pages, None, trace_callback)
-        if diary_cutoff is None
-        else partial(
-            _sync_scrape_diary,
+    return await loop.run_in_executor(
+        None,
+        partial(
+            _sync_scrape_profile_sources,
             username,
             max_pages,
-            None,
+            include_reviews,
             trace_callback,
             diary_cutoff,
-        )
-    )
-    diary_fut = loop.run_in_executor(None, diary_call)
-    grid_fut = (
-        loop.run_in_executor(None, partial(_sync_scrape_films_grid, username, max_pages, None, trace_callback))
-        if include_grid
-        else None
-    )
-    overview_fut = loop.run_in_executor(None, partial(_sync_scrape_overview, username, None, trace_callback))
-    futures = [diary_fut]
-    if grid_fut is not None:
-        futures.append(grid_fut)
-    futures.append(overview_fut)
-    if include_reviews:
-        futures.append(
-            loop.run_in_executor(
-                None,
-                partial(_sync_scrape_reviews, username, max_pages, None, trace_callback, False),
-            )
-        )
-
-    results = await asyncio.gather(*futures, return_exceptions=True)
-    diary_res = results[0]
-    if include_grid:
-        grid_res, overview_res = results[1], results[2]
-        reviews_res = results[3] if include_reviews else []
-    else:
-        grid_res = []
-        overview_res = results[1]
-        reviews_res = results[2] if include_reviews else []
-
-    # Fail fast if any film source hit a block, rate limit, or unexpected HTTP error
-    for res in (diary_res, grid_res):
-        if isinstance(res, (RuntimeError, requests.RequestException, httpx.HTTPError, OSError)):
-            raise res
-        if isinstance(res, ValueError):
-            msg = str(res)
-            if "Letterboxd is blocking" in msg or "Letterboxd rate limit" in msg:
-                raise res
-
-    diary_failed = isinstance(diary_res, BaseException)
-    grid_failed = isinstance(grid_res, BaseException)
-    if diary_failed and (grid_failed or not include_grid):
-        raise grid_res if isinstance(grid_res, (ValueError, RuntimeError, requests.RequestException)) else diary_res
-    if diary_failed:
-        logger.warning("Diary scrape failed for %s (using grid only): %s", username, diary_res)
-    if grid_failed:
-        logger.warning("Grid scrape failed for %s (using diary only): %s", username, grid_res)
-    diary = [] if diary_failed else diary_res
-    grid = [] if grid_failed else grid_res
-
-    film_count, review_count, favorite_films, profile_avatar_url = (0, 0, [], None)
-    if not isinstance(overview_res, BaseException):
-        film_count, review_count, favorite_films, profile_avatar_url = overview_res
-
-    if isinstance(reviews_res, BaseException):
-        logger.warning("Review scrape failed for %s: %s", username, reviews_res)
-        reviews_res = []
-
-    logger.info(
-        "Parallel profile scrape complete for %s: diary=%d grid=%d films=%d reviews=%d scraped_reviews=%d",
-        username, len(diary), len(grid), film_count, review_count, len(reviews_res),
-    )
-    return ProfileScrapeSources(
-        diary=diary,
-        grid=grid,
-        review_count=review_count,
-        film_count=film_count,
-        reviews=reviews_res,
-        favorite_films=favorite_films,
-        profile_avatar_url=profile_avatar_url,
+            include_grid,
+            skip_probe,
+            session,
+        ),
     )
 
 
