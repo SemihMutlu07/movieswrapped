@@ -1,11 +1,11 @@
 import type { MetadataRoute } from 'next';
 
+import { SITE_ORIGIN } from '@/i18n/site';
+
 // Static export requires explicitly static data routes.
 export const dynamic = 'force-static';
 
 export default function robots(): MetadataRoute.Robots {
-  const siteUrl = 'https://movieswrapped.com';
-
   // Personal results pages must never be indexed — they contain a user's
   // private Letterboxd analysis. The rest of the site is open to everyone,
   // including AI answer-engine crawlers (AEO).
@@ -24,6 +24,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/results', '/en/results', '/tr/results'],
       },
     ],
-    sitemap: `${siteUrl}/sitemap.xml`,
+    sitemap: `${SITE_ORIGIN}/sitemap.xml`,
   };
 }

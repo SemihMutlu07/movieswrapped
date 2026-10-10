@@ -24,6 +24,13 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    // Production 301 is in netlify.toml / public/_redirects (static export
+    // ignores this). Kept for `next dev` so `/en` matches production.
+    return [
+      { source: '/en', destination: '/', permanent: true },
+    ];
+  },
   async rewrites() {
     // Note: rewrites are ignored with output: 'export'. 
     // They are kept here for local development if not using export.

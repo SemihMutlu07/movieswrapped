@@ -446,12 +446,26 @@ describe('LetterboxdLanding persistence', () => {
   it('renders the FAQ section with all six questions from the catalog', () => {
     render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
 
+    expect(screen.getByRole('heading', { name: 'Your Letterboxd Wrapped' })).toBeInTheDocument();
+    expect(screen.getByText('From the zip you download. Not their screen again.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Frequently asked questions' })).toBeInTheDocument();
     expect(screen.getByText('What is Movies Wrapped?')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The file from your zip is your year. Letterboxd's Year in Review is the January 2 email, the same screen again.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('How do I get my Letterboxd export?')).toBeInTheDocument();
     expect(screen.getByText('Is my data stored?')).toBeInTheDocument();
     expect(screen.getByText('How long does it take?')).toBeInTheDocument();
     expect(screen.getByText('Is it free?')).toBeInTheDocument();
     expect(screen.getByText('Can I upload a CSV?')).toBeInTheDocument();
+  });
+
+  it('renders the locked Turkish homepage H1', () => {
+    render(<I18nProvider locale="tr"><LetterboxdLanding /></I18nProvider>);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Bu senin yılın, indirdiğin dosyadan. Aynı ekran onlarınki.',
+    );
   });
 });

@@ -86,7 +86,7 @@ test.describe('phone handoff', () => {
 
   test('landing asks the visitor to continue on desktop', async ({ page }) => {
     await acceptAnalytics(page);
-    await page.goto('/en');
+    await page.goto('/');
     await expect(page.getByTestId('desktop-required-landing')).toBeVisible();
     await expect(page.getByRole('button', { name: /copy this page/i })).toBeVisible();
     await expect(page.getByTestId('upload-drop-zone')).toHaveCount(0);
@@ -98,7 +98,7 @@ test.describe('narrow desktop window', () => {
 
   test('landing keeps drag-and-drop upload', async ({ page }) => {
     await acceptAnalytics(page);
-    await page.goto('/en');
+    await page.goto('/');
     await expect(page.getByTestId('upload-drop-zone')).toBeVisible();
     await expect(page.getByTestId('desktop-required-landing')).toHaveCount(0);
   });

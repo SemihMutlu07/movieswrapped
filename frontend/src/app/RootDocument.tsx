@@ -5,8 +5,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import PageViewTracker from '@/components/PageViewTracker';
 import { I18nProvider } from '@/i18n/I18nProvider';
-import { getFaqItems } from '@/i18n/faq';
 import type { Locale } from '@/i18n/locales';
+import { buildSiteJsonLd } from '@/lib/site-schema';
 
 import './globals.css';
 
@@ -31,57 +31,7 @@ export default function RootDocument({
   locale: Locale;
   showLanguageSwitcher?: boolean;
 }) {
-  const description = locale === 'tr'
-    ? 'Movies Wrapped, Letterboxd izleme geçmişini kişisel film istatistiklerine ve içgörülere dönüştürür.'
-    : 'Movies Wrapped turns your Letterboxd watch history into personal film statistics and insights.';
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'WebSite',
-        '@id': `https://movieswrapped.com/${locale}/#website`,
-        url: `https://movieswrapped.com/${locale}`,
-        name: 'Movies Wrapped',
-        description,
-        publisher: { '@id': 'https://movieswrapped.com/#organization' },
-        inLanguage: locale,
-      },
-      {
-        '@type': 'Organization',
-        '@id': 'https://movieswrapped.com/#organization',
-        name: 'Movies Wrapped',
-        url: 'https://movieswrapped.com/',
-        logo: 'https://movieswrapped.com/assets/Sosyal%20Medya%20Logo%20-%20Dark.png',
-        description,
-      },
-      {
-        '@type': 'WebApplication',
-        '@id': 'https://movieswrapped.com/#webapp',
-        name: 'Movies Wrapped',
-        url: 'https://movieswrapped.com/',
-        description,
-        applicationCategory: 'EntertainmentApplication',
-        operatingSystem: 'Any',
-        inLanguage: locale,
-        offers: {
-          '@type': 'Offer',
-          price: '0',
-          priceCurrency: 'USD',
-          availability: 'https://schema.org/InStock',
-        },
-      },
-      {
-        '@type': 'FAQPage',
-        '@id': `https://movieswrapped.com/${locale}/#faq`,
-        inLanguage: locale,
-        mainEntity: getFaqItems(locale).map((item) => ({
-          '@type': 'Question',
-          name: item.question,
-          acceptedAnswer: { '@type': 'Answer', text: item.answer },
-        })),
-      },
-    ],
-  };
+  const jsonLd = buildSiteJsonLd(locale);
   return (
     <html lang={locale}>
       <head>

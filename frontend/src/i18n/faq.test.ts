@@ -21,6 +21,9 @@ describe('landing FAQ', () => {
     expect(enItems).toHaveLength(6);
     expect(trItems).toHaveLength(6);
     expect(enItems[0].question).toBe('What is Movies Wrapped?');
+    expect(enItems[0].answer).toBe(
+      "The file from your zip is your year. Letterboxd's Year in Review is the January 2 email, the same screen again.",
+    );
     expect(trItems[0].question).toBe('Movies Wrapped nedir?');
 
     // Answers must not leak the other language or stay empty.

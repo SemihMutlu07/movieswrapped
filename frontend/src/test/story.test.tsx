@@ -72,7 +72,7 @@ describe('StoryPage', () => {
   it('shows the empty state when no stats are stored', async () => {
     renderStory();
     expect(await screen.findByText(/No result data in this session/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /back home/i })).toHaveAttribute('href', '/en');
+    expect(screen.getByRole('link', { name: /back home/i })).toHaveAttribute('href', '/');
     expect(screen.queryByTestId('desktop-required-story')).not.toBeInTheDocument();
   });
 

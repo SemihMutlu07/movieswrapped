@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import RootDocument from '@/app/RootDocument';
 import { isLocale, locales, type Locale } from '@/i18n/locales';
+import { HREFLANG_PATHS, SITE_ORIGIN, localeHomePath } from '@/i18n/site';
 
 export const dynamicParams = false;
 
@@ -13,8 +14,8 @@ export function generateStaticParams() {
 
 const metadataByLocale: Record<Locale, { title: string; description: string }> = {
   en: {
-    title: 'Movies Wrapped - Your Year in Film from Letterboxd',
-    description: 'Movies Wrapped turns your Letterboxd watch history into a personal year-in-film dossier: film statistics, rating personality, favorite directors and actors, review analysis, and your cinema scale.',
+    title: 'Your Letterboxd Wrapped | Movies Wrapped',
+    description: 'From the zip you download. Not their screen again.',
   },
   tr: {
     title: 'Movies Wrapped - Sinemada Yılın',
@@ -30,18 +31,19 @@ export async function generateMetadata({
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const copy = metadataByLocale[locale];
-  const siteUrl = 'https://movieswrapped.com';
+  const homePath = localeHomePath(locale);
+  const pageUrl = `${SITE_ORIGIN}${homePath === '/' ? '/' : homePath}`;
   return {
-    metadataBase: new URL(siteUrl),
+    metadataBase: new URL(SITE_ORIGIN),
     title: copy.title,
     description: copy.description,
     alternates: {
-      canonical: `/${locale}`,
-      languages: { en: '/en', tr: '/tr', 'x-default': '/' },
+      canonical: homePath,
+      languages: HREFLANG_PATHS,
     },
     openGraph: {
       type: 'website',
-      url: `${siteUrl}/${locale}`,
+      url: pageUrl,
       siteName: 'Movies Wrapped',
       title: copy.title,
       description: copy.description,
@@ -49,7 +51,7 @@ export async function generateMetadata({
         url: '/assets/og-image-1200x630.png',
         width: 1200,
         height: 630,
-        alt: locale === 'tr' ? 'Movies Wrapped — Letterboxd ile sinemada yılın' : 'Movies Wrapped — your year in film from Letterboxd',
+        alt: locale === 'tr' ? 'Movies Wrapped — Letterboxd ile sinemada yılın' : 'Your Letterboxd Wrapped',
       }],
     },
     twitter: {
@@ -58,7 +60,8 @@ export async function generateMetadata({
       description: copy.description,
       images: ['/assets/og-image-1200x630.png'],
     },
-    robots: { index: true, follow: true },
+    // English `/en` is a 301 to `/`. Do not index the leftover static file.
+    robots: locale === 'en' ? { index: false, follow: true } : { index: true, follow: true },
   };
 }
 
