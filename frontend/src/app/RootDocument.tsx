@@ -7,6 +7,7 @@ import PageViewTracker from '@/components/PageViewTracker';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { getFaqItems } from '@/i18n/faq';
 import type { Locale } from '@/i18n/locales';
+import { OG_SHARE_IMAGE, SITE_URL, seoByLocale } from '@/lib/seo';
 
 import './globals.css';
 
@@ -31,34 +32,32 @@ export default function RootDocument({
   locale: Locale;
   showLanguageSwitcher?: boolean;
 }) {
-  const description = locale === 'tr'
-    ? 'Movies Wrapped, Letterboxd izleme geçmişini kişisel film istatistiklerine ve içgörülere dönüştürür.'
-    : 'Movies Wrapped turns your Letterboxd watch history into personal film statistics and insights.';
+  const description = seoByLocale[locale].description;
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'WebSite',
-        '@id': `https://movieswrapped.com/${locale}/#website`,
-        url: `https://movieswrapped.com/${locale}`,
+        '@id': `${SITE_URL}/${locale}/#website`,
+        url: `${SITE_URL}/${locale}`,
         name: 'Movies Wrapped',
         description,
-        publisher: { '@id': 'https://movieswrapped.com/#organization' },
+        publisher: { '@id': `${SITE_URL}/#organization` },
         inLanguage: locale,
       },
       {
         '@type': 'Organization',
-        '@id': 'https://movieswrapped.com/#organization',
+        '@id': `${SITE_URL}/#organization`,
         name: 'Movies Wrapped',
-        url: 'https://movieswrapped.com/',
-        logo: 'https://movieswrapped.com/assets/Sosyal%20Medya%20Logo%20-%20Dark.png',
+        url: `${SITE_URL}/en`,
+        logo: `${SITE_URL}${OG_SHARE_IMAGE}`,
         description,
       },
       {
         '@type': 'WebApplication',
-        '@id': 'https://movieswrapped.com/#webapp',
+        '@id': `${SITE_URL}/#webapp`,
         name: 'Movies Wrapped',
-        url: 'https://movieswrapped.com/',
+        url: `${SITE_URL}/en`,
         description,
         applicationCategory: 'EntertainmentApplication',
         operatingSystem: 'Any',
@@ -72,7 +71,7 @@ export default function RootDocument({
       },
       {
         '@type': 'FAQPage',
-        '@id': `https://movieswrapped.com/${locale}/#faq`,
+        '@id': `${SITE_URL}/${locale}/#faq`,
         inLanguage: locale,
         mainEntity: getFaqItems(locale).map((item) => ({
           '@type': 'Question',
