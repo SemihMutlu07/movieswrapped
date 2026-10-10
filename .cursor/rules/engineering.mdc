@@ -1,0 +1,58 @@
+---
+description: pstack-style engineering constraints for this repo (small verified changes, tests, no speculative abstraction)
+alwaysApply: true
+---
+
+# Engineering rules (pstack)
+
+Work from constraints. Ship the smallest change that can be verified. Do not invent architecture for a future that is not in the request.
+
+## Constraints first
+
+Write down what this change must not do before writing code. In this repo that always includes:
+
+- One PR = one scope. Do not mix scrape, RSS, cache, mobile, SEO, MCP, or dependency bumps.
+- Frontend is a static Next.js export (`output: 'export'`). No SSR-only features.
+- Never commit `.env`, secrets, or API keys. TMDB stays on the backend. Supabase uses the anon key only.
+- ZIP export is the guaranteed product path. Username HTML scrape is best-effort and fail-fast.
+- Do not merge PRs unless the owner explicitly asked to merge in this turn.
+- Do not revert merged PRs unless the owner explicitly asked.
+
+## Dead systems — do not resurrect
+
+These were built, operated, and then removed on purpose. Do not restore them unless the owner names them in the request:
+
+- Desktop scrape worker (`/api/worker/*`, `desktop_scrape_worker.py`, `WORKER_TOKEN`, supervisor/watchdog scripts)
+- Residential-IP HTML scraping as a production dependency
+- Paid/proxy scrape (ScraperAPI and any successor)
+- Watchlist-compare / Date Night / FindFilm scrape jobs
+- Browser-use / Hermes as a general scraper
+
+Leftover docs and scripts (`docs/desktop-worker-*`, `backend/start-worker*.ps1`) are historical. They are not a live control plane. The durable copy of the worker lives on `archive/scrape`.
+
+If a task seems to need any of the above, stop and report. Do not "just add a worker gate" or "just try a proxy."
+
+## Small verified changes
+
+- Read the file you will edit. Change one behavior. Keep the diff small.
+- Prove the behavior with a test or a real run of the affected path before calling it done.
+- Frontend: `cd frontend && npx tsc --noEmit` plus the relevant vitest files.
+- Backend: `cd backend && python -m pytest` for the tests that cover the change (full suite before claiming done).
+- If you cannot verify UI in a browser, say what you ran instead. Do not claim visual verification from a screenshot alone.
+
+## Tests
+
+- New behavior needs a test that would fail without the change.
+- Do not delete or skip a test to make a scrape/proxy path look green.
+- Prefers fixtures and hermetic tests over live Letterboxd hits.
+
+## No speculative abstraction
+
+- Do not add helpers, layers, feature flags, or "for later" modules.
+- Do not extract a shared interface until a second real caller exists in this PR.
+- Do not rebuild the desktop worker, a job queue, or an RSS platform "so scrape can scale later."
+- Duplicate a ten-line helper before introducing a new package.
+
+## Default move when blocked
+
+If Cloudflare, Render IPs, or an always-on home machine is the blocker: keep ZIP as the complete path and fail scrape fast. Do not route around that with proxies, headless browsers, or a new worker.

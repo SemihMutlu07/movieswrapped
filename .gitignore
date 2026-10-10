@@ -81,7 +81,9 @@ prototype_backup_DO_NOT_TOUCH/
 # agent / tooling scratch (do not re-commit)
 .agent/
 .claude/
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 _screenshots/
 SCRATCHPAD.md
 CHECKPOINT-*.md
