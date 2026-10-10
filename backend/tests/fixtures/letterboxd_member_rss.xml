@@ -1,0 +1,711 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:letterboxd="https://letterboxd.com" xmlns:tmdb="https://themoviedb.org">
+	<channel>
+		<title>Letterboxd - Sample User</title>
+		<link>https://letterboxd.com/sampleuser/</link>
+		<description>Letterboxd - Sample User</description>
+		<atom:link rel="self" href="https://letterboxd.com/sampleuser/rss/" type="application/rss+xml"/>
+		<item>
+			<title>Digger, 2026 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-0/</link>
+			<guid isPermaLink="false">letterboxd-review-1000</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-10-09</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Digger</letterboxd:filmTitle>
+			<letterboxd:filmYear>2026</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>1248832</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/1/poster-digger-0-600-0-900-crop.jpg"/></p> <p>fixture review 0</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 2, 2026 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-1/</link>
+			<guid isPermaLink="false">letterboxd-review-1001</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-02-02</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 2</letterboxd:filmTitle>
+			<letterboxd:filmYear>2026</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10001</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/1/poster-1-0-600-0-900-crop.jpg"/></p> <p>fixture review 1</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 3, 2026</title>
+			<link>https://letterboxd.com/sampleuser/film/film-2/</link>
+			<guid isPermaLink="false">letterboxd-review-1002</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-03-03</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 3</letterboxd:filmTitle>
+			<letterboxd:filmYear>2026</letterboxd:filmYear>
+			
+			<tmdb:movieId>10002</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/2/poster-2-0-600-0-900-crop.jpg"/></p> <p>fixture review 2</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 4, 2026 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-3/</link>
+			<guid isPermaLink="false">letterboxd-review-1003</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-04-04</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 4</letterboxd:filmTitle>
+			<letterboxd:filmYear>2026</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10003</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/3/poster-3-0-600-0-900-crop.jpg"/></p> <p>fixture review 3</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 5, 2026 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-4/</link>
+			<guid isPermaLink="false">letterboxd-review-1004</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-05-05</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 5</letterboxd:filmTitle>
+			<letterboxd:filmYear>2026</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10004</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/4/poster-4-0-600-0-900-crop.jpg"/></p> <p>fixture review 4</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 6, 2026</title>
+			<link>https://letterboxd.com/sampleuser/film/film-5/</link>
+			<guid isPermaLink="false">letterboxd-review-1005</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-06-06</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 6</letterboxd:filmTitle>
+			<letterboxd:filmYear>2026</letterboxd:filmYear>
+			
+			
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/5/poster-5-0-600-0-900-crop.jpg"/></p> <p>fixture review 5</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 7, 2025 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-6/</link>
+			<guid isPermaLink="false">letterboxd-review-1006</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-07-07</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 7</letterboxd:filmTitle>
+			<letterboxd:filmYear>2025</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10006</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/6/poster-6-0-600-0-900-crop.jpg"/></p> <p>fixture review 6</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 8, 2025 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-7/</link>
+			<guid isPermaLink="false">letterboxd-review-1007</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-08-08</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 8</letterboxd:filmTitle>
+			<letterboxd:filmYear>2025</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10007</tmdb:movieId>
+			<description><![CDATA[ <p></p> <p>fixture review 7</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 9, 2025</title>
+			<link>https://letterboxd.com/sampleuser/film/film-8/</link>
+			<guid isPermaLink="false">letterboxd-review-1008</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-09-09</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 9</letterboxd:filmTitle>
+			<letterboxd:filmYear>2025</letterboxd:filmYear>
+			
+			<tmdb:movieId>10008</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/8/poster-8-0-600-0-900-crop.jpg"/></p> <p>fixture review 8</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 10, 2025 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-9/</link>
+			<guid isPermaLink="false">letterboxd-review-1009</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-01-10</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 10</letterboxd:filmTitle>
+			<letterboxd:filmYear>2025</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10009</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/9/poster-9-0-600-0-900-crop.jpg"/></p> <p>fixture review 9</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 11, 2025 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-10/</link>
+			<guid isPermaLink="false">letterboxd-review-1010</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-02-11</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 11</letterboxd:filmTitle>
+			<letterboxd:filmYear>2025</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10010</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/10/poster-10-0-600-0-900-crop.jpg"/></p> <p>fixture review 10</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 12, 2025</title>
+			<link>https://letterboxd.com/sampleuser/film/film-11/</link>
+			<guid isPermaLink="false">letterboxd-review-1011</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-03-12</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 12</letterboxd:filmTitle>
+			<letterboxd:filmYear>2025</letterboxd:filmYear>
+			
+			<tmdb:movieId>10011</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/11/poster-11-0-600-0-900-crop.jpg"/></p> <p>fixture review 11</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 13, 2024 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-12/</link>
+			<guid isPermaLink="false">letterboxd-review-1012</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-04-13</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 13</letterboxd:filmTitle>
+			<letterboxd:filmYear>2024</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10012</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/12/poster-12-0-600-0-900-crop.jpg"/></p> <p>fixture review 12</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 14, 2024 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-13/</link>
+			<guid isPermaLink="false">letterboxd-review-1013</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-05-14</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 14</letterboxd:filmTitle>
+			<letterboxd:filmYear>2024</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10013</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/13/poster-13-0-600-0-900-crop.jpg"/></p> <p>fixture review 13</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 15, 2024</title>
+			<link>https://letterboxd.com/sampleuser/film/film-14/</link>
+			<guid isPermaLink="false">letterboxd-review-1014</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-06-15</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 15</letterboxd:filmTitle>
+			<letterboxd:filmYear>2024</letterboxd:filmYear>
+			
+			<tmdb:movieId>10014</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/14/poster-14-0-600-0-900-crop.jpg"/></p> <p>fixture review 14</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 16, 2024 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-15/</link>
+			<guid isPermaLink="false">letterboxd-review-1015</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-07-16</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 16</letterboxd:filmTitle>
+			<letterboxd:filmYear>2024</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10015</tmdb:movieId>
+			<description><![CDATA[ <p></p> <p>fixture review 15</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 17, 2024 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-16/</link>
+			<guid isPermaLink="false">letterboxd-review-1016</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-08-17</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 17</letterboxd:filmTitle>
+			<letterboxd:filmYear>2024</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10016</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/16/poster-16-0-600-0-900-crop.jpg"/></p> <p>fixture review 16</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 18, 2024</title>
+			<link>https://letterboxd.com/sampleuser/film/film-17/</link>
+			<guid isPermaLink="false">letterboxd-review-1017</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-09-18</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 18</letterboxd:filmTitle>
+			<letterboxd:filmYear>2024</letterboxd:filmYear>
+			
+			
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/17/poster-17-0-600-0-900-crop.jpg"/></p> <p>fixture review 17</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 19, 2023 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-18/</link>
+			<guid isPermaLink="false">letterboxd-review-1018</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-01-19</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 19</letterboxd:filmTitle>
+			<letterboxd:filmYear>2023</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10018</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/18/poster-18-0-600-0-900-crop.jpg"/></p> <p>fixture review 18</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 20, 2023 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-19/</link>
+			<guid isPermaLink="false">letterboxd-review-1019</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-02-20</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 20</letterboxd:filmTitle>
+			<letterboxd:filmYear>2023</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10019</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/19/poster-19-0-600-0-900-crop.jpg"/></p> <p>fixture review 19</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 21, 2023</title>
+			<link>https://letterboxd.com/sampleuser/film/film-20/</link>
+			<guid isPermaLink="false">letterboxd-review-1020</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-03-21</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 21</letterboxd:filmTitle>
+			<letterboxd:filmYear>2023</letterboxd:filmYear>
+			
+			<tmdb:movieId>10020</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/20/poster-20-0-600-0-900-crop.jpg"/></p> <p>fixture review 20</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 22, 2023 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-21/</link>
+			<guid isPermaLink="false">letterboxd-review-1021</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-04-22</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 22</letterboxd:filmTitle>
+			<letterboxd:filmYear>2023</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10021</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/21/poster-21-0-600-0-900-crop.jpg"/></p> <p>fixture review 21</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 23, 2023 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-22/</link>
+			<guid isPermaLink="false">letterboxd-review-1022</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-05-23</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 23</letterboxd:filmTitle>
+			<letterboxd:filmYear>2023</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10022</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/22/poster-22-0-600-0-900-crop.jpg"/></p> <p>fixture review 22</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 24, 2023</title>
+			<link>https://letterboxd.com/sampleuser/film/film-23/</link>
+			<guid isPermaLink="false">letterboxd-review-1023</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-06-24</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 24</letterboxd:filmTitle>
+			<letterboxd:filmYear>2023</letterboxd:filmYear>
+			
+			<tmdb:movieId>10023</tmdb:movieId>
+			<description><![CDATA[ <p></p> <p>fixture review 23</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 25, 2022 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-24/</link>
+			<guid isPermaLink="false">letterboxd-review-1024</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-07-25</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 25</letterboxd:filmTitle>
+			<letterboxd:filmYear>2022</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10024</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/24/poster-24-0-600-0-900-crop.jpg"/></p> <p>fixture review 24</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 26, 2022 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-25/</link>
+			<guid isPermaLink="false">letterboxd-review-1025</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-08-26</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 26</letterboxd:filmTitle>
+			<letterboxd:filmYear>2022</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10025</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/25/poster-25-0-600-0-900-crop.jpg"/></p> <p>fixture review 25</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 27, 2022</title>
+			<link>https://letterboxd.com/sampleuser/film/film-26/</link>
+			<guid isPermaLink="false">letterboxd-review-1026</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-09-27</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 27</letterboxd:filmTitle>
+			<letterboxd:filmYear>2022</letterboxd:filmYear>
+			
+			<tmdb:movieId>10026</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/26/poster-26-0-600-0-900-crop.jpg"/></p> <p>fixture review 26</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 28, 2022 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-27/</link>
+			<guid isPermaLink="false">letterboxd-review-1027</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-01-01</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 28</letterboxd:filmTitle>
+			<letterboxd:filmYear>2022</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10027</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/27/poster-27-0-600-0-900-crop.jpg"/></p> <p>fixture review 27</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 29, 2022 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-28/</link>
+			<guid isPermaLink="false">letterboxd-review-1028</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-02-02</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 29</letterboxd:filmTitle>
+			<letterboxd:filmYear>2022</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10028</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/28/poster-28-0-600-0-900-crop.jpg"/></p> <p>fixture review 28</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 30, 2022</title>
+			<link>https://letterboxd.com/sampleuser/film/film-29/</link>
+			<guid isPermaLink="false">letterboxd-review-1029</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-03-03</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 30</letterboxd:filmTitle>
+			<letterboxd:filmYear>2022</letterboxd:filmYear>
+			
+			<tmdb:movieId>10029</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/29/poster-29-0-600-0-900-crop.jpg"/></p> <p>fixture review 29</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 31, 2021 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-30/</link>
+			<guid isPermaLink="false">letterboxd-review-1030</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-04-04</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 31</letterboxd:filmTitle>
+			<letterboxd:filmYear>2021</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10030</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/30/poster-30-0-600-0-900-crop.jpg"/></p> <p>fixture review 30</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 32, 2021 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-31/</link>
+			<guid isPermaLink="false">letterboxd-review-1031</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-05-05</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 32</letterboxd:filmTitle>
+			<letterboxd:filmYear>2021</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10031</tmdb:movieId>
+			<description><![CDATA[ <p></p> <p>fixture review 31</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 33, 2021</title>
+			<link>https://letterboxd.com/sampleuser/film/film-32/</link>
+			<guid isPermaLink="false">letterboxd-review-1032</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-06-06</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 33</letterboxd:filmTitle>
+			<letterboxd:filmYear>2021</letterboxd:filmYear>
+			
+			<tmdb:movieId>10032</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/32/poster-32-0-600-0-900-crop.jpg"/></p> <p>fixture review 32</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 34, 2021 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-33/</link>
+			<guid isPermaLink="false">letterboxd-review-1033</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-07-07</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 34</letterboxd:filmTitle>
+			<letterboxd:filmYear>2021</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10033</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/33/poster-33-0-600-0-900-crop.jpg"/></p> <p>fixture review 33</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 35, 2021 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-34/</link>
+			<guid isPermaLink="false">letterboxd-review-1034</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-08-08</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 35</letterboxd:filmTitle>
+			<letterboxd:filmYear>2021</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10034</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/34/poster-34-0-600-0-900-crop.jpg"/></p> <p>fixture review 34</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 36, 2021</title>
+			<link>https://letterboxd.com/sampleuser/film/film-35/</link>
+			<guid isPermaLink="false">letterboxd-review-1035</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-09-09</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 36</letterboxd:filmTitle>
+			<letterboxd:filmYear>2021</letterboxd:filmYear>
+			
+			<tmdb:movieId>10035</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/35/poster-35-0-600-0-900-crop.jpg"/></p> <p>fixture review 35</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 37, 2020 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-36/</link>
+			<guid isPermaLink="false">letterboxd-review-1036</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-01-10</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 37</letterboxd:filmTitle>
+			<letterboxd:filmYear>2020</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10036</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/36/poster-36-0-600-0-900-crop.jpg"/></p> <p>fixture review 36</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 38, 2020 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-37/</link>
+			<guid isPermaLink="false">letterboxd-review-1037</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-02-11</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 38</letterboxd:filmTitle>
+			<letterboxd:filmYear>2020</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10037</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/37/poster-37-0-600-0-900-crop.jpg"/></p> <p>fixture review 37</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 39, 2020</title>
+			<link>https://letterboxd.com/sampleuser/film/film-38/</link>
+			<guid isPermaLink="false">letterboxd-review-1038</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-03-12</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 39</letterboxd:filmTitle>
+			<letterboxd:filmYear>2020</letterboxd:filmYear>
+			
+			<tmdb:movieId>10038</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/38/poster-38-0-600-0-900-crop.jpg"/></p> <p>fixture review 38</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 40, 2020 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-39/</link>
+			<guid isPermaLink="false">letterboxd-review-1039</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-04-13</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 40</letterboxd:filmTitle>
+			<letterboxd:filmYear>2020</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10039</tmdb:movieId>
+			<description><![CDATA[ <p></p> <p>fixture review 39</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 41, 2020 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-40/</link>
+			<guid isPermaLink="false">letterboxd-review-1040</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-05-14</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 41</letterboxd:filmTitle>
+			<letterboxd:filmYear>2020</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10040</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/40/poster-40-0-600-0-900-crop.jpg"/></p> <p>fixture review 40</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 42, 2020</title>
+			<link>https://letterboxd.com/sampleuser/film/film-41/</link>
+			<guid isPermaLink="false">letterboxd-review-1041</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-06-15</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 42</letterboxd:filmTitle>
+			<letterboxd:filmYear>2020</letterboxd:filmYear>
+			
+			
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/41/poster-41-0-600-0-900-crop.jpg"/></p> <p>fixture review 41</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 43, 2019 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-42/</link>
+			<guid isPermaLink="false">letterboxd-review-1042</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-07-16</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 43</letterboxd:filmTitle>
+			<letterboxd:filmYear>2019</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10042</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/42/poster-42-0-600-0-900-crop.jpg"/></p> <p>fixture review 42</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 44, 2019 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-43/</link>
+			<guid isPermaLink="false">letterboxd-review-1043</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-08-17</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 44</letterboxd:filmTitle>
+			<letterboxd:filmYear>2019</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10043</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/43/poster-43-0-600-0-900-crop.jpg"/></p> <p>fixture review 43</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 45, 2019</title>
+			<link>https://letterboxd.com/sampleuser/film/film-44/</link>
+			<guid isPermaLink="false">letterboxd-review-1044</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-09-18</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 45</letterboxd:filmTitle>
+			<letterboxd:filmYear>2019</letterboxd:filmYear>
+			
+			<tmdb:movieId>10044</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/44/poster-44-0-600-0-900-crop.jpg"/></p> <p>fixture review 44</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 46, 2019 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-45/</link>
+			<guid isPermaLink="false">letterboxd-review-1045</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-01-19</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 46</letterboxd:filmTitle>
+			<letterboxd:filmYear>2019</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10045</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/45/poster-45-0-600-0-900-crop.jpg"/></p> <p>fixture review 45</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 47, 2019 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-46/</link>
+			<guid isPermaLink="false">letterboxd-review-1046</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-02-20</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 47</letterboxd:filmTitle>
+			<letterboxd:filmYear>2019</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10046</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/46/poster-46-0-600-0-900-crop.jpg"/></p> <p>fixture review 46</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 48, 2019</title>
+			<link>https://letterboxd.com/sampleuser/film/film-47/</link>
+			<guid isPermaLink="false">letterboxd-review-1047</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-03-21</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 48</letterboxd:filmTitle>
+			<letterboxd:filmYear>2019</letterboxd:filmYear>
+			
+			<tmdb:movieId>10047</tmdb:movieId>
+			<description><![CDATA[ <p></p> <p>fixture review 47</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 49, 2018 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-48/</link>
+			<guid isPermaLink="false">letterboxd-review-1048</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-04-22</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 49</letterboxd:filmTitle>
+			<letterboxd:filmYear>2018</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10048</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/48/poster-48-0-600-0-900-crop.jpg"/></p> <p>fixture review 48</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 50, 2018 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-49/</link>
+			<guid isPermaLink="false">letterboxd-review-1049</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-05-23</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 50</letterboxd:filmTitle>
+			<letterboxd:filmYear>2018</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10049</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/49/poster-49-0-600-0-900-crop.jpg"/></p> <p>fixture review 49</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 51, 2018</title>
+			<link>https://letterboxd.com/sampleuser/film/film-50/</link>
+			<guid isPermaLink="false">letterboxd-review-1050</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-06-24</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 51</letterboxd:filmTitle>
+			<letterboxd:filmYear>2018</letterboxd:filmYear>
+			
+			<tmdb:movieId>10050</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/50/poster-50-0-600-0-900-crop.jpg"/></p> <p>fixture review 50</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 52, 2018 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-51/</link>
+			<guid isPermaLink="false">letterboxd-review-1051</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-07-25</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 52</letterboxd:filmTitle>
+			<letterboxd:filmYear>2018</letterboxd:filmYear>
+			<letterboxd:memberRating>4.5</letterboxd:memberRating>
+			<tmdb:movieId>10051</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/51/poster-51-0-600-0-900-crop.jpg"/></p> <p>fixture review 51</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 53, 2018 - ★★★</title>
+			<link>https://letterboxd.com/sampleuser/film/film-52/</link>
+			<guid isPermaLink="false">letterboxd-review-1052</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-08-26</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 53</letterboxd:filmTitle>
+			<letterboxd:filmYear>2018</letterboxd:filmYear>
+			<letterboxd:memberRating>3.0</letterboxd:memberRating>
+			<tmdb:movieId>10052</tmdb:movieId>
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/52/poster-52-0-600-0-900-crop.jpg"/></p> <p>fixture review 52</p> ]]></description>
+		</item>
+		<item>
+			<title>Fixture Film 54, 2018</title>
+			<link>https://letterboxd.com/sampleuser/film/film-53/</link>
+			<guid isPermaLink="false">letterboxd-review-1053</guid>
+			<pubDate>Fri, 9 Oct 2026 12:00:00 +0000</pubDate>
+			<letterboxd:watchedDate>2026-09-27</letterboxd:watchedDate>
+			<letterboxd:rewatch>No</letterboxd:rewatch>
+			<letterboxd:filmTitle>Fixture Film 54</letterboxd:filmTitle>
+			<letterboxd:filmYear>2018</letterboxd:filmYear>
+			
+			
+			<description><![CDATA[ <p><img src="https://a.ltrbxd.com/resized/film-poster/53/poster-53-0-600-0-900-crop.jpg"/></p> <p>fixture review 53</p> ]]></description>
+		</item>
+	</channel>
+</rss>

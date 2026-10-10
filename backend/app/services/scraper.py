@@ -116,6 +116,11 @@ def _raise_for_letterboxd_gate(response, username: str, *, missing_is_not_found:
         raise RuntimeError(f"Letterboxd returned HTTP {status} for '{username}'")
 
 
+def probe_profile_access(username: str, session: Optional[requests.Session] = None) -> None:
+    """Public alias used by the scrape pipeline (RSS exists check, then HTML probe)."""
+    _probe_profile_access(username, session=session)
+
+
 def _probe_profile_access(username: str, session: Optional[requests.Session] = None) -> None:
     """Single GET of /{username}/ before any diary/grid/review pagination.
 
@@ -993,11 +998,13 @@ async def scrape_profile_sources(
     trace_callback: Optional[TraceCallback] = None,
     diary_cutoff: Optional[date] = None,
     include_grid: bool = True,
+    skip_probe: bool = False,
 ) -> ProfileScrapeSources:
     """Scrape diary, grid, overview (and optionally reviews) concurrently."""
     loop = _get_loop()
     # One profile GET first. Cloudflare/403 must not fan out into diary+grid+reviews.
-    await loop.run_in_executor(None, partial(_probe_profile_access, username))
+    if not skip_probe:
+        await loop.run_in_executor(None, partial(_probe_profile_access, username))
     diary_call = (
         partial(_sync_scrape_diary, username, max_pages, None, trace_callback)
         if diary_cutoff is None
