@@ -31,6 +31,12 @@ class TaskState:
     error_stage: Optional[str] = None
     error_code: Optional[str] = None
     tmdb: Optional[Dict[str, Any]] = None
+    kind: str = "analyze"  # analyze | scrape
+    username: Optional[str] = None
+    options: Dict[str, Any] = field(default_factory=dict)
+    claimed: bool = False
+    claimed_by: Optional[str] = None
+    lease_token: Optional[str] = None
     trace_events: list[Dict[str, Any]] = field(default_factory=list)
     poll_token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     owner_key: Optional[str] = None
@@ -42,11 +48,111 @@ _tasks: Dict[str, TaskState] = {}
 _SERVER_STARTED_AT: datetime = datetime.now(timezone.utc)
 RECENT_RESTART_WINDOW_SECONDS = 900
 
+# Last successful outbound-worker heartbeat. Enqueue gate for username scrapes.
+_last_worker_heartbeat: Optional[datetime] = None
+_worker_heartbeats: Dict[str, datetime] = {}
+_last_worker_meta: Dict[str, Any] = {}
+
 
 def create_task_state(owner_key: Optional[str] = None) -> str:
     task_id = str(uuid.uuid4())
     _tasks[task_id] = TaskState(task_id=task_id, owner_key=owner_key)
     return task_id
+
+
+def create_scrape_job(
+    username: str,
+    owner_key: Optional[str] = None,
+    options: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Queue a username scrape for the outbound desktop worker to claim."""
+    task_id = str(uuid.uuid4())
+    _tasks[task_id] = TaskState(
+        task_id=task_id,
+        kind="scrape",
+        username=username,
+        owner_key=owner_key,
+        options=dict(options or {}),
+        stage="queued",
+        message="Queued on desktop scraper",
+    )
+    append_task_event(task_id, "queued", "Queued on desktop scraper", level="info")
+    return task_id
+
+
+def _assign_lease(job: TaskState, worker_id: Optional[str]) -> None:
+    wid = (worker_id or "").strip() or None
+    job.claimed = True
+    job.status = "running"
+    job.stage = "scraping"
+    job.message = "Desktop worker is reading Letterboxd"
+    job.claimed_at = datetime.now(timezone.utc)
+    job.claimed_by = wid
+    job.lease_token = secrets.token_urlsafe(32)
+
+
+def claim_next_scrape_job(worker_id: Optional[str] = None) -> Optional[TaskState]:
+    queued = sorted(
+        [t for t in _tasks.values() if t.kind == "scrape" and t.status == "pending" and not t.claimed],
+        key=lambda t: t.created_at,
+    )
+    if not queued:
+        return None
+    job = queued[0]
+    _assign_lease(job, worker_id)
+    append_task_event(job.task_id, "claimed", "Desktop worker claimed the scrape job", level="info")
+    return job
+
+
+def append_task_event_payload(task_id: str, event: Dict[str, Any]) -> None:
+    task = _tasks.get(task_id)
+    if not task:
+        return
+    stage = str(event.get("stage") or "event")
+    message = str(event.get("message") or "")
+    elapsed = event.get("elapsed_seconds")
+    key = (stage, message, elapsed)
+    for existing in task.trace_events:
+        if (existing.get("stage"), existing.get("message"), existing.get("elapsed_seconds")) == key:
+            return
+    task.trace_events.append(
+        {
+            "stage": stage,
+            "message": message,
+            "elapsed_seconds": elapsed if isinstance(elapsed, (int, float)) else _event_elapsed(task),
+            "level": str(event.get("level") or "info"),
+            "metrics": event.get("metrics") if isinstance(event.get("metrics"), dict) else {},
+            "timestamp": str(event.get("timestamp") or datetime.now(timezone.utc).isoformat()),
+        }
+    )
+
+
+def record_worker_heartbeat(meta: Optional[Dict[str, Any]] = None) -> None:
+    global _last_worker_heartbeat, _last_worker_meta
+    now = datetime.now(timezone.utc)
+    _last_worker_heartbeat = now
+    if meta:
+        _last_worker_meta = {**_last_worker_meta, **meta}
+        worker_id = str(meta.get("worker_id") or "").strip()
+        if worker_id:
+            _worker_heartbeats[worker_id] = now
+
+
+def is_worker_online(max_age_seconds: int) -> bool:
+    if _last_worker_heartbeat is None:
+        return False
+    return (datetime.now(timezone.utc) - _last_worker_heartbeat) <= timedelta(seconds=max_age_seconds)
+
+
+def reset_worker_runtime() -> None:
+    """Test helper: drop queued scrape jobs and heartbeat liveness."""
+    global _last_worker_heartbeat, _last_worker_meta
+    _last_worker_heartbeat = None
+    _last_worker_meta = {}
+    _worker_heartbeats.clear()
+    for tid, task in list(_tasks.items()):
+        if task.kind == "scrape":
+            _tasks.pop(tid, None)
 
 
 def _seconds_between(start: Optional[datetime], end: Optional[datetime]) -> Optional[float]:

@@ -73,6 +73,10 @@ class ProfileScrapeSources:
     profile_avatar_url: Optional[str] = None
 
 
+def _stealth_transport() -> bool:
+    return os.getenv("SCRAPE_TRANSPORT", "direct_cloudscraper") == "stealth_browser"
+
+
 def _new_session() -> requests.Session:
     """Letterboxd sits behind Cloudflare. Plain requests sessions get challenged."""
     session = cloudscraper.create_scraper()
@@ -81,6 +85,8 @@ def _new_session() -> requests.Session:
 
 
 def _warm_session(session: requests.Session) -> None:
+    if _stealth_transport():
+        return
     try:
         session.get(BASE_URL, timeout=10)
     except Exception:
@@ -89,6 +95,10 @@ def _warm_session(session: requests.Session) -> None:
 
 
 def _fetch(session: requests.Session, url: str, timeout: int = 10):
+    if _stealth_transport():
+        from app.services.camoufox_pool import fetch_sync
+
+        return fetch_sync(url, timeout=max(timeout, 45))
     return session.get(url, timeout=timeout)
 
 

@@ -17,7 +17,9 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app import task_manager
+from app.config import settings
 from app.routes.feedback import _parse_letterboxd_username
+from app.routes.worker import WORKER_OFFLINE_MESSAGE
 from app.services.analysis import process_comprehensive_letterboxd_data
 from app.services.run_log import persist_run
 from app.services.scrape_pipeline import (
@@ -400,6 +402,35 @@ async def scrape_profile(request: Request):
             status_code=400,
             detail={"error_code": "invalid_analysis_period", "message": str(exc)},
         ) from exc
+
+    if settings.desktop_worker_enabled:
+        if not task_manager.is_worker_online(settings.worker_heartbeat_max_age_seconds):
+            persist_run(
+                username,
+                "scrape",
+                {},
+                ok=False,
+                error_message=WORKER_OFFLINE_MESSAGE,
+                error_type="desktop_worker_offline",
+                error_stage="desktop_worker_offline",
+            )
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error_code": "desktop_worker_offline",
+                    "message": WORKER_OFFLINE_MESSAGE,
+                },
+            )
+        task_id = task_manager.create_scrape_job(
+            username,
+            owner_key=client_key(request),
+            options={"analysis_period": analysis_period},
+        )
+        task = task_manager.get_task_state(task_id)
+        return JSONResponse(
+            status_code=202,
+            content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending"},
+        )
 
     task_id = task_manager.create_task_state(client_key(request))
     session = request.app.state.aiohttp_session

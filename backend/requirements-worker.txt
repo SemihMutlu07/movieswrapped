@@ -1,0 +1,2 @@
+# Extra deps for the X370 Camoufox worker. Render does not install this file.
+camoufox>=0.4.11
