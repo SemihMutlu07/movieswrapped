@@ -1,5 +1,6 @@
 """Poster selection: vote_count inside a language pool, not vote_average."""
 
+from tests.poster_eval_set import SUSPECT_FILMS
 from app.services.tmdb_client import fetch_comprehensive_film_details, select_poster_path
 
 
@@ -11,6 +12,17 @@ def _poster(path, lang, votes, average, aspect=0.667):
         "vote_average": average,
         "aspect_ratio": aspect,
     }
+
+
+def test_suspect_eval_ids_match_the_named_films():
+    """Burning, Shoplifters, and Decision to Leave are not the earlier wrong ids."""
+    by_title = {title: movie_id for movie_id, _lang, title in SUSPECT_FILMS}
+    assert by_title["Burning"] == 491584
+    assert by_title["Shoplifters"] == 505192
+    assert by_title["Decision to Leave"] == 705996
+    ids = {movie_id for movie_id, _lang, _title in SUSPECT_FILMS}
+    assert ids.isdisjoint({498229, 493922, 626332})
+    assert len(SUSPECT_FILMS) == len(ids) == 36
 
 
 def test_vote_average_leader_loses_to_higher_vote_count():
