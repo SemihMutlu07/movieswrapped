@@ -262,6 +262,10 @@ async def test_scrape_pipeline_windowing_and_provenance(monkeypatch):
         }
 
     monkeypatch.setattr(
+        "app.services.scrape_pipeline.probe_profile_access",
+        lambda username, session=None: None,
+    )
+    monkeypatch.setattr(
         "app.services.scrape_pipeline.scrape_profile_sources", fake_sources
     )
     monkeypatch.setattr(
