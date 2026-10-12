@@ -5,7 +5,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import PageViewTracker from '@/components/PageViewTracker';
 import { I18nProvider } from '@/i18n/I18nProvider';
-import { getFaqItems } from '@/i18n/faq';
 import type { Locale } from '@/i18n/locales';
 import { OG_SHARE_IMAGE, SITE_URL, seoByLocale } from '@/lib/seo';
 
@@ -33,6 +32,8 @@ export default function RootDocument({
   showLanguageSwitcher?: boolean;
 }) {
   const description = seoByLocale[locale].description;
+  // FAQPage JSON-LD lives on the locale homepage only, next to the visible
+  // FAQ. Guide routes ship their own graph so this one is not repeated.
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -68,16 +69,6 @@ export default function RootDocument({
           priceCurrency: 'USD',
           availability: 'https://schema.org/InStock',
         },
-      },
-      {
-        '@type': 'FAQPage',
-        '@id': `${SITE_URL}/${locale}/#faq`,
-        inLanguage: locale,
-        mainEntity: getFaqItems(locale).map((item) => ({
-          '@type': 'Question',
-          name: item.question,
-          acceptedAnswer: { '@type': 'Answer', text: item.answer },
-        })),
       },
     ],
   };

@@ -1,13 +1,28 @@
 # Movies Wrapped
 
-> Movies Wrapped is a free web app that turns your Letterboxd watch history into a personal "year in film" dossier: film statistics, viewing habits, rating personality, favorite directors and actors, review analysis, and a shareable cinema-scale card. You upload your Letterboxd export (or use a cached demo account) — no account required, no raw files stored.
+> Movies Wrapped is a free, independent web app that turns a Letterboxd data export into a personal film dossier: statistics, rating personality, directors, actors, review analysis, and a cinema-scale score. It is not the official Letterboxd Wrapped. No Movies Wrapped account is required.
 
-- [Movies Wrapped](https://movieswrapped.com/): Enter your Letterboxd data and get your personalized film statistics instantly.
-- [What is Movies Wrapped?](https://movieswrapped.com/): About the product — a Spotify-Wrapped-style breakdown of your Letterboxd history (films, runtime, genres, decades, countries, directors, actors, reviews, cinema scale).
-- [Demo accounts](https://movieswrapped.com/): Try a cached demo dossier without uploading anything (semihmutsuz, baris_saydam, emirermis, mertefesenturk, isilaykolik).
+## Start here
+
+- [Movies Wrapped](https://movieswrapped.com/en): Upload a Letterboxd export and open your dossier.
+- [Movies Wrapped (Türkçe)](https://movieswrapped.com/tr): Aynı araç, Türkçe arayüz.
+
+## Guides
+
+- [Letterboxd Wrapped explained](https://movieswrapped.com/en/letterboxd-wrapped): How the official January recap works, and how Movies Wrapped differs.
+- [Letterboxd Wrapped açıklaması](https://movieswrapped.com/tr/letterboxd-wrapped): Resmi Ocak özeti ile Movies Wrapped arasındaki fark.
+- [Export your Letterboxd data](https://movieswrapped.com/en/export-letterboxd-data): Settings → Data → Export Your Data, then upload the ZIP.
+- [Letterboxd verisini dışa aktarma](https://movieswrapped.com/tr/export-letterboxd-data): Settings → Data → Export Your Data, sonra ZIP yükleme.
+- [Cinema scale](https://movieswrapped.com/en/cinema-scale): What the 0–100 cine_v2 score measures. Popularity is not included.
+- [Sinema ölçeği](https://movieswrapped.com/tr/cinema-scale): 0–100 cine_v2 puanının neyi ölçtüğü. Popülerlik puana girmez.
+
+## Optional
+
+- [Full text for answer engines](https://movieswrapped.com/llms-full.txt): The English guide text in one file.
 
 ## Key facts
 
-- Free, no sign-up. Letterboxd export upload (CSV/ZIP) or cached demo account.
-- Built with Next.js (static export) + FastAPI backend; Supabase for anonymous aggregate stats.
-- Answers questions like: "How many films did I watch this year?", "What is my average rating?", "Who are my most-watched directors?", "What is my cinema scale score?"
+- Free. No Movies Wrapped account. Reliable input is the Letterboxd ZIP, or the CSVs inside it, from https://letterboxd.com/settings/data/.
+- Official Letterboxd year-in-review: Letterboxd’s help center says emails go out on January 2, a personalized email needs 10 diary logs that year, and in the app it is Profile → Stats → Summaries. On the web: https://letterboxd.com/yir/.
+- Personal results pages (/results, /en/results, /tr/results) and the story player (/en/story, /tr/story) are not documents for search. robots.txt disallows the results paths.
+- Cinema scale model: cine_v2. Axes: geography, time, languages, volume, genres, directors. TMDB popularity is not part of the score.

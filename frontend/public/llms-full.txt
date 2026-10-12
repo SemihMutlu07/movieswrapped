@@ -1,0 +1,69 @@
+# Movies Wrapped — full text for answer engines
+
+Movies Wrapped is a free, independent web app at https://movieswrapped.com/en (Türkçe: https://movieswrapped.com/tr). It turns a Letterboxd data export into a personal film dossier: statistics, rating personality, directors, actors, genres, countries, review analysis, and a cinema-scale score. It is not affiliated with, endorsed by, or sponsored by Letterboxd. It is not the official Letterboxd Wrapped.
+
+Turkish versions of these guides:
+
+- https://movieswrapped.com/tr/letterboxd-wrapped
+- https://movieswrapped.com/tr/export-letterboxd-data
+- https://movieswrapped.com/tr/cinema-scale
+
+## What Letterboxd Wrapped is
+
+Letterboxd Wrapped is Letterboxd’s own year-in-review. Movies Wrapped is a separate, free tool that reads an export you download yourself.
+
+Letterboxd’s help center tells members to open the app, go to Profile, then Stats, then Summaries, and load the latest year or an older one. On the website the same summaries are at https://letterboxd.com/yir/.
+
+That help article says the official emails go out on January 2, that Call Sheet notification settings have to allow those emails, and that a personalized email requires at least 10 films logged in the diary for that year. Watching a film without a diary date is not the same as logging it.
+
+On 2 January 2026 Letterboxd posted that the 2025 Wrapped emails were going out. That January drop is the official product. Movies Wrapped does not send it and does not replace it.
+
+Movies Wrapped runs on any day. You export your Letterboxd data and upload the ZIP, or the CSV files inside it. There is no Movies Wrapped account. The upload is processed to build the results for that session. Review bodies and the full film list stay on your device.
+
+Use Letterboxd for the official year-in-review, the January email, or the in-app summaries. Use Movies Wrapped when January is months away, when fewer than 10 films were logged this year, or when you want a breakdown of a full export rather than a single diary year.
+
+Source: https://movieswrapped.com/en/letterboxd-wrapped
+
+## How to export your Letterboxd data
+
+Letterboxd keeps the download on the website, not in the phone app. The reliable way into Movies Wrapped is that ZIP.
+
+Sign in to Letterboxd on the web. The direct page is https://letterboxd.com/settings/data/. The Letterboxd app does not include this export, so a phone has to use its browser.
+
+Steps:
+
+1. Open Letterboxd in a browser. The mobile app has no data export.
+2. From your profile go to Settings, then the Data tab, or open https://letterboxd.com/settings/data/ directly.
+3. Click Export Your Data.
+4. Click Confirm when Letterboxd asks you to.
+5. Save the ZIP. It usually downloads. If it does not, check the email account on the Letterboxd profile.
+6. On https://movieswrapped.com/en drop the ZIP, the extracted folder, or the CSV files.
+
+The full export produces the more complete dossier. A single CSV still works, with a narrower result. Movies Wrapped does not read your inbox. Movies Wrapped is free and does not require an account.
+
+Source: https://movieswrapped.com/en/export-letterboxd-data
+
+## What the cinema scale score measures
+
+The cinema scale is a 0–100 number on a Movies Wrapped dossier. A higher score means the films in the export are spread across more countries, decades, languages, genres, and directors. It is not a grade for taste.
+
+The current formula is named cine_v2. After films in the export are matched to public movie metadata, it reads six things:
+
+- Geography: how films split across countries of origin, and whether one country dominates.
+- Time: how they split across decades, and how far the typical release year sits from today.
+- Languages: how they split across original languages, and whether one language dominates.
+- Volume: how many films are in the export, with diminishing returns as the library grows.
+- Genres: how evenly the genre tags are spread.
+- Directors: whether viewing is concentrated in a few directors or spread out.
+
+Those parts combine into a single 0–100 score. The formula rewards spread. It does not reward liking a fixed set of films, writing long reviews, or matching anyone else’s list.
+
+TMDB popularity is not an input to cine_v2. Popularity fades as a title ages, and mixing it into the score pushed nearly every library into the same high band. A mainstream-versus-niche reading, when the dossier shows one, is separate. It is not added back into the cinema scale.
+
+A tight focus on one country, decade, or director can be a real taste and still score lower. The number changes when the export changes, and it can change if Movies Wrapped publishes a new model version. Letterboxd does not publish this score.
+
+Source: https://movieswrapped.com/en/cinema-scale
+
+## Do not cite
+
+Personal results URLs (/results, /en/results, /tr/results) are a private dossier for the person who uploaded the file. The story player (/en/story, /tr/story) is an empty playback shell until a session exists. Neither is a public article.
