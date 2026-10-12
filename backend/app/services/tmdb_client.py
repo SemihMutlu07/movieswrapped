@@ -506,6 +506,108 @@ def pick_movie_result_id(
     return int(movie_id) if movie_id is not None else None
 
 
+# Theatrical one-sheets are about 2:3. Wider uploads are banners misfiled as posters.
+_POSTER_ASPECT_MIN = 0.56
+_POSTER_ASPECT_MAX = 0.80
+
+
+def _poster_votes(poster: Dict[str, Any]) -> int:
+    try:
+        return int(poster.get("vote_count") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _poster_average(poster: Dict[str, Any]) -> float:
+    try:
+        return float(poster.get("vote_average") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _poster_usable(poster: Dict[str, Any]) -> bool:
+    path = poster.get("file_path")
+    if not isinstance(path, str) or not path.startswith("/"):
+        return False
+    aspect = poster.get("aspect_ratio")
+    if isinstance(aspect, (int, float)) and not (_POSTER_ASPECT_MIN <= float(aspect) <= _POSTER_ASPECT_MAX):
+        return False
+    return True
+
+
+def _best_voted_poster(posters: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    voted = [poster for poster in posters if _poster_votes(poster) > 0]
+    if not voted:
+        return None
+    return max(voted, key=lambda poster: (_poster_votes(poster), _poster_average(poster), poster.get("file_path") or ""))
+
+
+def select_poster_path(
+    primary_path: object,
+    posters: Optional[List[Dict[str, Any]]],
+    original_language: object = None,
+) -> str:
+    """Choose a poster file path from TMDB ``/movie/{id}/images``.
+
+    ``poster_path`` on the movie record is an editorial primary, not the
+    most-voted image. ``vote_average`` is the wrong sort: image scores sit
+    in a narrow band, so a one-vote alternate outranks the poster people
+    actually use. Rank by ``vote_count`` inside a language pool instead.
+
+    English posters win when any of them has votes, even if a foreign-language
+    primary has more votes. A textless poster (``iso_639_1`` null) is used
+    only when the film has no English poster. Inside the winning language
+    pool the primary is kept when it has at least as many votes as the
+    leader, or when that leader has fewer than two votes.
+    """
+    primary = primary_path if isinstance(primary_path, str) and primary_path.startswith("/") else ""
+    if not isinstance(posters, list):
+        posters = []
+    pool = [poster for poster in posters if isinstance(poster, dict) and _poster_usable(poster)]
+    english = [poster for poster in pool if poster.get("iso_639_1") == "en"]
+    language = original_language if isinstance(original_language, str) and original_language not in {"", "en"} else ""
+    original = [poster for poster in pool if language and poster.get("iso_639_1") == language]
+    neutral = [poster for poster in pool if poster.get("iso_639_1") in (None, "")]
+
+    chosen: Optional[Dict[str, Any]]
+    chosen_pool: List[Dict[str, Any]]
+    if any(_poster_votes(poster) > 0 for poster in english):
+        chosen = _best_voted_poster(english)
+        chosen_pool = english
+    elif english:
+        # Unvoted English art still beats a heavily voted textless poster.
+        chosen = None
+        chosen_pool = english
+    else:
+        original_best = _best_voted_poster(original)
+        if original_best is not None:
+            chosen = original_best
+            chosen_pool = original
+        else:
+            chosen = _best_voted_poster(neutral)
+            chosen_pool = neutral
+
+    if chosen is None:
+        return primary
+    chosen_path = chosen.get("file_path")
+    if not isinstance(chosen_path, str):
+        return primary
+    if not primary or chosen_path == primary:
+        return chosen_path if chosen_path else primary
+    if _poster_votes(chosen) < 2:
+        return primary
+    # Compare votes only inside the winning language pool. A foreign primary
+    # with many votes must not block a voted English poster.
+    primary_votes = 0
+    for poster in chosen_pool:
+        if poster.get("file_path") == primary:
+            primary_votes = _poster_votes(poster)
+            break
+    if _poster_votes(chosen) > primary_votes:
+        return chosen_path
+    return primary
+
+
 def poster_path_from_search_results(
     results: List[Dict[str, Any]],
     year: Optional[int] = None,
@@ -537,18 +639,43 @@ async def resolve_tmdb_id(
     return pick_movie_result_id(movie, parsed_year, title, letterboxd_uri)
 
 
+async def choose_poster_path(
+    session: aiohttp.ClientSession,
+    tmdb_id: int,
+    primary_path: object,
+    original_language: object = None,
+) -> str:
+    """Apply select_poster_path to a live ``/movie/{id}/images`` response."""
+    images = await tmdb_get(session, f"movie/{int(tmdb_id)}/images")
+    posters = images.get("posters") if isinstance(images, dict) else None
+    return select_poster_path(
+        primary_path,
+        posters if isinstance(posters, list) else None,
+        original_language,
+    )
+
+
 async def resolve_movie_poster(
     session: aiohttp.ClientSession,
     title: str,
     year: Optional[int] = None,
     letterboxd_uri: Optional[str] = None,
 ) -> Optional[str]:
-    """Poster path from search/movie — no extra details/credits call."""
+    """Poster path for a title: same movie pick as search, then vote-count images."""
     results = await _search_movie_results(session, title, year)
     if not results:
         return None
     parsed_year = int(year) if year and not pd.isna(year) else None
-    return poster_path_from_search_results(results, parsed_year, title, letterboxd_uri)
+    movie_id = pick_movie_result_id(results, parsed_year, title, letterboxd_uri)
+    if movie_id is None:
+        return None
+    movie = next((item for item in results if item.get("id") == movie_id), None)
+    if movie is None:
+        return None
+    path = await choose_poster_path(
+        session, movie_id, movie.get("poster_path"), movie.get("original_language"),
+    )
+    return path or None
 
 
 async def _search_movie_results(
@@ -575,10 +702,11 @@ async def fetch_comprehensive_film_details(
         return {}
 
     try:
-        details, credits, keywords = await asyncio.gather(
+        details, credits, keywords, images = await asyncio.gather(
             tmdb_get(session, f"movie/{int(tmdb_id)}"),
             tmdb_get(session, f"movie/{int(tmdb_id)}/credits"),
             tmdb_get(session, f"movie/{int(tmdb_id)}/keywords"),
+            tmdb_get(session, f"movie/{int(tmdb_id)}/images"),
         )
 
         if not details:
@@ -630,7 +758,11 @@ async def fetch_comprehensive_film_details(
             "keywords_full": keywords_full,
             "adult": details.get("adult", False),
             "status": details.get("status", ""),
-            "poster_path": details.get("poster_path", ""),
+            "poster_path": select_poster_path(
+                details.get("poster_path") or "",
+                images.get("posters") if isinstance(images, dict) else None,
+                details.get("original_language"),
+            ),
             "backdrop_path": details.get("backdrop_path", ""),
         }
     except Exception as e:

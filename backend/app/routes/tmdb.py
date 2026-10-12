@@ -5,7 +5,7 @@ import re
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
-from app.services.tmdb_client import pick_movie_result_id, tmdb_get
+from app.services.tmdb_client import choose_poster_path, pick_movie_result_id, tmdb_get
 from app.security import enforce_rate_limit
 
 router = APIRouter()
@@ -78,6 +78,13 @@ async def search_tmdb_movie(request: Request, title: str, year: int | None = Non
         tmdb_id = pick_movie_result_id(results, year, title)
         movie = next((item for item in results if item.get("id") == tmdb_id), results[0])
         poster_path = movie.get("poster_path")
+        if movie.get("id") is not None:
+            poster_path = await choose_poster_path(
+                session,
+                int(movie["id"]),
+                poster_path,
+                movie.get("original_language"),
+            )
         if poster_path:
             return {
                 "found": True,
