@@ -22,7 +22,7 @@
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
     "lucide-react": "^1.27.0",
-    "next": "15.5.24",
+    "next": "15.5.27",
     "posthog-js": "^1.407.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -52,9 +52,10 @@
   },
   "overrides": {
     "postcss": "8.5.23",
-    "sharp": "0.35.4",
-    "fflate": "0.8.2",
+    "sharp": "0.35.5",
+    "fflate": "0.8.3",
     "nanoid": "3.3.18",
-    "dompurify": "3.4.13"
+    "dompurify": "3.4.16",
+    "source-map-js": "1.2.2"
   }
 }
