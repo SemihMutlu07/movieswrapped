@@ -14,7 +14,7 @@ Write down what this change must not do before writing code. In this repo that a
 - One PR = one scope. Do not mix scrape, RSS, cache, mobile, SEO, MCP, or dependency bumps.
 - Frontend is a static Next.js export (`output: 'export'`). No SSR-only features.
 - Never commit `.env`, secrets, or API keys. TMDB stays on the backend. Supabase uses the anon key only.
-- ZIP export is the guaranteed product path. Username HTML scrape is best-effort and fail-fast.
+- ZIP export is the guaranteed fallback when the residential worker is offline. Username HTML scrape runs only on that worker, never on Render.
 - Do not merge PRs unless the owner explicitly asked to merge in this turn.
 - Do not revert merged PRs unless the owner explicitly asked.
 
@@ -22,15 +22,17 @@ Write down what this change must not do before writing code. In this repo that a
 
 These were built, operated, and then removed on purpose. Do not restore them unless the owner names them in the request:
 
-- Desktop scrape worker (`/api/worker/*`, `desktop_scrape_worker.py`, `WORKER_TOKEN`, supervisor/watchdog scripts)
-- Residential-IP HTML scraping as a production dependency
+- Windows desktop worker and its PowerShell supervisor (`desktop_scrape_worker.py`, `backend/start-worker*.ps1`)
+- HTML scraping on Render or any other datacenter IP
 - Paid/proxy scrape (ScraperAPI and any successor)
 - Watchlist-compare / Date Night / FindFilm scrape jobs
 - Browser-use / Hermes as a general scraper
 
-Leftover docs and scripts (`docs/desktop-worker-*`, `backend/start-worker*.ps1`) are historical. They are not a live control plane. The durable copy of the worker lives on `archive/scrape`.
+The chosen username-scrape path is the residential Linux worker on the X370: outbound poll, curl_cffi Safari impersonation, one job at a time, `WORKER_TOKEN`. That work is PR #150 (`cursor/letterboxd-username-scrape-196f`). Do not forbid it, and do not replace it with a second worker design. It is not live until that backend is deployed and the X370 is running the same git sha.
 
-If a task seems to need any of the above, stop and report. Do not "just add a worker gate" or "just try a proxy."
+`docs/desktop-worker-*` describes the retired Windows worker. It is not the X370 control plane. The X370 doc is `docs/x370-safari-worker.md` on the PR #150 branch. `archive/scrape` is the old snapshot, not the chosen path.
+
+If a task seems to need a forbidden path above, stop and report. Do not "just scrape on Render" or "just try a proxy."
 
 ## Small verified changes
 
@@ -50,9 +52,9 @@ If a task seems to need any of the above, stop and report. Do not "just add a wo
 
 - Do not add helpers, layers, feature flags, or "for later" modules.
 - Do not extract a shared interface until a second real caller exists in this PR.
-- Do not rebuild the desktop worker, a job queue, or an RSS platform "so scrape can scale later."
+- Do not rebuild a second worker, a different job queue, or an RSS platform "so scrape can scale later." The X370 residential worker is the chosen path.
 - Duplicate a ten-line helper before introducing a new package.
 
 ## Default move when blocked
 
-If Cloudflare, Render IPs, or an always-on home machine is the blocker: keep ZIP as the complete path and fail scrape fast. Do not route around that with proxies, headless browsers, or a new worker.
+If Cloudflare or a Render IP is the blocker: do not scrape from Render, and do not add a proxy or a datacenter browser. ZIP remains the fallback. The residential X370 worker is the chosen scrape path; do not invent another one.
