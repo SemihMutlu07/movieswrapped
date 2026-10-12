@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     debug_cinema_scale: bool = False
     log_level: str = "INFO"
 
+    # Shared secret for the outbound X370 worker (`X-Worker-Token`).
+    # When set, /api/scrape-profile queues jobs instead of scraping on Render.
+    worker_token: str = ""
+    worker_heartbeat_max_age_seconds: int = 60
+    # Bump together with app.worker.safari_worker.WORKER_PROTOCOL_VERSION.
+    # A mismatched heartbeat is 409 worker_version_mismatch; the worker git-pulls.
+    worker_protocol_version: int = 5
+
     # Optional: mirror run logs to Supabase so the admin dashboard survives Render
     # restarts (local runs/ is ephemeral there). Anon key only — never service_role.
     supabase_url: str = ""
@@ -23,6 +31,10 @@ class Settings(BaseSettings):
     supabase_ops_email: str = ""
     supabase_ops_password: str = ""
     run_retention_days: int = 30
+
+    @property
+    def desktop_worker_enabled(self) -> bool:
+        return bool(self.worker_token)
 
     @property
     def supabase_enabled(self) -> bool:

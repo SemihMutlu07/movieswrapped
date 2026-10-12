@@ -121,6 +121,7 @@ EXPECTED_OPS_TABLES = (
     "ops_workers",
     "ops_dashboard_settings",
     "ops_tasks",
+    "scrape_result_cache",
 )
 
 
@@ -147,6 +148,17 @@ async def check_expected_schema() -> None:
                 "CRITICAL: ops_workers table is MISSING from Supabase — worker "
                 "heartbeats and /api/health/workers will silently fail. Run "
                 "backend/migrations/007_ops_workers.sql in the Supabase SQL Editor.",
+            )
+        if "ops_tasks" in missing:
+            logger.error(
+                "CRITICAL: ops_tasks table is MISSING from Supabase — scrape "
+                "jobs will not survive a Render restart. Run "
+                "backend/migrations/006_ops_tasks.sql and 012_scrape_queue_cache_handshake.sql.",
+            )
+        if "scrape_result_cache" in missing:
+            logger.warning(
+                "scrape_result_cache is missing — 24h username cache is off. "
+                "Run backend/migrations/012_scrape_queue_cache_handshake.sql.",
             )
         logger.warning(
             "Supabase schema is missing expected ops table(s) %s — check that "

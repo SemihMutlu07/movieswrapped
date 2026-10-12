@@ -17,14 +17,18 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app import task_manager
+from app.config import settings
 from app.routes.feedback import _parse_letterboxd_username
+from app.routes.worker import WORKER_OFFLINE_MESSAGE
 from app.services.analysis import process_comprehensive_letterboxd_data
 from app.services.run_log import persist_run
+from app.services.scrape_cache import lookup_scrape_cache, store_scrape_cache
 from app.services.scrape_pipeline import (
     ScrapeAnalysisEmpty,
     normalize_analysis_period,
     scrape_and_analyze,
 )
+from app.services.scraper import classify_letterboxd_error, sources_from_bookmarklet
 from app.security import client_key, enforce_rate_limit
 
 logger = logging.getLogger("letterboxd_wrapped.analyze")
@@ -269,6 +273,7 @@ async def _run_scrape(
     session,
     username: str,
     analysis_period: str = "lifetime",
+    imported=None,
 ) -> None:
     def _trace(stage: str, message: str, metrics: Optional[dict[str, Any]] = None) -> None:
         task_manager.update_task_progress(task_id, stage, message, metrics=metrics)
@@ -281,10 +286,12 @@ async def _run_scrape(
             analysis_period=analysis_period,
             trace_callback=_trace,
             task_id=task_id,
+            imported=imported,
         )
         task = task_manager.get_task_state(task_id)
         trace_events = task.trace_events if task else None
-        task_manager.set_task_done(task_id, {"status": "success", "stats": stats})
+        store_scrape_cache(username, analysis_period, stats)
+        task_manager.set_task_done(task_id, {"status": "success", "stats": stats, "queue_wait_ms": 0})
         persist_run(username, "scrape", stats, ok=True, task_id=task_id, trace_events=trace_events)
     except ScrapeAnalysisEmpty as exc:
         if exc.period_empty:
@@ -318,13 +325,9 @@ async def _run_scrape(
         )
     except ValueError as exc:
         msg = str(exc)
-        if "rate limit" in msg:
-            error_code = "rate_limit_exceeded"
-        elif "Letterboxd is blocking" in msg:
-            error_code = "scrape_blocked"
-        else:
-            error_code = "user_not_found"
-            msg = f"Letterboxd profile '@{username}' was not found or could not be read."
+        error_code = classify_letterboxd_error(exc)
+        if error_code == "user_not_found":
+            msg = f"Letterboxd profile '@{username}' was not found."
         task_manager.set_task_failed(
             task_id,
             msg,
@@ -401,10 +404,113 @@ async def scrape_profile(request: Request):
             detail={"error_code": "invalid_analysis_period", "message": str(exc)},
         ) from exc
 
+    cached_stats = await lookup_scrape_cache(username, analysis_period)
+    if cached_stats:
+        task_id = task_manager.create_task_state(client_key(request))
+        task = task_manager.get_task_state(task_id)
+        if task:
+            task.kind = "scrape"
+            task.username = username
+            task.cached = True
+            task.options = {"analysis_period": analysis_period, "cached": True}
+        task_manager.set_task_done(
+            task_id,
+            {"status": "success", "stats": cached_stats, "cached": True, "queue_wait_ms": 0},
+        )
+        return JSONResponse(
+            status_code=202,
+            content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending", "cached": True},
+        )
+
+    if settings.desktop_worker_enabled:
+        if not task_manager.is_worker_online(settings.worker_heartbeat_max_age_seconds):
+            persist_run(
+                username,
+                "scrape",
+                {},
+                ok=False,
+                error_message=WORKER_OFFLINE_MESSAGE,
+                error_type="desktop_worker_offline",
+                error_stage="desktop_worker_offline",
+            )
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error_code": "desktop_worker_offline",
+                    "message": WORKER_OFFLINE_MESSAGE,
+                },
+            )
+        task_id = task_manager.create_scrape_job(
+            username,
+            owner_key=client_key(request),
+            options={"analysis_period": analysis_period},
+        )
+        task = task_manager.get_task_state(task_id)
+        return JSONResponse(
+            status_code=202,
+            content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending"},
+        )
+
     task_id = task_manager.create_task_state(client_key(request))
     session = request.app.state.aiohttp_session
     asyncio.create_task(_run_scrape(task_id, session, username, analysis_period))
 
+    task = task_manager.get_task_state(task_id)
+    return JSONResponse(
+        status_code=202,
+        content={"task_id": task_id, "poll_token": task.poll_token, "status": "pending"},
+    )
+
+
+MAX_IMPORT_ITEMS = 20_000
+
+
+@router.post("/api/import-scrape", status_code=202)
+async def import_scrape(request: Request):
+    """Analyze bookmarklet JSON (films + diary) without hitting Letterboxd HTML."""
+    enforce_rate_limit(request, "import_scrape", limit=5, window=600)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_json", "message": "Request body must be valid JSON."},
+        )
+    data = body.get("data") if isinstance(body.get("data"), dict) else body
+    raw_username = str((data or {}).get("user") or body.get("username") or "").strip()
+    username = raw_username.lower()
+    if not username or not re.match(r"^[a-z0-9_]+$", username):
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_username", "message": "Please enter a valid Letterboxd username."},
+        )
+    films = data.get("films") if isinstance(data.get("films"), list) else []
+    diary = data.get("diary") if isinstance(data.get("diary"), list) else []
+    if len(films) + len(diary) > MAX_IMPORT_ITEMS:
+        raise HTTPException(
+            status_code=413,
+            detail={"error_code": "payload_too_large", "message": "Import contains too many items."},
+        )
+    if not films and not diary:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "no_films", "message": "Import JSON has no films or diary entries."},
+        )
+    raw_period = body.get("period") or body.get("analysis_period")
+    try:
+        analysis_period = normalize_analysis_period(raw_period)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_analysis_period", "message": str(exc)},
+        ) from exc
+
+    imported = sources_from_bookmarklet({"films": films, "diary": diary})
+    task_id = task_manager.create_task_state(client_key(request))
+    session = request.app.state.aiohttp_session
+    asyncio.create_task(
+        _run_scrape(task_id, session, username, analysis_period, imported=imported)
+    )
     task = task_manager.get_task_state(task_id)
     return JSONResponse(
         status_code=202,
@@ -429,6 +535,10 @@ async def get_task_progress(task_id: str, request: Request):
     supplied = request.headers.get("X-Task-Token", "")
     if not supplied or not secrets.compare_digest(supplied, task.poll_token):
         raise HTTPException(status_code=403, detail={"error_code": "invalid_task_token", "message": "Invalid task token."})
+    queue = task_manager.scrape_queue_metrics(task)
+    result = task.result
+    if isinstance(result, dict) and task.kind == "scrape" and queue.get("queue_wait_ms") is not None:
+        result = {**result, "queue_wait_ms": queue["queue_wait_ms"]}
     return {
         "task_id": task.task_id,
         "status": task.status,
@@ -436,11 +546,13 @@ async def get_task_progress(task_id: str, request: Request):
         "message": task.message,
         "progress": task.progress,
         "total": task.total,
-        "result": task.result,
+        "result": result,
         "error": task.error,
         "duration_seconds": task.duration_seconds,
         "error_type": task.error_type,
         "error_stage": task.error_stage,
         "error_code": task.error_code,
         "trace_events": task.trace_events,
+        "cached": task.cached,
+        **queue,
     }

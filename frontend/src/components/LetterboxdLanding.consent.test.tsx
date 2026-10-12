@@ -153,6 +153,14 @@ describe('LetterboxdLanding persistence', () => {
       'analyze_started',
       { method: 'scrape', analysis_period: 'lifetime' },
     );
+    expect(analyticsMocks.trackEvent).toHaveBeenCalledWith(
+      'scrape_started',
+      { method: 'scrape' },
+    );
+    expect(analyticsMocks.trackEvent).toHaveBeenCalledWith(
+      'scrape_done',
+      expect.objectContaining({ method: 'scrape', films: 12, diary: 0, queue_wait_ms: 0 }),
+    );
 
     await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith('/en/story?u=alice'));
     expect(storedAtNavigation).toMatchObject({ scraped_username: 'alice', total_films: 12 });
@@ -365,12 +373,12 @@ describe('LetterboxdLanding persistence', () => {
     expect(screen.getByText(/analysis server appears to be offline/i)).toBeInTheDocument();
   });
 
-  it('presents ZIP export before username scrape', () => {
+  it('presents live username scan with bookmarklet and ZIP backups', () => {
     render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
-    const exportCta = screen.getByRole('link', { name: /open letterboxd export/i });
-    const usernameHeading = screen.getByRole('heading', { name: /or try a public username/i });
-    expect(exportCta.compareDocumentPosition(usernameHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText(/ZIP upload is the reliable path/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /type your letterboxd username/i })).toBeInTheDocument();
+    expect(screen.getByText(/bookmarklet or a ZIP export/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /use the bookmarklet instead/i })).toHaveAttribute('href', '/import');
+    expect(screen.getByRole('link', { name: /open letterboxd export/i })).toBeInTheDocument();
   });
 
   it('sends a blocked scrape to ZIP upload without a retry loop', async () => {

@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { AlertTriangle, RefreshCw, X, MessageSquare, Upload } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nProvider';
+import { localizePath } from '@/i18n/routing';
 import { needsZipFallback, type NormalizedError } from '@/lib/errors';
 
 interface ErrorBannerProps {
@@ -14,11 +16,12 @@ interface ErrorBannerProps {
 }
 
 export default function ErrorBanner({ error, onDismiss, onRetry, onUpload, onReport }: ErrorBannerProps) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const copy = locale === 'tr'
     ? { dismiss: 'Hatayı kapat', retry: 'Tekrar dene', report: 'Sorunu bildir', upload: 'Export ZIP yükle' }
     : { dismiss: 'Dismiss error', retry: 'Try again', report: 'Report issue', upload: 'Upload export ZIP' };
   const zipFirst = Boolean(onUpload && needsZipFallback(error.reason));
+  const showBookmarklet = error.reason === 'desktop_worker_offline';
   return (
     <div className="mx-auto max-w-xl rounded-2xl border border-red-700/50 bg-slate-800/90 p-4 sm:p-5">
       <div className="flex items-start gap-3">
@@ -45,6 +48,14 @@ export default function ErrorBanner({ error, onDismiss, onRetry, onUpload, onRep
           )}
 
           <div className="mt-3 flex flex-wrap gap-2">
+            {showBookmarklet && (
+              <Link
+                href={localizePath('/import', locale)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-xs font-medium text-white transition-colors"
+              >
+                {t('landing.error.desktopOffline.bookmarklet')}
+              </Link>
+            )}
             {zipFirst && onUpload && (
               <button
                 onClick={onUpload}

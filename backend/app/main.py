@@ -19,8 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.task_manager import cleanup_loop
-from app.routes import analyze, feedback, tmdb
+from app.task_manager import cleanup_loop, load_pending_tasks
+from app.routes import analyze, feedback, tmdb, worker
 from app import admin, supabase_ops
 from app.services.run_log import cleanup_expired_runs
 
@@ -46,6 +46,9 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("TMDB_API_KEY not found. Set it in .env or as an environment variable.")
 
     await cleanup_expired_runs()
+    reloaded = await load_pending_tasks()
+    if reloaded:
+        logger.info("Startup restored %d scrape job(s) from Supabase ops_tasks", reloaded)
     app.state.aiohttp_session = aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(limit_per_host=20)
     )
@@ -69,6 +72,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_origin_regex=r"https://deploy-preview-\d+--[a-z0-9-]+\.netlify\.app",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -99,6 +103,7 @@ def create_app() -> FastAPI:
     app.include_router(analyze.router)
     app.include_router(tmdb.router)
     app.include_router(feedback.router)
+    app.include_router(worker.router)
 
     @app.get("/")
     async def root():

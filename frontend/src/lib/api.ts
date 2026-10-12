@@ -20,6 +20,8 @@ export interface ScrapeProfileResult {
   status: string;
   stats: LetterboxdStats;
   task_id?: string;
+  queue_wait_ms?: number;
+  cached?: boolean;
 }
 
 export type ScrapeTraceEvent = {
@@ -33,6 +35,9 @@ export type ScrapeProgress = {
   stage?: string;
   message?: string;
   trace_events?: ScrapeTraceEvent[];
+  queue_position?: number | null;
+  eta_seconds?: number | null;
+  queue_wait_ms?: number | null;
 };
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000').replace(/\/$/, '');
@@ -175,7 +180,12 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
       const result = task.result;
       if (!result) throw new Error('Analysis returned no result');
       if (result.status === 'error') throw new Error(result.detail || 'Analysis failed');
-      return result as T;
+      const payload = result as T & { queue_wait_ms?: number; cached?: boolean };
+      if (typeof task.queue_wait_ms === 'number' && payload.queue_wait_ms == null) {
+        payload.queue_wait_ms = task.queue_wait_ms;
+      }
+      if (task.cached === true) payload.cached = true;
+      return payload as T;
     }
 
     if (task.status === 'failed') {
@@ -187,7 +197,14 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
       throw error;
     }
 
-    opts.onProgress?.({ stage: task.stage, message: task.message, trace_events: task.trace_events });
+    opts.onProgress?.({
+      stage: task.stage,
+      message: task.message,
+      trace_events: task.trace_events,
+      queue_position: typeof task.queue_position === 'number' ? task.queue_position : null,
+      eta_seconds: typeof task.eta_seconds === 'number' ? task.eta_seconds : null,
+      queue_wait_ms: typeof task.queue_wait_ms === 'number' ? task.queue_wait_ms : null,
+    });
 
     await new Promise<void>((resolve, reject) => {
       if (signal?.aborted) {
@@ -243,6 +260,43 @@ export async function analyzeFiles(
       throw new DOMException('Aborted', 'AbortError');
     }
     throw handleApiError(error, 'file analysis');
+  }
+}
+
+export async function importScrape(
+  payload: { user: string; films: unknown[]; diary: unknown[] },
+  signal?: AbortSignal,
+  onProgress?: (p: ScrapeProgress) => void,
+): Promise<ScrapeProfileResult> {
+  const url = `${API_BASE}/api/import-scrape`;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    if (!r.ok) {
+      throw await parseApiFailure(r, 'profile import', `import ${r.status}`);
+    }
+    const data = await r.json();
+    if (data && data.task_id && !data.stats) {
+      const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, {
+        onProgress,
+        signal,
+        intervalMs: 400,
+      });
+      return { ...result, task_id: data.task_id };
+    }
+    if (!data || data.status === 'error') {
+      throw new Error(data?.detail || 'Import failed');
+    }
+    return data as ScrapeProfileResult;
+  } catch (error) {
+    if (signal?.aborted || isAbortError(error) || (error instanceof DOMException && error.name === 'AbortError')) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+    throw handleApiError(error, 'profile import');
   }
 }
 

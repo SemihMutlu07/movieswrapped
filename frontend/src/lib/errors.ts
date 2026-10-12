@@ -147,14 +147,17 @@ export function normalizeError(err: unknown): NormalizedError {
 
   // Scraper-service failure (worker failed/unreachable/too busy). These messages
   // come from the local scraper or desktop worker when it cannot complete a job.
-  if (/desktop_worker_offline|desktop scraper is offline/i.test(raw) || code === 'desktop_worker_offline') {
+  if (
+    /desktop_worker_offline|desktop scraper is offline|live scan is offline/i.test(raw)
+    || code === 'desktop_worker_offline'
+  ) {
     return {
-      title: 'Desktop scraper offline',
+      title: 'Live scan offline right now',
       message:
         raw ||
-        'The desktop scraper is offline right now.',
+        'Live scan is offline right now.',
       action:
-        'Upload your Letterboxd export ZIP — that path does not use the scraper.',
+        'Use the bookmarklet or upload your Letterboxd export ZIP.',
       reason: 'desktop_worker_offline',
     };
   }

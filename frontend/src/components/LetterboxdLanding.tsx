@@ -1,6 +1,7 @@
 'use client';
 
 import JSZip from 'jszip';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Upload, Sparkles, PartyPopper, ChevronDown } from 'lucide-react';
@@ -447,6 +448,7 @@ export default function LetterboxdLanding() {
     const stillCurrent = () => generation === analysisGeneration.current && !controller.signal.aborted;
 
     trackEvent('analyze_started', { method: 'scrape', analysis_period: 'lifetime' });
+    trackEvent('scrape_started', { method: 'scrape' });
     const destination = storyPath(username, locale);
     storyDestinationRef.current = destination;
     router.prefetch(destination);
@@ -490,6 +492,13 @@ export default function LetterboxdLanding() {
         });
       }
 
+      trackEvent('scrape_done', {
+        duration_ms: Math.round(durationMs),
+        films: Number(result.stats.scraped_film_count ?? result.stats.total_films ?? 0),
+        diary: Number(result.stats.scraped_diary_count ?? 0),
+        queue_wait_ms: Number(result.queue_wait_ms ?? 0),
+        method: 'scrape',
+      });
       trackConsentedEvent('analyze_succeeded', {
         total_films: result.stats.total_films,
         duration_ms: Math.round(durationMs),
@@ -543,6 +552,7 @@ export default function LetterboxdLanding() {
           /* silent */
         }
       }
+      trackEvent('scrape_failed', { reason: normalized.reason, method: 'scrape' });
       trackEvent('analyze_failed', {
         reason: normalized.reason,
         duration_ms: startedAt > 0 ? Math.round(performance.now() - startedAt) : 0,
@@ -605,9 +615,12 @@ export default function LetterboxdLanding() {
       <ScrapeStoryWait
         username={activeScrapeUsername}
         onCancel={handleCancel}
+        queued={(scrapeProgress?.queue_position ?? 0) > 1 || scrapeProgress?.stage === 'queued'}
         events={scrapeProgress?.trace_events}
         resultReady={scrapeResultReady}
         onStoryReady={handleStoryReady}
+        queuePosition={scrapeProgress?.queue_position}
+        etaSeconds={scrapeProgress?.eta_seconds}
       />
     );
   }
@@ -726,6 +739,11 @@ export default function LetterboxdLanding() {
                     {t('landing.username.analyze')} →
                   </button>
                 </div>
+                <p className="text-center text-xs text-white/40">
+                  <Link href="/import" className="underline decoration-white/25 hover:text-white/70">
+                    {t('landing.username.bookmarklet')}
+                  </Link>
+                </p>
               </form>
             </div>
           </section>

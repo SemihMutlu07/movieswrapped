@@ -2,7 +2,12 @@
 
 > Durable reference so we **never re-derive** how the desktop server works.
 > Paths relative to repo root.
-> Last verified: 2026-08-22.
+> Last verified: 2026-10-10.
+>
+> Current production path is the **X370 Safari worker**. See
+> [`docs/x370-safari-worker.md`](x370-safari-worker.md) for the version
+> handshake, self-update, systemd unit, and 24h cache. Sections below that
+> still mention Windows / cloudscraper describe the archived 2026-08 topology.
 
 ## 1. Mental model (read this first)
 

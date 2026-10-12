@@ -15,6 +15,8 @@ type Props = {
   events?: ScrapeTraceEvent[];
   resultReady?: boolean;
   onStoryReady?: () => void;
+  queuePosition?: number | null;
+  etaSeconds?: number | null;
 };
 
 /**
@@ -96,7 +98,16 @@ function formatElapsed(seconds: number, t: (key: MessageKey) => string): string 
   return t('landing.loading.minutesSeconds').replace('{minutes}', String(m)).replace('{seconds}', String(s));
 }
 
-export default function ScrapeStoryWait({ username, onCancel, queued = false, events, resultReady = false, onStoryReady }: Props) {
+export default function ScrapeStoryWait({
+  username,
+  onCancel,
+  queued = false,
+  events,
+  resultReady = false,
+  onStoryReady,
+  queuePosition = null,
+  etaSeconds = null,
+}: Props) {
   const { t } = useI18n();
   const [elapsed, setElapsed] = useState(0);
   const [started, setStarted] = useState(false);
@@ -353,6 +364,17 @@ export default function ScrapeStoryWait({ username, onCancel, queued = false, ev
       >
         <p className="text-xs uppercase tracking-[0.2em] text-white/45">{t('landing.storyWait.kicker')}</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{label}</h1>
+        {!finished && (queuePosition != null || etaSeconds != null) && (
+          <p className="mt-3 text-sm text-white/60" data-testid="wait-queue-meta">
+            {queuePosition != null && queuePosition > 0
+              ? t('landing.storyWait.position').replace('{position}', String(queuePosition))
+              : null}
+            {queuePosition != null && queuePosition > 0 && etaSeconds != null ? ' · ' : null}
+            {etaSeconds != null
+              ? t('landing.storyWait.eta').replace('{seconds}', String(etaSeconds))
+              : null}
+          </p>
+        )}
         {/* Counter renders as plain text here; the sparse emphasis bump is L2 scope
             and must not stack with this phase's dominant motion. */}
         {countLabel && current !== 'queued' && current !== 'intro' && (
