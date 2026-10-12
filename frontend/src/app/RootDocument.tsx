@@ -75,6 +75,7 @@ export default function RootDocument({
   return (
     <html lang={locale}>
       <head>
+        <meta name="google-site-verification" content="uwLVZKp-vZ9CHJu1eVp99-ffatpP80y1uFvucHLQs0U" />
         <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48x48.png" />
