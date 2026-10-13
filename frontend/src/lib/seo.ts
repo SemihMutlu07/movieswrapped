@@ -29,10 +29,12 @@ export const seoByLocale: Record<
   },
 };
 
-export function sitemapLanguages(): Record<string, string> {
+/** Absolute hreflang map for a locale-less path (`''` is the homepage). */
+export function sitemapLanguages(path = ''): Record<string, string> {
+  const suffix = path ? `/${path}` : '';
   return {
-    en: `${SITE_URL}/en`,
-    tr: `${SITE_URL}/tr`,
-    'x-default': `${SITE_URL}${DEFAULT_HREF}`,
+    en: `${SITE_URL}/en${suffix}`,
+    tr: `${SITE_URL}/tr${suffix}`,
+    'x-default': `${SITE_URL}/en${suffix}`,
   };
 }

@@ -5,7 +5,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import PageViewTracker from '@/components/PageViewTracker';
 import { I18nProvider } from '@/i18n/I18nProvider';
-import { getFaqItems } from '@/i18n/faq';
 import type { Locale } from '@/i18n/locales';
 import { OG_SHARE_IMAGE, SITE_URL, seoByLocale } from '@/lib/seo';
 
@@ -33,6 +32,8 @@ export default function RootDocument({
   showLanguageSwitcher?: boolean;
 }) {
   const description = seoByLocale[locale].description;
+  // FAQPage JSON-LD lives on the locale homepage only, next to the visible
+  // FAQ. Guide routes ship their own graph so this one is not repeated.
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -69,21 +70,12 @@ export default function RootDocument({
           availability: 'https://schema.org/InStock',
         },
       },
-      {
-        '@type': 'FAQPage',
-        '@id': `${SITE_URL}/${locale}/#faq`,
-        inLanguage: locale,
-        mainEntity: getFaqItems(locale).map((item) => ({
-          '@type': 'Question',
-          name: item.question,
-          acceptedAnswer: { '@type': 'Answer', text: item.answer },
-        })),
-      },
     ],
   };
   return (
     <html lang={locale}>
       <head>
+        <meta name="google-site-verification" content="uwLVZKp-vZ9CHJu1eVp99-ffatpP80y1uFvucHLQs0U" />
         <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48x48.png" />

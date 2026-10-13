@@ -21,8 +21,11 @@ export default function robots(): MetadataRoute.Robots {
       },
       // AI answer-engine / LLM crawlers — explicit allow (AEO). Results
       // pages stay disallowed for them too.
+      // GrokBot and xAI-SearchBot are the tokens public crawler registries
+      // report for xAI. As of 2026-10-12 xAI had not published an official
+      // crawler user-agent, so these two lines are a request, not a contract.
       {
-        userAgent: ['GPTBot', 'ChatGPT-User', 'OAI-SearchBot', 'ClaudeBot', 'Claude-User', 'anthropic-ai', 'PerplexityBot', 'Google-Extended', 'CCBot', 'cohere-ai', 'meta-externalagent', 'Bytespider', 'Applebot-Extended', 'Amazonbot', 'DuckAssistBot', 'YouBot', 'Googlebot', 'Bingbot'],
+        userAgent: ['GPTBot', 'ChatGPT-User', 'OAI-SearchBot', 'ClaudeBot', 'Claude-User', 'anthropic-ai', 'PerplexityBot', 'Google-Extended', 'CCBot', 'cohere-ai', 'meta-externalagent', 'Bytespider', 'Applebot-Extended', 'Amazonbot', 'DuckAssistBot', 'YouBot', 'Googlebot', 'Bingbot', 'GrokBot', 'xAI-SearchBot'],
         allow: '/',
         disallow: ['/api/', '/results', '/en/results', '/tr/results'],
       },

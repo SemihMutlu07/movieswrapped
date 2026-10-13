@@ -13,6 +13,11 @@ describe('seo copy', () => {
   it('points x-default and the share image at space-free URLs', () => {
     expect(DEFAULT_HREF).toBe('/en');
     expect(sitemapLanguages()['x-default']).toBe('https://movieswrapped.com/en');
+    expect(sitemapLanguages('letterboxd-wrapped')).toEqual({
+      en: 'https://movieswrapped.com/en/letterboxd-wrapped',
+      tr: 'https://movieswrapped.com/tr/letterboxd-wrapped',
+      'x-default': 'https://movieswrapped.com/en/letterboxd-wrapped',
+    });
     expect(OG_SHARE_IMAGE).not.toMatch(/\s/);
   });
 });
