@@ -78,6 +78,25 @@ describe('letterboxdImport', () => {
     ]);
   });
 
+  it('reads an October 2026 profile where the rating sits beside LazyPoster', () => {
+    const html = `
+      <ul>
+        <li class="griditem">
+          <div class="react-component" data-component-class="LazyPoster"
+               data-item-slug="digger-2026" data-item-name="Digger (2026)">
+            <div class="poster film-poster"></div>
+          </div>
+          <p class="poster-viewingdata">
+            <span class="rating -micro -darker rated-6">★★★</span>
+          </p>
+        </li>
+      </ul>
+    `;
+    expect(parseFilmsFromBookmarklet(html)).toEqual([
+      { slug: 'digger-2026', title: 'Digger', year: 2026, rating: 3, liked: false },
+    ]);
+  });
+
   it('still reads a classic li.griditem tile', () => {
     const html = `
       <ul>

@@ -4,7 +4,6 @@ import React from 'react';
 import Link from 'next/link';
 import { AlertTriangle, RefreshCw, X, MessageSquare, Upload } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nProvider';
-import { localizePath } from '@/i18n/routing';
 import { needsZipFallback, type NormalizedError } from '@/lib/errors';
 
 interface ErrorBannerProps {
@@ -50,7 +49,7 @@ export default function ErrorBanner({ error, onDismiss, onRetry, onUpload, onRep
           <div className="mt-3 flex flex-wrap gap-2">
             {showBookmarklet && (
               <Link
-                href={localizePath('/import', locale)}
+                href="/import"
                 className="inline-flex items-center gap-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-xs font-medium text-white transition-colors"
               >
                 {t('landing.error.desktopOffline.bookmarklet')}

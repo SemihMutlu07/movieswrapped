@@ -85,4 +85,27 @@ describe('ImportLetterboxdPage', () => {
     });
     expect(analyticsMocks.trackEvent).toHaveBeenCalledWith('scrape_started', { method: 'bookmarklet' });
   });
+
+  it('exposes a drag-and-copy bookmarklet React does not strip', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <I18nProvider locale="en">
+        <ImportLetterboxdPage />
+      </I18nProvider>,
+    );
+
+    const drag = screen.getByRole('link', { name: /movieswrapped export/i });
+    const href = drag.getAttribute('href') ?? '';
+    expect(href.startsWith('javascript:')).toBe(true);
+    expect(href).toMatch(/LazyPoster/);
+    expect(href).not.toMatch(/blocked a javascript/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /copy bookmarklet/i }));
+    expect(writeText).toHaveBeenCalledWith(href);
+    expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument();
+  });
 });

@@ -99,6 +99,11 @@ describe('LetterboxdLanding persistence', () => {
     vi.unstubAllGlobals();
   });
 
+  it('links the homepage to the bookmarklet import page', () => {
+    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    expect(screen.getByRole('link', { name: /use the bookmarklet instead/i })).toHaveAttribute('href', '/import');
+  });
+
   it('keeps ZIP upload on a phone user agent', () => {
     vi.stubGlobal('navigator', {
       ...navigator,
