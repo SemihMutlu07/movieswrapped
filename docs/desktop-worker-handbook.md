@@ -121,10 +121,13 @@ Backend side (`config.py`): `worker_heartbeat_max_age_seconds=60`,
 ## 5. Failure & offline behavior
 
 - **Worker offline at request time:** clean 503 + upload-export message.
-- **Worker dies AFTER a job is claimed:** `requeue_stale_claims` recovers
-  scrape/watchlist claims older than **5 minutes** whose **owner heartbeat** is
-  stale; `fail_expired_worker_jobs` fails anything still active after **9
-  minutes**. Terminal rows are retained ~1 hour.
+- **Worker dies AFTER a job is claimed:** `requeue_stale_scrape_claims`
+  releases the claim once that owner's heartbeat is older than the enqueue
+  window plus 60s grace (default **120s**). The cleanup loop checks every
+  **5s**. One slow heartbeat POST is not a crash, and a claim restored at
+  boot is kept until a heartbeat is seen. A worker that is still
+  heartbeating but stuck keeps the **10-minute** lease. The old lease token
+  stays until the next claim replaces it. Terminal rows are retained ~1 hour.
 - **Orphan postback:** complete/failed for a forgotten task still
   `persist_run`s (`orphan:true`); the public poll may already have 404'd.
 - **Wrong lease:** 409 — a requeued job's old postback cannot complete under the

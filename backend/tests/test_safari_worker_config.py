@@ -36,6 +36,12 @@ def test_read_config_requires_fields(tmp_path: Path, monkeypatch):
         safari_worker.read_config()
 
 
+def test_worker_requirements_pin_pandas_for_python_314():
+    text = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text(encoding="utf-8")
+    assert "pandas==2.3.1" not in text
+    assert "pandas>=2.3.3,<3" in text
+
+
 def test_worker_does_not_import_camoufox():
     import app.worker.safari_worker as mod
 

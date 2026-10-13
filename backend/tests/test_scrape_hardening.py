@@ -1,6 +1,7 @@
 """Hardening against LESSONS.md: challenge fail-closed, serial grid, cache, handshake."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -169,7 +170,7 @@ def test_queue_metrics_count_jobs_ahead():
 
 
 def test_stale_claim_is_requeued():
-    task_manager._tasks.clear()
+    task_manager.reset_worker_runtime()
     task_id = task_manager.create_scrape_job("alice")
     job = task_manager.claim_next_scrape_job("x370")
     assert job is not None
@@ -179,4 +180,167 @@ def test_stale_claim_is_requeued():
     assert restored is not None
     assert restored.status == "pending"
     assert restored.claimed is False
-    task_manager._tasks.clear()
+    task_manager.reset_worker_runtime()
+
+
+def test_dead_owner_heartbeat_requeues_without_waiting_ten_minutes():
+    task_manager.reset_worker_runtime()
+    task_id = task_manager.create_scrape_job("alice")
+    job = task_manager.claim_next_scrape_job("x370")
+    assert job is not None
+    now = datetime.now(timezone.utc)
+    old_lease = job.lease_token
+    job.claimed_at = now - timedelta(seconds=5)
+    task_manager._worker_heartbeats["x370"] = now - timedelta(
+        seconds=task_manager.claim_heartbeat_limit_seconds() + 5
+    )
+    assert task_manager.requeue_stale_scrape_claims(now) == 1
+    restored = task_manager.get_task_state(task_id)
+    assert restored is not None
+    assert restored.status == "pending"
+    assert restored.claimed is False
+    assert restored.lease_token == old_lease
+    assert "heartbeat" in (restored.message or "").lower()
+    reclaimed = task_manager.claim_next_scrape_job("x370-2")
+    assert reclaimed is not None
+    assert reclaimed.lease_token != old_lease
+    task_manager.reset_worker_runtime()
+
+
+def test_one_slow_heartbeat_does_not_release_the_claim():
+    task_manager.reset_worker_runtime()
+    task_manager.create_scrape_job("alice")
+    job = task_manager.claim_next_scrape_job("x370")
+    assert job is not None
+    now = datetime.now(timezone.utc)
+    job.claimed_at = now - timedelta(seconds=5)
+    task_manager._worker_heartbeats["x370"] = now - timedelta(
+        seconds=settings.worker_heartbeat_max_age_seconds + 5
+    )
+    assert task_manager.requeue_stale_scrape_claims(now) == 0
+    assert job.status == "running"
+    task_manager.reset_worker_runtime()
+
+
+def test_restored_claim_without_a_heartbeat_since_boot_stays_running():
+    task_manager.reset_worker_runtime()
+    started = task_manager._SERVER_STARTED_AT
+    now = datetime.now(timezone.utc)
+    task_manager._SERVER_STARTED_AT = now
+    try:
+        task_manager.create_scrape_job("alice")
+        job = task_manager.claim_next_scrape_job("x370")
+        assert job is not None
+        job.claimed_at = now - timedelta(seconds=180)
+        assert task_manager.requeue_stale_scrape_claims(now) == 0
+        assert job.status == "running"
+        assert job.claimed is True
+    finally:
+        task_manager._SERVER_STARTED_AT = started
+        task_manager.reset_worker_runtime()
+
+
+def test_fresh_heartbeat_keeps_claim_past_the_online_window():
+    task_manager.reset_worker_runtime()
+    task_manager.create_scrape_job("alice")
+    job = task_manager.claim_next_scrape_job("x370")
+    assert job is not None
+    now = datetime.now(timezone.utc)
+    job.claimed_at = now - timedelta(seconds=settings.worker_heartbeat_max_age_seconds + 30)
+    task_manager._worker_heartbeats["x370"] = now
+    assert task_manager.requeue_stale_scrape_claims(now) == 0
+    assert job.status == "running"
+    assert job.claimed is True
+    task_manager.reset_worker_runtime()
+
+
+def test_young_claim_without_heartbeat_is_kept():
+    task_manager.reset_worker_runtime()
+    task_manager.create_scrape_job("alice")
+    job = task_manager.claim_next_scrape_job("x370")
+    assert job is not None
+    assert task_manager.requeue_stale_scrape_claims() == 0
+    assert job.claimed is True
+    task_manager.reset_worker_runtime()
+
+
+def test_scan_stages_advance_progress_off_zero():
+    task_manager.reset_worker_runtime()
+    task_id = task_manager.create_scrape_job("alice")
+    task = task_manager.get_task_state(task_id)
+    assert task is not None
+    assert task.progress == 0
+    assert task.total == task_manager.SCAN_STAGE_TOTAL
+    assert not (task.progress == 0 and task.total == 0)
+    for stage, step in (
+        ("diary", 1),
+        ("diary_page", 1),
+        ("grid", 2),
+        ("reviews", 3),
+        ("reviews_page", 3),
+        ("analysis", 4),
+        ("analysis_started", 4),
+    ):
+        task_manager.note_scan_stage(task_id, stage)
+        assert task.progress == step
+        assert task.total == 4
+    task_manager.note_scan_stage(task_id, "diary_page")
+    assert task.progress == 4
+    task_manager.reset_worker_runtime()
+
+
+@pytest.mark.asyncio
+async def test_trace_pump_posts_scan_stage_immediately(monkeypatch):
+    posted: list[dict] = []
+
+    async def fake_post(session, cfg, path, payload):
+        posted.append({"path": path, **payload})
+        return True
+
+    monkeypatch.setattr(safari_worker, "_post", fake_post)
+    cfg = safari_worker.WorkerConfig(base_url="http://backend", token="t", tmdb_api_key="k")
+    trace = safari_worker.TraceBuffer()
+    trace.add("diary", "Scanning diary")
+    stop = asyncio.Event()
+    pump = asyncio.create_task(
+        safari_worker._pump_trace(None, cfg, "task-1", trace, {"lease_token": "lease"}, stop)
+    )
+    for _ in range(50):
+        if posted:
+            break
+        await asyncio.sleep(0.01)
+    stop.set()
+    await pump
+    assert posted
+    assert posted[0]["path"].endswith("/event")
+    assert posted[0]["events"][0]["stage"] == "diary"
+    assert posted[0]["lease_token"] == "lease"
+
+
+@pytest.mark.asyncio
+async def test_trace_pump_retries_a_failed_flush(monkeypatch):
+    monkeypatch.setattr(safari_worker, "TRACE_FLUSH_SECONDS", 0.01)
+    attempts: list[dict] = []
+
+    async def fake_post(session, cfg, path, payload):
+        attempts.append(payload)
+        return len(attempts) >= 2
+
+    monkeypatch.setattr(safari_worker, "_post", fake_post)
+    cfg = safari_worker.WorkerConfig(base_url="http://backend", token="t", tmdb_api_key="k")
+    trace = safari_worker.TraceBuffer()
+    trace.add("grid", "Scanning grid")
+    stop = asyncio.Event()
+    pump = asyncio.create_task(
+        safari_worker._pump_trace(None, cfg, "task-1", trace, {"lease_token": "lease"}, stop)
+    )
+    for _ in range(50):
+        if len(attempts) >= 2:
+            break
+        await asyncio.sleep(0.01)
+    stop.set()
+    await pump
+    assert len(attempts) >= 2
+    assert attempts[0]["events"][0]["stage"] == "grid"
+    assert attempts[1]["events"][0]["stage"] == "grid"
+    assert trace.snapshot()[0]["stage"] == "grid"

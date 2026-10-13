@@ -1,6 +1,5 @@
 fastapi==0.139.0
 uvicorn
-pandas
 python-multipart==0.0.32
 Jinja2
 zipstream-ng
@@ -28,7 +27,10 @@ MarkupSafe==3.0.2
 multidict==6.9.1
 numpy==2.4.6
 packaging==25.0
-pandas==2.3.1
+# 2.3.1 SIGSEGV in get_datetime_metadata_from_dtype on Python 3.14 + numpy 2.4
+# (X370 worker). Upper bound stays off pandas 3 (an open >=2.3.3 resolves to 3.x).
+# git pull does not upgrade the venv; reinstall requirements on X370 after approval.
+pandas>=2.3.3,<3
 propcache==0.3.2
 pydantic==2.14.0
 pydantic_core==2.50.0

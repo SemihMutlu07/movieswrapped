@@ -819,6 +819,7 @@ def _sync_scrape_diary(
     """Synchronous diary scraper (same Safari session as grid and access check)."""
     owns_session = session is None
     logger.info("Starting diary scrape for %s (max_pages=%d)", username, max_pages)
+    _trace(trace_callback, "diary", "Scanning diary", None)
     s = session or _new_session()
     if owns_session:
         _warm_session(s)
@@ -943,6 +944,7 @@ def _sync_scrape_films_grid(
     """Synchronous full-watched grid scraper (same Safari session as diary)."""
     owns_session = session is None
     logger.info("Starting grid scrape for %s (max_pages=%d)", username, max_pages)
+    _trace(trace_callback, "grid", "Scanning grid", None)
     s = session or _new_session()
     if owns_session:
         _warm_session(s)
@@ -1003,6 +1005,7 @@ def _sync_scrape_reviews(
     """Single-pass scraper for /{username}/reviews/films/page/N/."""
     owns_session = session is None
     logger.info("Starting review scrape for %s (max_pages=%d)", username, max_pages)
+    _trace(trace_callback, "reviews", "Scanning reviews", None)
     s = session or _new_session()
     if owns_session:
         _warm_session(s)

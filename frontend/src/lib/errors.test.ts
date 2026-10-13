@@ -37,6 +37,7 @@ describe('normalizeError desktop worker offline', () => {
 
     expect(normalized.reason).toBe('queue_full');
     expect(normalized.action).toMatch(/ZIP/i);
+    expect(normalized.action).toMatch(/bookmarklet/i);
   });
 });
 

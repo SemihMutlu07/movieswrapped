@@ -23,6 +23,10 @@ WORKER_OFFLINE_MESSAGE = (
     "Live scan is offline right now. Use the bookmarklet on /import, or download "
     "your Letterboxd export ZIP and upload it."
 )
+QUEUE_FULL_MESSAGE = (
+    "Live scan is full right now. Use the bookmarklet on /import, or download "
+    "your Letterboxd export ZIP and upload it."
+)
 
 
 def _constant_time_equal(supplied: str, expected: str) -> bool:
@@ -150,6 +154,7 @@ async def record_scrape_event(
         for event in events:
             if isinstance(event, dict):
                 task_manager.append_task_event_payload(task_id, event)
+                task_manager.note_scan_stage(task_id, str(event.get("stage") or ""))
                 last_stage = str(event.get("stage") or last_stage)
                 last_message = str(event.get("message") or last_message)
         if last_stage:
@@ -170,6 +175,7 @@ async def record_scrape_event(
         level=str(body.get("level") or "info"),
         metrics=body.get("metrics") if isinstance(body.get("metrics"), dict) else None,
     )
+    task_manager.note_scan_stage(task_id, stage)
     task.stage = stage
     task.message = message or stage
     task_manager.persist_task(task)
