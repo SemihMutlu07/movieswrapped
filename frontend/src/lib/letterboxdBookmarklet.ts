@@ -4,15 +4,20 @@ const BOOKMARKLET_BODY = `/* MoviesWrapped Letterboxd exporter. Run on letterbox
   function txt(el) { return el ? el.textContent.trim() : null; }
   function parseFilmsPage(doc) {
     var out = [];
-    doc.querySelectorAll('li.griditem, li.poster-container').forEach(function (li) {
-      var p = li.querySelector('[data-item-slug],[data-film-slug]'); if (!p) return;
-      var name = p.getAttribute('data-item-name') || '';
+    var seen = {};
+    doc.querySelectorAll('.griditem, li.poster-container, [data-component-class="LazyPoster"]').forEach(function (item) {
+      var p = item.matches('[data-item-slug],[data-film-slug]') ? item : item.querySelector('[data-item-slug],[data-film-slug]');
+      if (!p) return;
+      var slug = p.getAttribute('data-item-slug') || p.getAttribute('data-film-slug');
+      if (!slug || seen[slug]) return;
+      seen[slug] = 1;
+      var name = p.getAttribute('data-item-name') || p.getAttribute('data-film-name') || '';
       var m = name.match(/^(.*) \\((\\d{4})\\)$/);
-      var r = li.querySelector('.rating[class*="rated-"]');
+      var r = item.querySelector('.rating[class*="rated-"]');
       var rm = r && r.className.match(/rated-(\\d+)/);
-      out.push({ slug: p.getAttribute('data-item-slug') || p.getAttribute('data-film-slug'),
+      out.push({ slug: slug,
         title: m ? m[1] : name, year: m ? +m[2] : null,
-        rating: rm ? +rm[1] / 2 : null, liked: !!li.querySelector('.like, .icon-liked') });
+        rating: rm ? +rm[1] / 2 : null, liked: !!item.querySelector('.like, .icon-liked, .icon-like.-on') });
     });
     return out;
   }
