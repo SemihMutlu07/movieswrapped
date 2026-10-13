@@ -54,8 +54,11 @@ mirror. The G1 brief reports those three tables empty in production. See
 - Repeat scrapes for the same `username + analysis_period` are meant to hit
   `scrape_result_cache` for 24 hours. A miss, or Supabase disabled, runs a
   live job. There is no on-disk result cache on Render.
-- Frontend polls `queue_position`, `eta_seconds` (~15s per job ahead), and
-  `queue_wait_ms`.
+- Frontend polls `queue_position`, `eta_seconds`, and `queue_wait_ms`.
+  `eta_seconds` is the mean of the last ten successful uncached processing
+  durations, and it stays null until three samples exist. A completed task
+  reports zero remaining time. The wait screen shows queue position and
+  elapsed time while a job is processing.
 - More than `SCRAPE_QUEUE_CAP` (20) pending or running scrapes returns
   503 `queue_full` and points at the bookmarklet (`/import`) and ZIP upload.
 

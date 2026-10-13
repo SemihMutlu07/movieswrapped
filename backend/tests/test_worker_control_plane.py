@@ -189,8 +189,45 @@ async def test_progress_includes_queue_position_and_eta(client, worker_auth):
     )
     body = progress.json()
     assert body["queue_position"] == 2
-    assert body["eta_seconds"] == 15
+    assert body["eta_seconds"] is None
 
+
+
+@pytest.mark.asyncio
+async def test_fifty_request_burst_accepts_twenty_without_letterboxd(client, worker_auth, monkeypatch):
+    monkeypatch.setattr("app.routes.analyze.enforce_rate_limit", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.routes.analyze.lookup_scrape_cache", AsyncMock(return_value=None))
+    letterboxd = AsyncMock()
+    monkeypatch.setattr("app.routes.analyze._run_scrape", letterboxd)
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
+    accepts = 0
+    full = 0
+    for index in range(50):
+        response = await client.post("/api/scrape-profile", json={"username": f"burst{index}"})
+        if response.status_code == 202:
+            accepts += 1
+            continue
+        assert response.status_code == 503
+        assert response.json()["detail"]["error_code"] == "queue_full"
+        full += 1
+    assert accepts == 20
+    assert full == 30
+    letterboxd.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_scrape_per_ip_limit_is_separate_from_queue_cap(client, worker_auth, monkeypatch):
+    monkeypatch.setattr("app.routes.analyze.lookup_scrape_cache", AsyncMock(return_value=None))
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
+    codes = []
+    last = None
+    for index in range(6):
+        last = await client.post("/api/scrape-profile", json={"username": f"ipuser{index}"})
+        codes.append(last.status_code)
+    assert codes == [202, 202, 202, 202, 202, 429]
+    assert last is not None
+    assert last.json()["detail"]["error_code"] == "rate_limited"
+    assert task_manager.scrape_queue_depth() == 5
 
 @pytest.mark.asyncio
 async def test_scan_stage_events_fill_progress(client, worker_auth):

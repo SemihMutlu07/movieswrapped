@@ -13,7 +13,8 @@ from app.config import settings
 logger = logging.getLogger("letterboxd_wrapped.task_manager")
 
 PERSISTABLE_KINDS = frozenset({"scrape"})
-SECONDS_PER_SCRAPE_JOB = 15
+ETA_MIN_SAMPLES = 3
+ETA_RECENT_SAMPLES = 10
 # Hung-but-still-heartbeating backstop for a claim that already posted pages.
 # A crashed worker is released from its heartbeat age (see
 # requeue_stale_scrape_claims). A claim with no films and no terminal event
@@ -308,8 +309,37 @@ def note_scan_stage(task_id: str, stage: str) -> None:
         task.progress = step
 
 
+def _processing_seconds(task: TaskState) -> Optional[float]:
+    """Successful uncached scanner time. Queue wait is not included."""
+    if task.kind != "scrape" or task.status != "done" or task.cached:
+        return None
+    if task.claimed_at is not None and task.completed_at is not None:
+        return max(0.0, (task.completed_at - task.claimed_at).total_seconds())
+    if task.duration_seconds is not None and task.queue_wait_seconds is not None:
+        return max(0.0, float(task.duration_seconds) - float(task.queue_wait_seconds))
+    return None
+
+
+def recent_uncached_processing_seconds() -> list[float]:
+    ranked: list[tuple[datetime, float]] = []
+    for other in _tasks.values():
+        seconds = _processing_seconds(other)
+        if seconds is None:
+            continue
+        ranked.append((other.completed_at or other.created_at, seconds))
+    ranked.sort(key=lambda item: item[0])
+    return [seconds for _, seconds in ranked[-ETA_RECENT_SAMPLES:]]
+
+
+def estimated_processing_seconds() -> Optional[float]:
+    samples = recent_uncached_processing_seconds()
+    if len(samples) < ETA_MIN_SAMPLES:
+        return None
+    return sum(samples) / len(samples)
+
+
 def scrape_queue_metrics(task: TaskState) -> dict[str, Any]:
-    """Queue position (1-based) and ETA for the live scanner. ~15s per job ahead."""
+    """Queue position (1-based) and ETA from recent uncached completions."""
     if task.kind != "scrape":
         return {"queue_position": None, "eta_seconds": None, "queue_wait_ms": None}
     if task.status in {"done", "failed"}:
@@ -324,12 +354,13 @@ def scrape_queue_metrics(task: TaskState) -> dict[str, Any]:
         and other.created_at < task.created_at
     ]
     position = len(ahead) + 1
+    sample = estimated_processing_seconds()
     if task.status == "running":
         elapsed = (_now() - (task.claimed_at or task.created_at)).total_seconds()
-        eta = max(0, int(SECONDS_PER_SCRAPE_JOB - elapsed))
+        eta = None if sample is None else max(0, int(round(sample - elapsed)))
         wait_ms = int(round((task.queue_wait_seconds or 0) * 1000))
     else:
-        eta = len(ahead) * SECONDS_PER_SCRAPE_JOB
+        eta = None if sample is None else int(round(len(ahead) * sample))
         wait_ms = int(round((_now() - task.created_at).total_seconds() * 1000))
     return {"queue_position": position, "eta_seconds": eta, "queue_wait_ms": wait_ms}
 
