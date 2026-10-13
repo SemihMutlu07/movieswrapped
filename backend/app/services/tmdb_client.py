@@ -570,19 +570,23 @@ async def fetch_comprehensive_film_details(
     session: aiohttp.ClientSession,
     tmdb_id: int,
 ) -> Dict[str, Any]:
-    """Fetch details, credits, and keywords for a single film concurrently."""
+    """Fetch details, credits, and keywords for one film in one request."""
     if pd.isna(tmdb_id):
         return {}
 
     try:
-        details, credits, keywords = await asyncio.gather(
-            tmdb_get(session, f"movie/{int(tmdb_id)}"),
-            tmdb_get(session, f"movie/{int(tmdb_id)}/credits"),
-            tmdb_get(session, f"movie/{int(tmdb_id)}/keywords"),
+        # One round trip. Separate /credits and /keywords calls tripled the
+        # metadata wait (741 films × 3 / 25 rps ≈ 90s) after the Letterboxd walk.
+        details = await tmdb_get(
+            session,
+            f"movie/{int(tmdb_id)}",
+            {"append_to_response": "credits,keywords"},
         )
 
         if not details:
             return {}
+        credits = details.get("credits") if isinstance(details.get("credits"), dict) else None
+        keywords = details.get("keywords") if isinstance(details.get("keywords"), dict) else None
 
         directors: List[str] = [c["name"] for c in credits.get("crew", []) if c["job"] == "Director"] if credits else []
         writers: List[str] = [c["name"] for c in credits.get("crew", []) if c["job"] in ["Writer", "Screenplay", "Story"]] if credits else []
