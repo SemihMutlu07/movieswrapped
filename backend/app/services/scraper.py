@@ -642,51 +642,28 @@ def _parse_review_cards(soup: BeautifulSoup) -> list[dict]:
     return reviews
 
 
-def _review_listing_looks_truncated(review_text: str) -> bool:
-    """Heuristic: Letterboxd review listings often clip long bodies."""
-    text = (review_text or "").strip()
-    if not text:
+def _film_identity(film: dict) -> tuple[str, str]:
+    return (str(film.get("title") or "").strip().lower(), str(film.get("year") or "").strip())
+
+
+def _unique_film_count(films: list[dict]) -> int:
+    return len({_film_identity(film) for film in films if str(film.get("title") or "").strip()})
+
+
+def _diary_covers_library(diary: list[dict], film_count: int) -> bool:
+    """True when unique diary titles already match the profile's film count.
+
+    A rewatch makes len(diary) larger than the library, so the row count is
+    not enough. film_count of 0 means the overview parse failed; keep the grid.
+    """
+    if film_count <= 0:
         return False
-    if text.endswith("…") or text.endswith("..."):
-        return True
-    if len(text) >= 700:
-        return True
-    return False
+    return _unique_film_count(diary) >= film_count
 
 
-def _parse_review_detail_body(soup: BeautifulSoup) -> str:
-    """Extract full review prose from a single-review page."""
-    body = soup.select_one(".js-review-body, .body-text, .review")
-    if not body:
-        return ""
-    return body.get_text(separator=" ", strip=True)
-
-
-def _hydrate_truncated_review_texts(
-    reviews: list[dict],
-    session: requests.Session,
-) -> None:
-    """Replace truncated listing excerpts with full text from review permalinks."""
-    for review in reviews:
-        excerpt = str(review.get("review_text") or "")
-        review_path = str(review.get("review_path") or "").strip()
-        if not review_path or not _review_listing_looks_truncated(excerpt):
-            continue
-        url = review_path if review_path.startswith("http") else f"{BASE_URL}{review_path}"
-        try:
-            r = _fetch(session, url, timeout=10)
-        except Exception as exc:
-            logger.debug("Full review fetch failed for %s: %s", review_path, exc)
-            continue
-        if r.status_code != 200 or _is_cloudflare_block(r.text):
-            continue
-        full_text = _parse_review_detail_body(BeautifulSoup(r.text, "html.parser"))
-        if full_text and (
-            len(full_text) > len(excerpt)
-            or (_review_listing_looks_truncated(excerpt) and not _review_listing_looks_truncated(full_text))
-        ):
-            review["review_text"] = full_text
-        time.sleep(PAGE_DELAY)
+def _emit_films(on_films: Optional[Callable[[list[dict]], None]], films: list[dict]) -> None:
+    if on_films and films:
+        on_films(list(films))
 
 
 def _parse_liker_cards(soup: BeautifulSoup) -> list[dict]:
@@ -815,6 +792,7 @@ def _sync_scrape_diary(
     session: Optional[Any] = None,
     trace_callback: Optional[TraceCallback] = None,
     cutoff_date: Optional[date] = None,
+    on_films: Optional[Callable[[list[dict]], None]] = None,
 ) -> list[dict]:
     """Synchronous diary scraper (same Safari session as grid and access check)."""
     owns_session = session is None
@@ -844,6 +822,7 @@ def _sync_scrape_diary(
             {"page": 1, "films": len(films), "status_code": r.status_code},
         )
         all_films.extend(films)
+        _emit_films(on_films, films)
         last_page = _last_page(soup)
         known_last = last_page > 1
         remaining = range(2, min(last_page if known_last else max_pages, max_pages) + 1)
@@ -901,6 +880,7 @@ def _sync_scrape_diary(
                     continue
                 break
             all_films.extend(films)
+            _emit_films(on_films, films)
             if _note_dates(films):
                 break
     finally:
@@ -940,6 +920,7 @@ def _sync_scrape_films_grid(
     max_pages: int,
     session: Optional[Any] = None,
     trace_callback: Optional[TraceCallback] = None,
+    on_films: Optional[Callable[[list[dict]], None]] = None,
 ) -> list[dict]:
     """Synchronous full-watched grid scraper (same Safari session as diary)."""
     owns_session = session is None
@@ -970,6 +951,7 @@ def _sync_scrape_films_grid(
                 {"page": 1, "films": len(films), "status_code": r.status_code},
             )
         all_films.extend(films)
+        _emit_films(on_films, films)
         known_last = last_page > 1
         remaining = list(range(2, min(last_page if known_last else max_pages, max_pages) + 1))
         if not films and not known_last:
@@ -981,6 +963,7 @@ def _sync_scrape_films_grid(
             if not page_films:
                 break
             all_films.extend(page_films)
+            _emit_films(on_films, page_films)
     finally:
         if owns_session:
             s.close()
@@ -1034,7 +1017,8 @@ def _sync_scrape_reviews(
             )
             if not reviews:
                 break
-            _hydrate_truncated_review_texts(reviews, s)
+            # Listing text is enough for the story. A permalink per truncated
+            # review is another serial Letterboxd walk on this same connection.
             all_reviews.extend(reviews)
             time.sleep(PAGE_DELAY)
 
@@ -1128,6 +1112,7 @@ def _sync_scrape_profile_sources(
     include_grid: bool = True,
     skip_probe: bool = False,
     session: Optional[Any] = None,
+    on_films: Optional[Callable[[list[dict]], None]] = None,
 ) -> ProfileScrapeSources:
     """Scrape diary and grid in one warmed Safari session."""
     logger.info("Starting combined profile scrape for %s (include_reviews=%s)", username, include_reviews)
@@ -1147,12 +1132,31 @@ def _sync_scrape_profile_sources(
             session=s,
             trace_callback=trace_callback,
             cutoff_date=diary_cutoff,
+            on_films=on_films,
         )
-        grid = (
-            _sync_scrape_films_grid(username, max_pages, session=s, trace_callback=trace_callback)
-            if include_grid
-            else []
-        )
+        if include_grid and not _diary_covers_library(diary, film_count):
+            grid = _sync_scrape_films_grid(
+                username,
+                max_pages,
+                session=s,
+                trace_callback=trace_callback,
+                on_films=on_films,
+            )
+        else:
+            grid = []
+            if include_grid:
+                logger.info(
+                    "Skipping grid for %s: diary already has %d unique films (profile count %d)",
+                    username,
+                    _unique_film_count(diary),
+                    film_count,
+                )
+                _trace(
+                    trace_callback,
+                    "grid_skipped",
+                    "Diary already has the library",
+                    {"films": _unique_film_count(diary), "film_count": film_count},
+                )
         reviews: list[dict] = []
         if include_reviews:
             try:
@@ -1266,6 +1270,7 @@ async def scrape_profile_sources(
     include_grid: bool = True,
     skip_probe: bool = False,
     session: Optional[Any] = None,
+    on_films: Optional[Callable[[list[dict]], None]] = None,
 ) -> ProfileScrapeSources:
     """Scrape diary, grid, overview (and optionally reviews) on one Safari session."""
     loop = _get_loop()
@@ -1281,6 +1286,7 @@ async def scrape_profile_sources(
             include_grid,
             skip_probe,
             session,
+            on_films,
         ),
     )
 

@@ -7,6 +7,7 @@ Scrapes Letterboxd HTML and runs the analysis pipeline over synthesized CSVs.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import shutil
 from calendar import monthrange
@@ -219,6 +220,23 @@ async def _analyze_window(
     return stats
 
 
+async def _warm_scraped_films(session, films: list[dict]) -> None:
+    """Resolve and cache TMDB details for one page of films. Failures stay misses."""
+    from app.services.tmdb_client import fetch_comprehensive_film_details, resolve_tmdb_id
+
+    async def one(film: dict) -> None:
+        raw_year = film.get("year")
+        year = int(raw_year) if str(raw_year).isdigit() else None
+        try:
+            tmdb_id = await resolve_tmdb_id(session, str(film.get("title") or ""), year, None)
+            if tmdb_id:
+                await fetch_comprehensive_film_details(session, tmdb_id)
+        except Exception:
+            logger.debug("TMDB warm skipped for a scraped film", exc_info=True)
+
+    await asyncio.gather(*(one(film) for film in films))
+
+
 async def scrape_and_analyze(
     session,
     username: str,
@@ -280,6 +298,42 @@ async def _scrape_and_analyze_inner(
     period = analysis_period
     loop = asyncio.get_running_loop()
     scrape_started = monotonic()
+    warm_tasks: list[asyncio.Task] = []
+    seen_films: set[tuple[str, str]] = set()
+    warm_context = contextvars.copy_context()
+
+    def on_films(films: list[dict]) -> None:
+        """Schedule TMDB cache fills while Letterboxd pages are still in flight.
+
+        Called from the scrape thread. Search + one details call for 741 films
+        is about a minute at 25 requests/second, which fits inside the walk
+        instead of being added after it.
+        """
+        fresh: list[dict] = []
+        for film in films:
+            title = str(film.get("title") or "").strip()
+            if not title:
+                continue
+            key = (title.lower(), str(film.get("year") or "").strip())
+            if key in seen_films:
+                continue
+            seen_films.add(key)
+            fresh.append(film)
+        if not fresh:
+            return
+
+        def _schedule() -> None:
+            warm_tasks.append(asyncio.create_task(_warm_scraped_films(session, fresh)))
+
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is loop:
+            _schedule()
+        else:
+            loop.call_soon_threadsafe(warm_context.run, _schedule)
+
     if imported is None:
         # Fail closed on Cloudflare before pagination. Probe, grid, and diary
         # all use curl_cffi Safari; scrape_profile_sources keeps one session
@@ -293,7 +347,10 @@ async def _scrape_and_analyze_inner(
             diary_cutoff=start_date,
             include_grid=analysis_period == "lifetime",
             skip_probe=True,
+            on_films=on_films,
         )
+        if warm_tasks:
+            await asyncio.gather(*warm_tasks, return_exceptions=True)
     else:
         sources = imported
     scrape_seconds = round(monotonic() - scrape_started, 1)

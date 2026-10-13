@@ -495,14 +495,14 @@ def test_sync_scrape_profile_sources_shares_one_session(monkeypatch):
     monkeypatch.setattr(
         scraper,
         "_sync_scrape_diary",
-        lambda username, max_pages, session=None, trace_callback=None, cutoff_date=None: (
+        lambda username, max_pages, session=None, trace_callback=None, cutoff_date=None, on_films=None: (
             seen.append(("diary", session)) or []
         ),
     )
     monkeypatch.setattr(
         scraper,
         "_sync_scrape_films_grid",
-        lambda username, max_pages, session=None, trace_callback=None: (
+        lambda username, max_pages, session=None, trace_callback=None, on_films=None: (
             seen.append(("grid", session)) or []
         ),
     )
