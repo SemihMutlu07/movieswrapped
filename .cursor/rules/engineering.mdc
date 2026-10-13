@@ -1,0 +1,59 @@
+---
+description: pstack-style engineering constraints for this repo (small verified changes, tests, no speculative abstraction)
+alwaysApply: true
+---
+
+# Engineering rules (pstack)
+
+Work from constraints. Ship the smallest change that can be verified. Do not invent architecture for a future that is not in the request.
+
+## Models
+
+Agent work in this repo uses Grok only. Do not add Opus or Sonnet.
+
+## Constraints first
+
+Write down what this change must not do before writing code. In this repo that always includes:
+
+- One PR = one scope. Do not mix scrape, RSS, cache, mobile, SEO, MCP, or dependency bumps.
+- Frontend is a static Next.js export (`output: 'export'`). No SSR-only features.
+- Never commit `.env`, secrets, or API keys. TMDB stays on the backend. Supabase uses the anon key only.
+- No env change and no migration unless this turn asked for that.
+- The desktop/X370 worker and residential HTML fetch are allowed. They are the profile path: `backend/app/worker/safari_worker.py`, `/api/worker/*`, `WORKER_TOKEN`, outbound poll, curl_cffi Safari, one job at a time. ZIP upload is the fallback when that worker is offline.
+- Do not merge PRs unless the owner explicitly asked to merge in this turn.
+- Do not revert merged PRs unless the owner explicitly asked.
+
+## Still forbidden
+
+- Paid proxies, ScraperAPI, and any successor (`SCRAPER_API_KEY`)
+- RSS-as-library: an official feed is a short preview, not a film library and not a cinema-scale ingest
+- Presenting a datacenter scrape (Render or any other datacenter IP) as a working profile fetch
+- A second worker, job queue, or browser-use/Hermes scraper beside the X370 path
+- Watchlist-compare, Date Night, and FindFilm scrape jobs
+
+Do not add those. Do not describe a datacenter HTML scrape as if it works.
+
+## When a live profile fetch is broken
+
+Add a test that fails on the bug, fix the worker or the queue path, and merge when green. Do not stop and wait.
+
+## Small verified changes
+
+- Read the file you will edit. Change one behavior. Keep the diff small.
+- Prove the behavior with a test or a real run of the affected path before calling it done.
+- Frontend: `cd frontend && npx tsc --noEmit` plus the relevant vitest files.
+- Backend: `cd backend && python -m pytest` for the tests that cover the change (full suite before claiming done).
+- If you cannot verify UI in a browser, say what you ran instead. Do not claim visual verification from a screenshot alone.
+
+## Tests
+
+- New behavior needs a test that would fail without the change.
+- Do not delete or skip a test to make a scrape or proxy path look green.
+- Prefer fixtures and hermetic tests over live Letterboxd hits.
+
+## No speculative abstraction
+
+- Do not add helpers, layers, feature flags, or "for later" modules.
+- Do not extract a shared interface until a second real caller exists in this PR.
+- Do not rebuild a second worker or treat RSS as the library so scrape can scale later. The residential X370 worker is the profile path.
+- Duplicate a ten-line helper before introducing a new package.
