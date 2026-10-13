@@ -42,6 +42,13 @@ export type ScrapeProgress = {
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000').replace(/\/$/, '');
 
+/**
+ * Gap between profile-scrape progress polls.
+ * Backend PROGRESS_RATE_LIMIT allows one tab at this cadence for the whole
+ * 60s window (150 polls) plus headroom. Do not poll faster without raising it.
+ */
+export const SCRAPE_POLL_INTERVAL_MS = 400;
+
 export function isLetterboxdExportFilename(name: string): boolean {
   const lower = name.toLowerCase();
   return (
@@ -136,6 +143,24 @@ async function parseApiFailure(r: Response, context: string, fallbackMessage: st
   return err;
 }
 
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 async function pollTask<T = { status: string; stats: LetterboxdStats }>(
   taskId: string,
   pollToken: string,
@@ -170,6 +195,16 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
             ? 'The server restarted while your analysis was running. Please try again.'
             : 'Task not found or expired.',
         );
+      }
+      // A 429 is the progress bucket, not a failed scrape. Wait out Retry-After
+      // and keep polling so one burst does not abort a multi-minute job.
+      if (r.status === 429) {
+        const retryAfter = Number(r.headers.get('Retry-After'));
+        const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter * 1000, 60_000)
+          : Math.max(intervalMs, 1000);
+        await wait(waitMs, signal);
+        continue;
       }
       throw new Error(`Progress poll failed: ${r.status}`);
     }
@@ -206,18 +241,7 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
       queue_wait_ms: typeof task.queue_wait_ms === 'number' ? task.queue_wait_ms : null,
     });
 
-    await new Promise<void>((resolve, reject) => {
-      if (signal?.aborted) {
-        reject(new DOMException('Aborted', 'AbortError'));
-        return;
-      }
-      const timer = setTimeout(resolve, intervalMs);
-      const onAbort = () => {
-        clearTimeout(timer);
-        reject(new DOMException('Aborted', 'AbortError'));
-      };
-      signal?.addEventListener('abort', onAbort, { once: true });
-    });
+    await wait(intervalMs, signal);
   }
 
   throw new Error('Analysis timed out after 10 minutes');
@@ -284,7 +308,7 @@ export async function importScrape(
       const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, {
         onProgress,
         signal,
-        intervalMs: 400,
+        intervalMs: SCRAPE_POLL_INTERVAL_MS,
       });
       return { ...result, task_id: data.task_id };
     }
@@ -328,7 +352,7 @@ export async function scrapeProfile(
       const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, {
         onProgress,
         signal,
-        intervalMs: 400,
+        intervalMs: SCRAPE_POLL_INTERVAL_MS,
       });
       return { ...result, task_id: data.task_id };
     }
