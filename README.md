@@ -1,8 +1,8 @@
 # Movies Wrapped
 
-**Ready-to-use visualizing of a ZIP folder from Letterboxd.**
+**Visual recap of a Letterboxd library.**
 
-Export your data from Letterboxd **Settings → Data → Export Your Data**, drop the ZIP here, and get a wrapped-style recap: story playback, results stats, and shareable landscape cards. No username scrape.
+The profile path is the residential X370 worker. It runs one outbound Safari job at a time. When that scan cannot proceed, use the bookmarklet on `/import` or a Letterboxd Settings → Data ZIP.
 
 → **Live site:** [movieswrapped.netlify.app](https://movieswrapped.netlify.app/)
 
@@ -27,14 +27,12 @@ Story playback is the motion surface: scene transitions, poster cascades, and pe
 
 ## Extending this
 
-The ZIP path is the product. Useful next seams without bringing scrape back:
+The X370 worker is the profile path on `main`. ZIP upload and the `/import` bookmarklet are the fallbacks when that scan cannot proceed. Watchlist, Date Night, and FindFilm scrape jobs stay off. Do not add a second worker.
 
 - **New results section** — add a gated component under `frontend/src/containers/results/sections/` and emit fields from `backend/app/services/`
 - **New share layout** — register a landscape variant in `frontend/src/components/share/registry.ts`
 - **Story beat** — `frontend/src/components/story/slides/buildSlides.tsx` + `media.ts` (keep poster sizes at w500 or larger)
 - **Richer ZIP identity** — resolve `boxd.it` short links if review posters still miss
-
-Username scrape, watchlist jobs, and the desktop worker live on `archive/scrape`, not on `main`.
 
 ---
 
@@ -48,7 +46,7 @@ Username scrape, watchlist jobs, and the desktop worker live on `archive/scrape`
 ```
 
 - **Frontend:** Next.js 15 (static export), React 19, TailwindCSS 4, Recharts, Framer Motion
-- **Backend:** FastAPI, pandas/numpy, aiohttp — ZIP extract + TMDB match
+- **Backend:** FastAPI, pandas/numpy, aiohttp — X370 scrape queue, bookmarklet import, and ZIP extract
 - **Database:** Supabase (anon/publishable key only)
 - **Images:** TMDB CDN for display; backend `/tmdb-proxy/` for share-canvas export
 

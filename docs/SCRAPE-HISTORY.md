@@ -1,6 +1,7 @@
 # Username scrape — every approach tried
 
 Do not repeat a row whose result is **failed** unless you can name a new fact that changes the outcome. ZIP export remains the complete, legitimate library path.
+Current rule: the residential X370 worker is the profile path. ZIP upload and the bookmarklet are the fallbacks when that scan cannot proceed. The dated rows below are history. Do not treat a ZIP-only row as the live rule.
 
 Evidence sources: owner decision log (`mw-history`), git (`origin/main`, `origin/archive/scrape`), closed PRs, `docs/research/desktop-worker-final-decision-2026-08-24.md`, live probes on 2026-10-10.
 

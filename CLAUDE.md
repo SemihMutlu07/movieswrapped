@@ -2,13 +2,13 @@
 
 ## What this repo does
 Analyze a user's Letterboxd export and generate a "wrapped"-style film stats summary.
-Input path: ZIP or CSV/folder export from Letterboxd Settings → Data. Username scrape is archived on `archive/scrape`, not on live `main`.
+Input path: the X370 worker scrapes a public username. ZIP, CSV, or folder export, and the bookmarklet on `/import`, are the fallbacks when that scan cannot proceed.
 Frontend is a static Next.js export; backend is FastAPI that processes uploads and enriches with TMDB.
 
 ## Tech stack
 - Frontend: Next.js 15 (App Router), React 19, TypeScript, TailwindCSS, Recharts, Framer Motion
 - Backend: Python, FastAPI, Uvicorn, pandas/numpy, aiohttp/aiofiles
-- Scraper: archived on `archive/scrape` (not on live `main`)
+- Scraper: residential X370 worker (`backend/app/worker/safari_worker.py`), one job at a time. ZIP and the bookmarklet are the fallbacks. Datacenter HTML scrape stays forbidden.
 - Database: Supabase (client-side insert/upsert for `user_sessions`, `feedback`, `analysis_runs`)
 - Analytics: PostHog (consent-gated), in-app helper modules
 - Deployment: Frontend on Netlify static export (`output: 'export'`); backend is **live on Render** at `https://wrapped-backend.onrender.com` (built from `backend/Dockerfile`; `netlify.toml` sets it as the production `NEXT_PUBLIC_API_BASE`)
