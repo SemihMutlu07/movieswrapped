@@ -35,6 +35,15 @@ logger = logging.getLogger("letterboxd_wrapped.analyze")
 
 router = APIRouter()
 
+# frontend/src/lib/api.ts SCRAPE_POLL_INTERVAL_MS. One tab waits this long
+# between GET /api/progress calls. With instant responses the sliding window
+# holds WINDOW*1000/INTERVAL polls (150). The cap stays strictly above that
+# so one profile scrape is not 429'd, and still rejects a tighter loop.
+SCRAPE_PROGRESS_POLL_INTERVAL_MS = 400
+PROGRESS_RATE_WINDOW_SECONDS = 60
+_ONE_TAB_PROGRESS_POLLS = PROGRESS_RATE_WINDOW_SECONDS * 1000 // SCRAPE_PROGRESS_POLL_INTERVAL_MS
+PROGRESS_RATE_LIMIT = _ONE_TAB_PROGRESS_POLLS + _ONE_TAB_PROGRESS_POLLS // 2
+
 _ALLOWED_CSV_NAMES = frozenset({
     "diary.csv", "ratings.csv", "watched.csv", "reviews.csv",
     "watchlist.csv", "comments.csv", "profile.csv",
@@ -531,7 +540,12 @@ async def get_task_progress(task_id: str, request: Request):
                 **task_manager.get_task_not_found_context(),
             },
         )
-    enforce_rate_limit(request, "progress", limit=120, window=60)
+    enforce_rate_limit(
+        request,
+        "progress",
+        limit=PROGRESS_RATE_LIMIT,
+        window=PROGRESS_RATE_WINDOW_SECONDS,
+    )
     supplied = request.headers.get("X-Task-Token", "")
     if not supplied or not secrets.compare_digest(supplied, task.poll_token):
         raise HTTPException(status_code=403, detail={"error_code": "invalid_task_token", "message": "Invalid task token."})

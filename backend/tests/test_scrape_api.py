@@ -151,6 +151,41 @@ async def test_scrape_progress_exposure(client: AsyncClient):
     assert payload["trace_events"][0]["stage"] == "scrape_started"
 
 
+@pytest.mark.asyncio
+async def test_one_profile_scrape_poll_is_not_rate_limited(client: AsyncClient):
+    """One tab at the scrape poll interval must clear a full rate-limit window.
+
+    The live failure was GET /api/progress/{id} → 429 while a profile scrape
+    was still running. The client polls every 400ms (150 times per minute),
+    and the old cap was 120/minute, so a single tab was rejected after ~48s.
+    """
+    from app.routes.analyze import (
+        PROGRESS_RATE_LIMIT,
+        PROGRESS_RATE_WINDOW_SECONDS,
+        SCRAPE_PROGRESS_POLL_INTERVAL_MS,
+    )
+
+    one_tab_polls = PROGRESS_RATE_WINDOW_SECONDS * 1000 // SCRAPE_PROGRESS_POLL_INTERVAL_MS
+    assert SCRAPE_PROGRESS_POLL_INTERVAL_MS == 400
+    assert one_tab_polls == 150
+    # Above one tab, below two tabs at the same cadence — the cap still bites.
+    assert one_tab_polls < PROGRESS_RATE_LIMIT < one_tab_polls * 2
+
+    task_id = task_manager.create_task_state("one-tab")
+    task = task_manager.get_task_state(task_id)
+    assert task is not None
+    headers = {"X-Task-Token": task.poll_token}
+
+    for _ in range(PROGRESS_RATE_LIMIT):
+        response = await client.get(f"/api/progress/{task_id}", headers=headers)
+        assert response.status_code == 200, response.text
+
+    blocked = await client.get(f"/api/progress/{task_id}", headers=headers)
+    assert blocked.status_code == 429
+    assert int(blocked.headers["retry-after"]) >= 1
+    assert blocked.json()["detail"]["error_code"] == "rate_limited"
+
+
 # ---- failure handling does not report success --------------------------------
 
 
