@@ -165,7 +165,83 @@ def test_queue_metrics_count_jobs_ahead():
     second_metrics = task_manager.scrape_queue_metrics(newer)
     assert first_metrics["queue_position"] == 1
     assert second_metrics["queue_position"] == 2
-    assert second_metrics["eta_seconds"] == task_manager.SECONDS_PER_SCRAPE_JOB
+    assert second_metrics["eta_seconds"] is None
+    task_manager._tasks.clear()
+
+def _finish_uncached(username: str, seconds: float, *, cached: bool = False) -> task_manager.TaskState:
+    task_manager.create_scrape_job(username)
+    job = task_manager.claim_next_scrape_job("x370")
+    assert job is not None
+    assert job.claimed_at is not None
+    job.cached = cached
+    job.status = "done"
+    job.completed_at = job.claimed_at + timedelta(seconds=seconds)
+    return job
+
+
+def test_queue_eta_uses_three_uncached_samples():
+    task_manager._tasks.clear()
+    _finish_uncached("one", 40)
+    _finish_uncached("two", 50)
+    _finish_uncached("three", 60)
+    pending_id = task_manager.create_scrape_job("four")
+    pending = task_manager.get_task_state(pending_id)
+    assert pending is not None
+    metrics = task_manager.scrape_queue_metrics(pending)
+    assert metrics["queue_position"] == 1
+    assert metrics["eta_seconds"] == 0
+    behind_id = task_manager.create_scrape_job("five")
+    behind = task_manager.get_task_state(behind_id)
+    assert behind is not None
+    behind_metrics = task_manager.scrape_queue_metrics(behind)
+    assert behind_metrics["queue_position"] == 2
+    assert behind_metrics["eta_seconds"] == 50
+    task_manager._tasks.clear()
+
+
+def test_queue_eta_stays_null_below_three_samples():
+    task_manager._tasks.clear()
+    _finish_uncached("one", 90)
+    _finish_uncached("two", 90)
+    pending = task_manager.get_task_state(task_manager.create_scrape_job("three"))
+    assert pending is not None
+    assert task_manager.scrape_queue_metrics(pending)["eta_seconds"] is None
+    task_manager._tasks.clear()
+
+
+def test_cached_completions_are_not_eta_samples():
+    task_manager._tasks.clear()
+    _finish_uncached("one", 30)
+    _finish_uncached("two", 30)
+    _finish_uncached("cached", 1, cached=True)
+    pending = task_manager.get_task_state(task_manager.create_scrape_job("four"))
+    assert pending is not None
+    assert task_manager.scrape_queue_metrics(pending)["eta_seconds"] is None
+    task_manager._tasks.clear()
+
+
+def test_completed_task_reserves_zero_remaining_time():
+    task_manager._tasks.clear()
+    done = _finish_uncached("one", 44)
+    metrics = task_manager.scrape_queue_metrics(done)
+    assert metrics["queue_position"] == 0
+    assert metrics["eta_seconds"] == 0
+    task_manager._tasks.clear()
+
+
+def test_running_job_shows_position_and_remaining_from_samples():
+    task_manager._tasks.clear()
+    _finish_uncached("one", 60)
+    _finish_uncached("two", 60)
+    _finish_uncached("three", 60)
+    task_manager.create_scrape_job("live")
+    running = task_manager.claim_next_scrape_job("x370")
+    assert running is not None and running.claimed_at is not None
+    running.claimed_at = datetime.now(timezone.utc) - timedelta(seconds=10)
+    metrics = task_manager.scrape_queue_metrics(running)
+    assert metrics["queue_position"] == 1
+    assert metrics["eta_seconds"] == 50
+    assert metrics["queue_wait_ms"] == int(round((running.queue_wait_seconds or 0) * 1000))
     task_manager._tasks.clear()
 
 
