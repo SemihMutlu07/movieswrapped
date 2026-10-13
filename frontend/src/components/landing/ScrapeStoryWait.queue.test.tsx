@@ -32,7 +32,7 @@ describe('live scan queue and offline UX', () => {
         <ErrorBanner error={error} onDismiss={() => {}} onUpload={() => {}} />
       </I18nProvider>,
     );
-    expect(screen.getByRole('link', { name: /bookmarklet/i })).toHaveAttribute('href', '/en/import');
+    expect(screen.getByRole('link', { name: /bookmarklet/i })).toHaveAttribute('href', '/import');
     expect(screen.getByRole('button', { name: /upload export zip/i })).toBeInTheDocument();
   });
 
@@ -43,7 +43,7 @@ describe('live scan queue and offline UX', () => {
         <ErrorBanner error={error} onDismiss={() => {}} onUpload={() => {}} />
       </I18nProvider>,
     );
-    expect(screen.getByRole('link', { name: /bookmarklet/i })).toHaveAttribute('href', '/en/import');
+    expect(screen.getByRole('link', { name: /bookmarklet/i })).toHaveAttribute('href', '/import');
     expect(screen.getByRole('button', { name: /upload export zip/i })).toBeInTheDocument();
   });
 });

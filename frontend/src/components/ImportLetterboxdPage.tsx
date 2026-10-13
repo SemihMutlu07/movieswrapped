@@ -37,6 +37,8 @@ export default function ImportLetterboxdPage() {
   const [progress, setProgress] = useState<ScrapeProgress | null>(null);
   const origin = typeof window === 'undefined' ? 'https://movieswrapped.com' : window.location.origin;
   const href = useMemo(() => bookmarkletHref(origin), [origin]);
+  const [copied, setCopied] = useState(false);
+  const [showBookmarkletSource, setShowBookmarkletSource] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const storyDestinationRef = useRef<string | null>(null);
 
@@ -47,6 +49,22 @@ export default function ImportLetterboxdPage() {
       window.opener?.postMessage('mw-ack', '*');
     }
   }, []);
+
+  const bindBookmarklet = useCallback((node: HTMLAnchorElement | null) => {
+    // React replaces a javascript: href with an error URL. The bookmarklet has to live on the DOM node.
+    if (node) node.setAttribute('href', href);
+  }, [href]);
+
+  const copyBookmarklet = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(href);
+      setCopied(true);
+      setShowBookmarkletSource(false);
+    } catch {
+      setCopied(false);
+      setShowBookmarkletSource(true);
+    }
+  }, [href]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -220,12 +238,32 @@ export default function ImportLetterboxdPage() {
             <li>{t('import.bookmarklet.step2')}</li>
             <li>{t('import.bookmarklet.step3')}</li>
           </ol>
-          <a
-            href={href}
-            className="inline-flex rounded-xl bg-[#ff7f00] px-4 py-2 text-sm font-semibold text-[#1b1c1e]"
-          >
-            {t('import.bookmarklet.drag')}
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <a
+              ref={bindBookmarklet}
+              draggable
+              onClick={(event) => event.preventDefault()}
+              className="inline-flex rounded-xl bg-[#ff7f00] px-4 py-2 text-sm font-semibold text-[#1b1c1e]"
+            >
+              {t('import.bookmarklet.drag')}
+            </a>
+            <button
+              type="button"
+              onClick={() => void copyBookmarklet()}
+              className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white"
+            >
+              {copied ? t('import.bookmarklet.copied') : t('import.bookmarklet.copy')}
+            </button>
+          </div>
+          {showBookmarkletSource ? (
+            <textarea
+              readOnly
+              value={href}
+              aria-label={t('import.bookmarklet.copy')}
+              onFocus={(event) => event.currentTarget.select()}
+              className="h-24 w-full rounded-xl border border-white/10 bg-[#1a1a1a] p-3 text-xs text-white"
+            />
+          ) : null}
         </section>
 
         {payload ? (

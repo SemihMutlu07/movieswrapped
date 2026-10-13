@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 
 import { LandingContributors, LandingFeedback } from '@/components/landing/LandingExtras';
@@ -242,13 +243,21 @@ export default function WrappedLanding({ view }: { view: LandingViewProps }) {
 
         <div className="mt-5">
           {view.showUsernameScrape ? <UsernameScrapeSection view={view} /> : null}
-          <button
-            type="button"
-            className="mt-3 text-sm text-[#9ab] underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00e054]/50"
-            onClick={() => setShowZip(true)}
-          >
-            {t('landing.upload.zipInstead')}
-          </button>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button
+              type="button"
+              className="text-sm text-[#9ab] underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00e054]/50"
+              onClick={() => setShowZip(true)}
+            >
+              {t('landing.upload.zipInstead')}
+            </button>
+            <Link
+              href="/import"
+              className="text-sm text-[#9ab] underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00e054]/50"
+            >
+              {t('landing.username.bookmarklet')}
+            </Link>
+          </div>
         </div>
 
         <div className="mt-4 space-y-4">
