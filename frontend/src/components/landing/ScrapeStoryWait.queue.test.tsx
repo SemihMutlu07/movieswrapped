@@ -35,4 +35,15 @@ describe('live scan queue and offline UX', () => {
     expect(screen.getByRole('link', { name: /bookmarklet/i })).toHaveAttribute('href', '/en/import');
     expect(screen.getByRole('button', { name: /upload export zip/i })).toBeInTheDocument();
   });
+
+  it('offers bookmarklet and ZIP when the live queue is full', () => {
+    const error = normalizeError(Object.assign(new Error('Live scan is full right now.'), { code: 'queue_full' }));
+    render(
+      <I18nProvider locale="en">
+        <ErrorBanner error={error} onDismiss={() => {}} onUpload={() => {}} />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole('link', { name: /bookmarklet/i })).toHaveAttribute('href', '/en/import');
+    expect(screen.getByRole('button', { name: /upload export zip/i })).toBeInTheDocument();
+  });
 });

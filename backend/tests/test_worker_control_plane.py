@@ -193,6 +193,67 @@ async def test_progress_includes_queue_position_and_eta(client, worker_auth):
 
 
 @pytest.mark.asyncio
+async def test_scan_stage_events_fill_progress(client, worker_auth):
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
+    queued = await client.post("/api/scrape-profile", json={"username": "alice"})
+    assert queued.status_code == 202
+    task_id = queued.json()["task_id"]
+    poll_token = queued.json()["poll_token"]
+    job = (await client.get("/api/worker/next", headers=_headers(), params={"worker_id": "x370"})).json()["job"]
+
+    claimed = await client.get(f"/api/progress/{task_id}", headers={"X-Task-Token": poll_token})
+    assert claimed.status_code == 200
+    assert claimed.json()["total"] == 4
+    assert claimed.json()["progress"] == 0
+
+    batch = await client.post(
+        f"/api/worker/scrape/{task_id}/event",
+        headers=_headers(),
+        json={
+            "events": [
+                {"stage": "diary", "message": "Scanning diary"},
+                {"stage": "diary_page", "message": "Diary page 1 parsed"},
+            ],
+            "lease_token": job["lease_token"],
+        },
+    )
+    assert batch.status_code == 200
+    after_batch = await client.get(f"/api/progress/{task_id}", headers={"X-Task-Token": poll_token})
+    assert after_batch.json()["progress"] == 1
+    assert after_batch.json()["total"] == 4
+
+    for stage, step in (("diary", 1), ("grid", 2), ("reviews", 3), ("analysis", 4)):
+        posted = await client.post(
+            f"/api/worker/scrape/{task_id}/event",
+            headers=_headers(),
+            json={"stage": stage, "message": f"Scanning {stage}", "lease_token": job["lease_token"]},
+        )
+        assert posted.status_code == 200
+        progress = await client.get(f"/api/progress/{task_id}", headers={"X-Task-Token": poll_token})
+        body = progress.json()
+        assert body["progress"] == step
+        assert body["total"] == 4
+        assert not (body["progress"] == 0 and body["total"] == 0)
+
+
+@pytest.mark.asyncio
+async def test_queue_cap_overflow_points_at_bookmarklet_and_zip(client, worker_auth, monkeypatch):
+    monkeypatch.setattr(task_manager, "SCRAPE_QUEUE_CAP", 1)
+    await client.post("/api/worker/heartbeat", headers=_headers(), json=_hb())
+    first = await client.post("/api/scrape-profile", json={"username": "alice"})
+    assert first.status_code == 202
+    second = await client.post("/api/scrape-profile", json={"username": "bob"})
+    assert second.status_code == 503
+    detail = second.json()["detail"]
+    assert detail["error_code"] == "queue_full"
+    message = detail["message"].lower()
+    assert "bookmarklet" in message
+    assert "zip" in message
+    claimed = await client.get("/api/worker/next", headers=_headers(), params={"worker_id": "x370"})
+    assert claimed.json()["job"]["username"] == "alice"
+
+
+@pytest.mark.asyncio
 async def test_scrape_profile_cache_hit_skips_worker(client, worker_auth):
     cached = {"total_films": 42, "scraped_username": "alice"}
     with patch("app.routes.analyze.lookup_scrape_cache", new=AsyncMock(return_value=cached)):

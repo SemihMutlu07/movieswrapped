@@ -18,6 +18,7 @@ import re
 import socket
 import subprocess
 import sys
+import threading
 from time import monotonic as time_monotonic
 from typing import Any, Optional
 
@@ -48,6 +49,9 @@ logger = logging.getLogger("letterboxd_wrapped.safari_worker")
 POLL_INTERVAL = float(os.getenv("WORKER_POLL_INTERVAL", "5"))
 HEARTBEAT_INTERVAL = float(os.getenv("WORKER_HEARTBEAT_INTERVAL", "30"))
 JOB_GAP_SECONDS = float(os.getenv("WORKER_JOB_GAP_SECONDS", "2"))
+# Push diary/grid/reviews/analysis while the scrape is still running so
+# /api/progress leaves 0/0 within about a second of each stage.
+TRACE_FLUSH_SECONDS = float(os.getenv("WORKER_TRACE_FLUSH_SECONDS", "1"))
 CONTROL_TIMEOUT = aiohttp.ClientTimeout(total=30)
 WORKER_ID = os.getenv("WORKER_ID") or f"x370-{socket.gethostname()}"
 WORKER_PROTOCOL_VERSION = 5
@@ -92,6 +96,7 @@ class TraceBuffer:
     started: float = field(default_factory=_monotonic)
     events: list[dict[str, Any]] = field(default_factory=list)
     pending: list[dict[str, Any]] = field(default_factory=list)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def add(self, stage: str, message: str, metrics: Optional[dict[str, Any]] = None, level: str = "info") -> None:
         event = {
@@ -101,16 +106,26 @@ class TraceBuffer:
             "level": level,
             "elapsed_seconds": round(_monotonic() - self.started, 1),
         }
-        self.events.append(event)
-        self.pending.append(event)
+        with self._lock:
+            self.events.append(event)
+            self.pending.append(event)
 
     def drain(self) -> list[dict[str, Any]]:
-        batch = list(self.pending)
-        self.pending.clear()
-        return batch
+        with self._lock:
+            batch = list(self.pending)
+            self.pending.clear()
+            return batch
+
+    def restore(self, batch: list[dict[str, Any]]) -> None:
+        """Put a failed post back at the front of the queue. Snapshot is unchanged."""
+        if not batch:
+            return
+        with self._lock:
+            self.pending = list(batch) + self.pending
 
     def snapshot(self) -> list[dict[str, Any]]:
-        return list(self.events)
+        with self._lock:
+            return list(self.events)
 
 
 def redact_secrets(text: str) -> str:
@@ -273,7 +288,27 @@ async def _flush_trace(
     events = trace.drain()
     if not events:
         return
-    await _post(session, cfg, f"/api/worker/scrape/{task_id}/event", {"events": events, **lease})
+    ok = await _post(session, cfg, f"/api/worker/scrape/{task_id}/event", {"events": events, **lease})
+    if not ok:
+        trace.restore(events)
+
+
+async def _pump_trace(
+    session: aiohttp.ClientSession,
+    cfg: WorkerConfig,
+    task_id: str,
+    trace: TraceBuffer,
+    lease: dict,
+    stop: asyncio.Event,
+) -> None:
+    """POST queued scan stages while scrape_and_analyze is still running."""
+    while True:
+        await _flush_trace(session, cfg, task_id, trace, lease)
+        if stop.is_set():
+            await _flush_trace(session, cfg, task_id, trace, lease)
+            return
+        with suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(stop.wait(), timeout=TRACE_FLUSH_SECONDS)
 
 
 async def _process_job(session: aiohttp.ClientSession, cfg: WorkerConfig, job: dict) -> None:
@@ -291,20 +326,33 @@ async def _process_job(session: aiohttp.ClientSession, cfg: WorkerConfig, job: d
         {"username": username, "scrape_transport": SCRAPE_TRANSPORT},
     )
     logger.info("Processing scrape job %s for @%s", task_id, username)
+    stop_flush = asyncio.Event()
+    pump = asyncio.create_task(_pump_trace(session, cfg, task_id, trace, lease, stop_flush))
+    failure: Optional[tuple[str, dict[str, Any]]] = None
+    stats: Optional[dict] = None
     try:
-        with collecting(collector):
-            stats = await scrape_and_analyze(
-                session,
-                username,
-                trace_callback=trace.add,
-                analysis_period=analysis_period,
-                task_id=task_id,
-            )
-        stats.setdefault("tmdb_telemetry", collector.snapshot())
-    except Exception as exc:  # noqa: BLE001 — loop must survive a bad profile
-        duration = round(_monotonic() - started, 1)
-        message, telemetry = _failure_payload(username, exc, duration)
-        trace.add(telemetry["error_stage"], message, {"error_type": telemetry["error_type"]}, level="error")
+        try:
+            with collecting(collector):
+                stats = await scrape_and_analyze(
+                    session,
+                    username,
+                    trace_callback=trace.add,
+                    analysis_period=analysis_period,
+                    task_id=task_id,
+                )
+            stats.setdefault("tmdb_telemetry", collector.snapshot())
+        except Exception as exc:  # noqa: BLE001 — loop must survive a bad profile
+            duration = round(_monotonic() - started, 1)
+            message, telemetry = _failure_payload(username, exc, duration)
+            trace.add(telemetry["error_stage"], message, {"error_type": telemetry["error_type"]}, level="error")
+            failure = (message, telemetry)
+    finally:
+        stop_flush.set()
+        with suppress(asyncio.CancelledError):
+            await pump
+
+    if failure is not None:
+        message, telemetry = failure
         await _flush_trace(session, cfg, task_id, trace, lease)
         await _post(
             session,
@@ -320,6 +368,7 @@ async def _process_job(session: aiohttp.ClientSession, cfg: WorkerConfig, job: d
         )
         return
 
+    assert stats is not None
     duration = round(_monotonic() - started, 1)
     telemetry = {
         "duration_seconds": duration,

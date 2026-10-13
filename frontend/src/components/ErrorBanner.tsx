@@ -21,7 +21,7 @@ export default function ErrorBanner({ error, onDismiss, onRetry, onUpload, onRep
     ? { dismiss: 'Hatayı kapat', retry: 'Tekrar dene', report: 'Sorunu bildir', upload: 'Export ZIP yükle' }
     : { dismiss: 'Dismiss error', retry: 'Try again', report: 'Report issue', upload: 'Upload export ZIP' };
   const zipFirst = Boolean(onUpload && needsZipFallback(error.reason));
-  const showBookmarklet = error.reason === 'desktop_worker_offline';
+  const showBookmarklet = error.reason === 'desktop_worker_offline' || error.reason === 'queue_full';
   return (
     <div className="mx-auto max-w-xl rounded-2xl border border-red-700/50 bg-slate-800/90 p-4 sm:p-5">
       <div className="flex items-start gap-3">

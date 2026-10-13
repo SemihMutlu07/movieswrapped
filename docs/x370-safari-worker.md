@@ -44,12 +44,20 @@ so the worker self-updates on the next heartbeat.
 
 ## Queue + cache
 
-- Jobs persist in `ops_tasks` (migrations `006`, `010`, `012`). Render
-  startup calls `load_pending_tasks()` so a restart does not drop the queue.
-- Repeat scrapes for the same `username + analysis_period` hit
-  `scrape_result_cache` for 24 hours.
+The live queue is the Render process dict `task_manager._tasks`. Supabase
+`ops_tasks`, `ops_workers`, and `scrape_result_cache` are a best-effort
+mirror. The G1 brief reports those three tables empty in production. See
+`docs/scrape-queue-and-cache.md` before treating them as the source of truth.
+
+- Intended durability is `ops_tasks` (migrations `006`, `010`, `012`). Render
+  startup calls `load_pending_tasks()` only when that mirror has rows.
+- Repeat scrapes for the same `username + analysis_period` are meant to hit
+  `scrape_result_cache` for 24 hours. A miss, or Supabase disabled, runs a
+  live job. There is no on-disk result cache on Render.
 - Frontend polls `queue_position`, `eta_seconds` (~15s per job ahead), and
   `queue_wait_ms`.
+- More than `SCRAPE_QUEUE_CAP` (20) pending or running scrapes returns
+  503 `queue_full` and points at the bookmarklet (`/import`) and ZIP upload.
 
 ## Offline UX
 

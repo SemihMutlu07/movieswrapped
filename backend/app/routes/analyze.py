@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from app import task_manager
 from app.config import settings
 from app.routes.feedback import _parse_letterboxd_username
-from app.routes.worker import WORKER_OFFLINE_MESSAGE
+from app.routes.worker import QUEUE_FULL_MESSAGE, WORKER_OFFLINE_MESSAGE
 from app.services.analysis import process_comprehensive_letterboxd_data
 from app.services.run_log import persist_run
 from app.services.scrape_cache import lookup_scrape_cache, store_scrape_cache
@@ -447,6 +447,14 @@ async def scrape_profile(request: Request):
                 detail={
                     "error_code": "desktop_worker_offline",
                     "message": WORKER_OFFLINE_MESSAGE,
+                },
+            )
+        if task_manager.scrape_queue_depth() >= task_manager.SCRAPE_QUEUE_CAP:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error_code": "queue_full",
+                    "message": QUEUE_FULL_MESSAGE,
                 },
             )
         task_id = task_manager.create_scrape_job(

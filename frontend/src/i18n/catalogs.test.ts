@@ -55,6 +55,9 @@ describe('i18n catalogs and routing', () => {
     expect(en['landing.howItWorks.enter.title']).toMatch(/enter your username/i);
     expect(en['landing.error.desktopOffline.title']).toMatch(/live scan offline/i);
     expect(en['landing.error.desktopOffline.action']).toMatch(/bookmarklet/i);
+    expect(en['landing.error.queueFull.action']).toMatch(/bookmarklet/i);
+    expect(en['landing.error.queueFull.action']).toMatch(/ZIP/i);
+    expect(tr['landing.error.queueFull.action']).toMatch(/bookmarklet/i);
     expect(en['landing.error.scrapeBlocked.action']).toMatch(/export ZIP/i);
   });
 

@@ -14,7 +14,19 @@ logger = logging.getLogger("letterboxd_wrapped.task_manager")
 
 PERSISTABLE_KINDS = frozenset({"scrape"})
 SECONDS_PER_SCRAPE_JOB = 15
+# Hung-but-still-heartbeating backstop. A crashed worker is released from its
+# heartbeat age (see requeue_stale_scrape_claims), not from this lease.
 STALE_CLAIM_SECONDS = 600
+# diary, grid, reviews, analysis. Kept off 0/0 while a scrape is in flight.
+SCAN_STAGE_TOTAL = 4
+# Pending + running username scrapes. The next one is queue_full.
+SCRAPE_QUEUE_CAP = 20
+# cleanup_loop used to sleep 30s and only then apply the 600s lease, so a
+# dead claim was observed coming back at 632.8s. Check every few seconds.
+STALE_CHECK_SECONDS = 5
+# Worker beats every 30s and one POST may sit on the 30s client timeout.
+# The 60s enqueue gate alone treats that slow post as a crash. Add both.
+CLAIM_HEARTBEAT_GRACE_SECONDS = 60
 
 
 @dataclass
@@ -215,6 +227,8 @@ def create_scrape_job(
         options=dict(options or {}),
         stage="queued",
         message="Queued on live scanner",
+        progress=0,
+        total=SCAN_STAGE_TOTAL,
     )
     _tasks[task_id] = task
     append_task_event(task_id, "queued", "Queued on live scanner", level="info")
@@ -232,6 +246,8 @@ def _assign_lease(job: TaskState, worker_id: Optional[str]) -> None:
     job.claimed_at = now
     job.claimed_by = wid
     job.lease_token = secrets.token_urlsafe(32)
+    job.progress = 0
+    job.total = SCAN_STAGE_TOTAL
     job.queue_wait_seconds = round((now - job.created_at).total_seconds(), 1)
 
 
@@ -247,6 +263,42 @@ def claim_next_scrape_job(worker_id: Optional[str] = None) -> Optional[TaskState
     append_task_event(job.task_id, "claimed", "Desktop worker claimed the scrape job", level="info")
     persist_task(job)
     return job
+
+
+def scrape_queue_depth() -> int:
+    """Pending and running scrape jobs. Done/failed rows do not hold a slot."""
+    return sum(
+        1
+        for task in _tasks.values()
+        if task.kind == "scrape" and task.status in {"pending", "running"}
+    )
+
+
+def scan_stage_step(stage: str) -> Optional[int]:
+    """Map a worker trace stage onto diary=1, grid=2, reviews=3, analysis=4."""
+    name = (stage or "").strip().lower()
+    if name == "analysis" or name.startswith("analysis_"):
+        return 4
+    if name.startswith("review"):
+        return 3
+    if name.startswith("grid"):
+        return 2
+    if name.startswith("diary"):
+        return 1
+    return None
+
+
+def note_scan_stage(task_id: str, stage: str) -> None:
+    """Advance /api/progress off 0/0. Never moves the counter backwards."""
+    task = _tasks.get(task_id)
+    if task is None:
+        return
+    step = scan_stage_step(stage)
+    if step is None:
+        return
+    task.total = SCAN_STAGE_TOTAL
+    if step > task.progress:
+        task.progress = step
 
 
 def scrape_queue_metrics(task: TaskState) -> dict[str, Any]:
@@ -479,35 +531,91 @@ def set_task_failed(
         persist_task(task)
 
 
+def _owner_heartbeat_at(task: TaskState) -> Optional[datetime]:
+    owner = (task.claimed_by or "").strip()
+    if owner and owner in _worker_heartbeats:
+        return _worker_heartbeats[owner]
+    return _last_worker_heartbeat
+
+
+def claim_heartbeat_limit_seconds() -> int:
+    """Silence that means the claim owner has crashed, not that one POST was slow."""
+    return settings.worker_heartbeat_max_age_seconds + CLAIM_HEARTBEAT_GRACE_SECONDS
+
+
+def _requeue_reason(task: TaskState, now: datetime) -> Optional[str]:
+    """Why a running claim should return to the queue, or None to keep it.
+
+    A crashed worker stops heartbeating. That is released once the owner's
+    last beat is older than ``claim_heartbeat_limit_seconds`` (enqueue window
+    plus one beat and one POST timeout, about two minutes).
+
+    No beat recorded since this process booted is not a crash by itself.
+    ``load_pending_tasks`` restores running claims into an empty heartbeat
+    map, and the worker's next beat can be 30s away. Those claims stay until
+    a beat arrives and then goes stale, or until this process has been up
+    longer than the limit with still no beat.
+
+    A worker that is still heartbeating but stuck keeps the 10-minute lease.
+    """
+    claimed_at = task.claimed_at or task.created_at
+    claim_age = (now - claimed_at).total_seconds()
+    limit = claim_heartbeat_limit_seconds()
+    heartbeat_at = _owner_heartbeat_at(task)
+    if heartbeat_at is not None and (now - heartbeat_at).total_seconds() > limit:
+        return "heartbeat"
+    if heartbeat_at is None:
+        boot_age = (now - _SERVER_STARTED_AT).total_seconds()
+        if boot_age > limit and claim_age > limit:
+            return "heartbeat"
+    if claim_age > STALE_CLAIM_SECONDS:
+        return "lease"
+    return None
+
+
 def requeue_stale_scrape_claims(now: Optional[datetime] = None) -> int:
-    """Return running scrape jobs whose lease owner went silent to the pending queue."""
-    cutoff = (now or _now()) - timedelta(seconds=STALE_CLAIM_SECONDS)
+    """Return running scrape jobs whose owner crashed, or whose lease expired."""
+    current = now or _now()
     requeued = 0
     for task in list(_tasks.values()):
         if task.kind != "scrape" or task.status != "running" or not task.claimed:
             continue
-        claimed_at = task.claimed_at or task.created_at
-        if claimed_at > cutoff:
+        reason = _requeue_reason(task, current)
+        if reason is None:
             continue
         task.status = "pending"
         task.claimed = False
         task.claimed_by = None
-        task.lease_token = None
+        # Keep lease_token until the next claim replaces it. Clearing it makes
+        # _require_lease a no-op, so the dead worker's postback and a new
+        # claim could both complete the same job.
         task.claimed_at = None
         task.stage = "queued"
-        task.message = "Requeued after stale worker claim"
-        append_task_event(task.task_id, "requeued", "Stale worker claim released", level="warning")
+        task.progress = 0
+        task.total = SCAN_STAGE_TOTAL
+        if reason == "heartbeat":
+            task.message = "Requeued after worker heartbeat stopped"
+            event_message = "Worker heartbeat went stale; claim released"
+        else:
+            task.message = "Requeued after stale worker claim"
+            event_message = "Stale worker claim released"
+        append_task_event(task.task_id, "requeued", event_message, level="warning")
         persist_task(task)
         requeued += 1
     return requeued
 
 
 async def cleanup_loop() -> None:
-    """Remove terminal tasks after retention; release stale scrape leases."""
+    """Remove terminal tasks after retention; release crashed scrape leases."""
+    ticks = 0
     while True:
-        await asyncio.sleep(30)
+        await asyncio.sleep(STALE_CHECK_SECONDS)
         now = _now()
         requeue_stale_scrape_claims(now)
+        ticks += 1
+        # Terminal purge stays on the old ~30s cadence (6 * 5s).
+        if ticks % 6 != 0:
+            continue
         cutoff = now - timedelta(hours=1)
         stale = [
             tid

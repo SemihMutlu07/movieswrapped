@@ -169,7 +169,7 @@ export function normalizeError(err: unknown): NormalizedError {
         raw ||
         'Too many scrapes are already running from this network. Export upload still works.',
       action:
-        'Upload your Letterboxd export ZIP (Settings → Import & Export). Username scrape can wait.',
+        'Use the bookmarklet or upload your Letterboxd export ZIP.',
       reason: 'queue_full',
     };
   }
