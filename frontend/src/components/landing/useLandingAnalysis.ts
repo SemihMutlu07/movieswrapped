@@ -123,6 +123,7 @@ function localizeLandingError(
     queue_full: ['landing.error.queueFull.title', 'landing.error.queueFull.message', 'landing.error.queueFull.action'],
     desktop_worker_offline: ['landing.error.desktopOffline.title', 'landing.error.desktopOffline.message', 'landing.error.desktopOffline.action'],
     desktop_worker_paused: ['landing.error.desktopPaused.title', 'landing.error.desktopPaused.message', 'landing.error.desktopPaused.action'],
+    claim_timeout: ['landing.error.claimTimeout.title', 'landing.error.claimTimeout.message', 'landing.error.claimTimeout.action'],
     stats_too_large: ['landing.error.statsTooLarge.title', 'landing.error.statsTooLarge.message', 'landing.error.statsTooLarge.action'],
   } as const;
   const copy = messages[error.reason as keyof typeof messages];

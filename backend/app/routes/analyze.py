@@ -557,6 +557,7 @@ async def get_task_progress(task_id: str, request: Request):
     supplied = request.headers.get("X-Task-Token", "")
     if not supplied or not secrets.compare_digest(supplied, task.poll_token):
         raise HTTPException(status_code=403, detail={"error_code": "invalid_task_token", "message": "Invalid task token."})
+    task_manager.fail_silent_scrape_claims()
     queue = task_manager.scrape_queue_metrics(task)
     result = task.result
     if isinstance(result, dict) and task.kind == "scrape" and queue.get("queue_wait_ms") is not None:
