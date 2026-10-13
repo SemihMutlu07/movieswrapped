@@ -43,11 +43,18 @@ export type ScrapeProgress = {
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000').replace(/\/$/, '');
 
 /**
- * Gap between profile-scrape progress polls.
+ * Gap between active profile-scrape progress polls.
  * Backend PROGRESS_RATE_LIMIT allows one tab at this cadence for the whole
  * 60s window (150 polls) plus headroom. Do not poll faster without raising it.
+ * Queued jobs use SCRAPE_QUEUED_POLL_INTERVAL_MS instead.
  */
 export const SCRAPE_POLL_INTERVAL_MS = 400;
+export const SCRAPE_QUEUED_POLL_INTERVAL_MS = 2_000;
+export const SCRAPE_QUEUED_BUDGET_MS = 60 * 60 * 1000;
+export const SCRAPE_PROCESSING_BUDGET_MS = 10 * 60 * 1000;
+export const SCRAPE_OVERALL_BUDGET_MS = 70 * 60 * 1000;
+export const ZIP_POLL_TIMEOUT_MS = 600_000;
+
 
 export function isLetterboxdExportFilename(name: string): boolean {
   const lower = name.toLowerCase();
@@ -164,17 +171,54 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
 async function pollTask<T = { status: string; stats: LetterboxdStats }>(
   taskId: string,
   pollToken: string,
-  opts: { intervalMs?: number; timeoutMs?: number; onProgress?: (p: ScrapeProgress) => void; signal?: AbortSignal } = {},
+  opts: {
+    intervalMs?: number;
+    timeoutMs?: number;
+    onProgress?: (p: ScrapeProgress) => void;
+    signal?: AbortSignal;
+    splitDeadlines?: boolean;
+  } = {},
 ): Promise<T> {
+  const split = opts.splitDeadlines === true;
   const intervalMs = opts.intervalMs ?? 2000;
-  const timeoutMs = opts.timeoutMs ?? 600_000;
-  const deadline = Date.now() + timeoutMs;
+  const timeoutMs = opts.timeoutMs ?? ZIP_POLL_TIMEOUT_MS;
+  const started = Date.now();
+  const deadline = started + timeoutMs;
   const signal = opts.signal;
+  let queuedMs = 0;
+  let processingMs = 0;
+  let lastMark = started;
+  let queued = true;
+  let sawStatus = false;
 
-  while (Date.now() < deadline) {
+  const charge = (now: number) => {
+    const delta = now - lastMark;
+    lastMark = now;
+    if (!sawStatus || delta <= 0) return;
+    if (queued) queuedMs += delta;
+    else processingMs += delta;
+  };
+
+  while (true) {
     if (signal?.aborted) {
       throw new DOMException('Aborted', 'AbortError');
     }
+    const now = Date.now();
+    charge(now);
+    if (split) {
+      if (now - started >= SCRAPE_OVERALL_BUDGET_MS) {
+        throw new Error('Scrape exceeded 70 minutes');
+      }
+      if (queuedMs >= SCRAPE_QUEUED_BUDGET_MS) {
+        throw new Error('Scrape stayed queued for 60 minutes');
+      }
+      if (processingMs >= SCRAPE_PROCESSING_BUDGET_MS) {
+        throw new Error('Scrape processing exceeded 10 minutes');
+      }
+    } else if (now >= deadline) {
+      throw new Error('Analysis timed out after 10 minutes');
+    }
+
     const r = await fetch(`${API_BASE}/api/progress/${taskId}`, {
       method: 'GET',
       headers: { Accept: 'application/json', 'X-Task-Token': pollToken },
@@ -232,6 +276,8 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
       throw error;
     }
 
+    queued = task.status === 'pending' || task.stage === 'queued';
+    sawStatus = true;
     opts.onProgress?.({
       stage: task.stage,
       message: task.message,
@@ -241,10 +287,11 @@ async function pollTask<T = { status: string; stats: LetterboxdStats }>(
       queue_wait_ms: typeof task.queue_wait_ms === 'number' ? task.queue_wait_ms : null,
     });
 
-    await wait(intervalMs, signal);
+    const nextInterval = split
+      ? (queued ? SCRAPE_QUEUED_POLL_INTERVAL_MS : SCRAPE_POLL_INTERVAL_MS)
+      : intervalMs;
+    await wait(nextInterval, signal);
   }
-
-  throw new Error('Analysis timed out after 10 minutes');
 }
 
 function isAbortError(error: unknown): boolean {
@@ -348,10 +395,10 @@ export async function scrapeProfile(
 
     // 202 Accepted direct task or async job without immediate stats
     if (data && data.task_id && !data.stats) {
-      // Blocked scrapes fail in ~1s; poll faster than the 2s analyze interval.
       const result = await pollTask<ScrapeProfileResult>(data.task_id, data.poll_token, {
         onProgress,
         signal,
+        splitDeadlines: true,
         intervalMs: SCRAPE_POLL_INTERVAL_MS,
       });
       return { ...result, task_id: data.task_id };
