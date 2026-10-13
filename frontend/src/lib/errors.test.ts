@@ -31,6 +31,18 @@ describe('normalizeError desktop worker offline', () => {
     expect(normalized.reason).toBe('desktop_worker_offline');
   });
 
+  it('maps claim_timeout to the ZIP path', () => {
+    const err = Object.assign(
+      new Error('The live scanner claimed this profile and sent no films within 90 seconds.'),
+      { code: 'claim_timeout' },
+    );
+    const normalized = normalizeError(err);
+
+    expect(normalized.reason).toBe('claim_timeout');
+    expect(normalized.action).toMatch(/ZIP/i);
+    expect(needsZipFallback(normalized.reason)).toBe(true);
+  });
+
   it('maps queue_full from error code and ZIP-first copy', () => {
     const err = Object.assign(new Error('The analysis queue is full. Please try again later.'), { code: 'queue_full' });
     const normalized = normalizeError(err);

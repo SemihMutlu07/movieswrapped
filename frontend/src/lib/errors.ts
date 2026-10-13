@@ -20,6 +20,7 @@ export type ErrorReason =
   | 'queue_full'
   | 'desktop_worker_offline'
   | 'desktop_worker_paused'
+  | 'claim_timeout'
   | 'stats_too_large'
   | 'unknown_error';
 
@@ -36,6 +37,7 @@ export const ZIP_FALLBACK_REASONS: readonly ErrorReason[] = [
   'queue_full',
   'desktop_worker_offline',
   'desktop_worker_paused',
+  'claim_timeout',
   'scrape_blocked',
 ];
 
@@ -185,6 +187,17 @@ export function normalizeError(err: unknown): NormalizedError {
       action:
         'Upload your Letterboxd export ZIP for a guaranteed result, or retry in a minute.',
       reason: 'scraper_unavailable',
+    };
+  }
+
+  if (code === 'claim_timeout' || /claim_timeout|sent no films within 90 seconds/i.test(raw)) {
+    return {
+      title: 'Live scan stalled',
+      message:
+        raw ||
+        'The scanner claimed this profile and sent no films within 90 seconds.',
+      action: 'Upload your Letterboxd export ZIP. That path does not wait on the scanner.',
+      reason: 'claim_timeout',
     };
   }
 

@@ -14,9 +14,16 @@ logger = logging.getLogger("letterboxd_wrapped.task_manager")
 
 PERSISTABLE_KINDS = frozenset({"scrape"})
 SECONDS_PER_SCRAPE_JOB = 15
-# Hung-but-still-heartbeating backstop. A crashed worker is released from its
-# heartbeat age (see requeue_stale_scrape_claims), not from this lease.
+# Hung-but-still-heartbeating backstop for a claim that already posted pages.
+# A crashed worker is released from its heartbeat age (see
+# requeue_stale_scrape_claims). A claim with no films and no terminal event
+# fails open sooner (see fail_silent_scrape_claims).
 STALE_CLAIM_SECONDS = 600
+SILENT_CLAIM_SECONDS = 90
+SILENT_CLAIM_MESSAGE = (
+    "The live scanner claimed this profile and sent no films within 90 seconds. "
+    "Upload your Letterboxd export ZIP — that path does not wait on the scanner."
+)
 # diary, grid, reviews, analysis. Kept off 0/0 while a scrape is in flight.
 SCAN_STAGE_TOTAL = 4
 # Pending + running username scrapes. The next one is queue_full.
@@ -556,7 +563,9 @@ def _requeue_reason(task: TaskState, now: datetime) -> Optional[str]:
     a beat arrives and then goes stale, or until this process has been up
     longer than the limit with still no beat.
 
-    A worker that is still heartbeating but stuck keeps the 10-minute lease.
+    A worker that is still heartbeating but has posted no films is failed by
+    fail_silent_scrape_claims at 90 seconds. One that has posted pages keeps
+    this 10-minute lease.
     """
     claimed_at = task.claimed_at or task.created_at
     claim_age = (now - claimed_at).total_seconds()
@@ -571,6 +580,63 @@ def _requeue_reason(task: TaskState, now: datetime) -> Optional[str]:
     if claim_age > STALE_CLAIM_SECONDS:
         return "lease"
     return None
+
+
+def _claim_has_films_or_terminal_event(task: TaskState) -> bool:
+    """True once the worker has shown films, a scan page, or a terminal post."""
+    if task.status in {"done", "failed"}:
+        return True
+    if task.progress > 0:
+        return True
+    for event in task.trace_events:
+        stage = str(event.get("stage") or "")
+        if stage in {"completed", "failed"} or scan_stage_step(stage) is not None:
+            return True
+        metrics = event.get("metrics") if isinstance(event.get("metrics"), dict) else {}
+        films = metrics.get("films")
+        if isinstance(films, (int, float)) and not isinstance(films, bool) and films > 0:
+            return True
+        sample = metrics.get("sample")
+        if isinstance(sample, list) and sample:
+            return True
+    return False
+
+
+def fail_silent_scrape_claims(now: Optional[datetime] = None) -> int:
+    """Fail a claimed scrape that sent no films and no terminal event in 90s.
+
+    The claim flag is released so the Opening screen can leave. The lease
+    token stays so a late /complete from this worker still matches; clearing
+    it would make _require_lease a no-op.
+    """
+    current = now or _now()
+    cutoff = current - timedelta(seconds=SILENT_CLAIM_SECONDS)
+    failed = 0
+    for task in list(_tasks.values()):
+        if task.kind != "scrape" or task.status != "running" or not task.claimed:
+            continue
+        if _claim_has_films_or_terminal_event(task):
+            continue
+        claimed_at = task.claimed_at or task.created_at
+        if claimed_at > cutoff:
+            continue
+        task.claimed = False
+        task.claimed_by = None
+        append_task_event(
+            task.task_id,
+            "claim_timeout",
+            SILENT_CLAIM_MESSAGE,
+            level="warning",
+        )
+        set_task_failed(
+            task.task_id,
+            SILENT_CLAIM_MESSAGE,
+            error_code="claim_timeout",
+            error_type="claim_timeout",
+            error_stage="claim_timeout",
+        )
+        failed += 1
+    return failed
 
 
 def requeue_stale_scrape_claims(now: Optional[datetime] = None) -> int:
@@ -611,6 +677,7 @@ async def cleanup_loop() -> None:
     while True:
         await asyncio.sleep(STALE_CHECK_SECONDS)
         now = _now()
+        fail_silent_scrape_claims(now)
         requeue_stale_scrape_claims(now)
         ticks += 1
         # Terminal purge stays on the old ~30s cadence (6 * 5s).
