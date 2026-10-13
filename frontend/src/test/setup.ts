@@ -1,4 +1,21 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+vi.mock('next/image', async () => {
+  const React = await import('react');
+  return {
+    default: ({
+      src,
+      alt,
+    }: {
+      src: string | { src?: string };
+      alt?: string;
+    }) => {
+      const href = typeof src === 'string' ? src : src?.src ?? '';
+      return React.createElement('img', { src: href, alt: alt ?? '' });
+    },
+  };
+});
 
 class MockIntersectionObserver {
   observe() {}

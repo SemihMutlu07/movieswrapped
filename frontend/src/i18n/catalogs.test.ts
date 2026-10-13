@@ -33,9 +33,23 @@ describe('i18n catalogs and routing', () => {
     }
   });
 
-  it('treats username scrape as the live path with bookmarklet and ZIP backups', () => {
-    expect(en['landing.username.title']).toMatch(/type your letterboxd username/i);
-    expect(en['landing.username.hint']).toMatch(/bookmarklet or a ZIP/i);
+  it('uses Letterboxd Wrapped 2026 as the landing heading in both locales', () => {
+    expect(en['landing.hero.title']).toBe('Letterboxd Wrapped 2026');
+    expect(tr['landing.hero.title']).toBe('Letterboxd Wrapped 2026');
+    expect(en['landing.hero.promise'].split(/\s+/).filter(Boolean).length).toBeLessThanOrEqual(40);
+    expect(tr['landing.hero.promise'].split(/\s+/).filter(Boolean).length).toBeLessThanOrEqual(40);
+    expect(en['landing.hero.promise']).toMatch(/semihmutsuz/i);
+    expect(en['landing.hero.promise']).toMatch(/ZIP/i);
+    expect(tr['landing.hero.promise']).toMatch(/ZIP/i);
+    expect(en['landing.username.analyze']).toMatch(/wrap my year/i);
+    expect(en['landing.upload.zipInstead']).toMatch(/zip/i);
+    expect(en['landing.upload.chooseFiles']).toMatch(/^upload zip$/i);
+    expect(en['landing.upload.zoneTitle']).toMatch(/letterboxd zip/i);
+  });
+
+  it('treats username scrape as best-effort, not the guaranteed path', () => {
+    expect(en['landing.username.analyze']).toMatch(/wrap my year/i);
+    expect(en['landing.username.hint']).toMatch(/ZIP still works/i);
     expect(en['landing.username.bookmarklet']).toMatch(/bookmarklet/i);
     expect(tr['landing.username.hint']).toMatch(/ZIP/i);
     expect(en['landing.howItWorks.enter.title']).toMatch(/enter your username/i);

@@ -40,10 +40,8 @@ export function LanguageSwitchControl({ compact = false }: { compact?: boolean }
               : 'min-h-9 min-w-11 px-3 text-xs'
           } ${
             locale === item
-              ? compact
-                ? 'bg-amber-300 text-stone-950'
-                : 'bg-white text-[#17202a]'
-              : 'text-white/60 hover:text-white'
+              ? 'bg-[#00e054] text-[#14181c]'
+              : 'text-[#9ab] hover:text-white'
           }`}
         >
           {item.toUpperCase()}
@@ -78,8 +76,8 @@ export default function LanguageSwitcher({
     <div
       className={
         variant === 'fixed'
-          ? 'fixed right-3 top-[var(--mw-top-chrome-offset)] z-[90] rounded-full border border-white/10 bg-[#111820]/90 p-1 shadow-lg backdrop-blur-md'
-          : 'relative z-10 shrink-0 rounded-full border border-white/10 bg-[#111820]/90 p-1 shadow-lg backdrop-blur-md'
+          ? 'fixed right-3 top-[var(--mw-top-chrome-offset)] z-[90] border border-[#303840] bg-[#14181c] p-1'
+          : 'relative z-10 shrink-0 border border-[#303840] bg-[#14181c] p-1'
       }
     >
       <LanguageSwitchControl />

@@ -56,7 +56,7 @@ import UploadZone from '@/components/landing/UploadZone';
 describe('UploadZone', () => {
   it('renders upload prompt text', () => {
     render(<I18nProvider locale="en"><UploadZone onFiles={() => {}} /></I18nProvider>);
-    expect(screen.getByText(/Begin Your Cinema Reveal/i)).toBeInTheDocument();
+    expect(screen.getByText(/Drop your Letterboxd ZIP/i)).toBeInTheDocument();
     expect(screen.getByText(/Drag a ZIP, CSV files/i)).toBeInTheDocument();
   });
 

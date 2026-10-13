@@ -48,7 +48,15 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 vi.mock('@/lib/supabase/analysis_runs', () => analysisRunMocks);
 vi.mock('@/lib/supabase/sessions', () => sessionMocks);
-vi.mock('@/lib/analytics', () => analyticsMocks);
+vi.mock('@/lib/analytics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/analytics')>();
+  return {
+    ...actual,
+    trackEvent: analyticsMocks.trackEvent,
+    trackConsentedEvent: analyticsMocks.trackConsentedEvent,
+    trackFilmStats: analyticsMocks.trackFilmStats,
+  };
+});
 
 
 import LetterboxdLanding from './LetterboxdLanding';
@@ -91,7 +99,7 @@ describe('LetterboxdLanding persistence', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows a kind desktop-required notice on a phone user agent', () => {
+  it('keeps ZIP upload on a phone user agent', () => {
     vi.stubGlobal('navigator', {
       ...navigator,
       userAgent:
@@ -99,10 +107,9 @@ describe('LetterboxdLanding persistence', () => {
       userAgentData: undefined,
     });
     render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
-    const hint = screen.getByTestId('desktop-required-landing');
-    expect(hint).toHaveTextContent(/desktop/i);
-    expect(hint.textContent).not.toMatch(/computer/i);
-    expect(document.getElementById('upload-zone-input')).toBeNull();
+    expect(screen.getByRole('button', { name: /wrap my year/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /have a zip instead/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('desktop-required-landing')).not.toBeInTheDocument();
   });
 
   it('keeps drag-and-drop upload on a desktop user agent', () => {
@@ -121,10 +128,10 @@ describe('LetterboxdLanding persistence', () => {
   }
   async function submitUsername(username = 'alice') {
     const user = userEvent.setup();
-    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    render(<I18nProvider locale="en"><LetterboxdLanding showUsernameScrape /></I18nProvider>);
     const input = document.querySelector('input[name="username"]') as HTMLInputElement;
     await user.type(input, username);
-    await user.click(screen.getByRole('button', { name: /Analyze/i }));
+    await user.click(screen.getByRole('button', { name: /Wrap my year/i }));
     return { user, input };
   }
 
@@ -373,12 +380,18 @@ describe('LetterboxdLanding persistence', () => {
     expect(screen.getByText(/analysis server appears to be offline/i)).toBeInTheDocument();
   });
 
-  it('presents live username scan with bookmarklet and ZIP backups', () => {
+  it('shows the username wrap CTA by default, with ZIP as a secondary path', () => {
     render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
-    expect(screen.getByRole('heading', { name: /type your letterboxd username/i })).toBeInTheDocument();
-    expect(screen.getByText(/bookmarklet or a ZIP export/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /use the bookmarklet instead/i })).toHaveAttribute('href', '/import');
-    expect(screen.getByRole('link', { name: /open letterboxd export/i })).toBeInTheDocument();
+    expect(document.querySelector('input[name="username"]')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /wrap my year/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /have a zip instead/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /or try a public username/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/how it works/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps Letterboxd Wrapped 2026 as the page heading', () => {
+    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    expect(screen.getByRole('heading', { level: 1, name: 'Letterboxd Wrapped 2026' })).toBeInTheDocument();
   });
 
   it('sends a blocked scrape to ZIP upload without a retry loop', async () => {
@@ -411,5 +424,17 @@ describe('LetterboxdLanding persistence', () => {
     expect(screen.getByText('How long does it take?')).toBeInTheDocument();
     expect(screen.getByText('Is it free?')).toBeInTheDocument();
     expect(screen.getByText('Can I upload a CSV?')).toBeInTheDocument();
+  });
+
+  it('promotes the wrapped landing with a collage, sample share card, and username wrap CTA', () => {
+    render(<I18nProvider locale="en"><LetterboxdLanding /></I18nProvider>);
+    expect(document.querySelector('[data-landing-variant="wrapped"]')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Letterboxd Wrapped 2026' })).toBeInTheDocument();
+    expect(screen.getByText(/woody allen on a loop/i)).toBeInTheDocument();
+    expect(document.querySelector('input[name="username"]')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /wrap my year/i })).toBeInTheDocument();
+    expect(screen.getByTestId('landing-sample-share-card')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-sample-share-card')).toHaveTextContent('Woody Allen');
+    expect(screen.getByTestId('landing-sample-share-card')).toHaveTextContent('711');
   });
 });

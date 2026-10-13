@@ -84,12 +84,15 @@ test.describe('phone handoff', () => {
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
   });
 
-  test('landing asks the visitor to continue on desktop', async ({ page }) => {
+  test('landing keeps ZIP upload on a phone', async ({ page }) => {
     await acceptAnalytics(page);
     await page.goto('/en');
-    await expect(page.getByTestId('desktop-required-landing')).toBeVisible();
-    await expect(page.getByRole('button', { name: /copy this page/i })).toBeVisible();
-    await expect(page.getByTestId('upload-drop-zone')).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: 'Letterboxd Wrapped 2026' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /wrap my year/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /have a zip instead/i })).toBeVisible();
+    await page.getByRole('button', { name: /have a zip instead/i }).click();
+    await expect(page.getByTestId('upload-drop-zone')).toBeVisible();
+    await expect(page.getByTestId('desktop-required-landing')).toHaveCount(0);
   });
 });
 
@@ -99,6 +102,7 @@ test.describe('narrow desktop window', () => {
   test('landing keeps drag-and-drop upload', async ({ page }) => {
     await acceptAnalytics(page);
     await page.goto('/en');
+    await page.getByRole('button', { name: /have a zip instead/i }).click();
     await expect(page.getByTestId('upload-drop-zone')).toBeVisible();
     await expect(page.getByTestId('desktop-required-landing')).toHaveCount(0);
   });
