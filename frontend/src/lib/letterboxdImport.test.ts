@@ -1,10 +1,47 @@
 import { describe, expect, it } from 'vitest';
 
+import { bookmarkletSource } from './letterboxdBookmarklet';
 import {
   isTrustedImportOrigin,
   parseBookmarkletMessage,
   parseBookmarkletPayload,
 } from './letterboxdImport';
+
+type ParsedFilm = {
+  slug: string | null;
+  title: string;
+  year: number | null;
+  rating: number | null;
+  liked: boolean;
+};
+
+/** June 2026 member-page grid: div.react-component.griditem, not li.griditem. */
+const lazyPosterProfileFixture = `
+  <div class="grid">
+    <div class="react-component griditem" data-component-class="LazyPoster"
+         data-item-slug="heat" data-item-name="Heat (1995)"
+         data-item-link="/film/heat/">
+      <span class="rating rated-9"></span>
+      <span class="icon-liked"></span>
+    </div>
+    <div class="react-component griditem" data-component-class="LazyPoster"
+         data-item-slug="past-lives" data-item-name="Past Lives (2023)"
+         data-item-link="/film/past-lives/">
+    </div>
+  </div>
+`;
+
+function parseFilmsFromBookmarklet(html: string): ParsedFilm[] {
+  const win = window as Window & { MWParse?: { parseFilmsPage: (doc: Document) => ParsedFilm[] } };
+  if (!win.MWParse) {
+    if (/letterboxd\.com$/.test(window.location.hostname)) {
+      throw new Error('refusing to eval the bookmarklet crawl on letterboxd.com');
+    }
+    window.eval(bookmarkletSource('https://movieswrapped.com'));
+  }
+  if (!win.MWParse) throw new Error('bookmarklet did not publish MWParse');
+  return win.MWParse.parseFilmsPage(new DOMParser().parseFromString(html, 'text/html'));
+}
 
 const sample = {
   source: 'letterboxd',
@@ -30,6 +67,29 @@ describe('letterboxdImport', () => {
   it('rejects empty or invalid payloads', () => {
     expect(parseBookmarkletPayload({ user: 'dave', films: [], diary: [] })).toBeNull();
     expect(parseBookmarkletPayload({ user: 'not valid', films: sample.films })).toBeNull();
+  });
+
+  it('reads a LazyPoster profile grid the old li selectors miss', () => {
+    const doc = new DOMParser().parseFromString(lazyPosterProfileFixture, 'text/html');
+    expect(doc.querySelectorAll('li.griditem, li.poster-container')).toHaveLength(0);
+    expect(parseFilmsFromBookmarklet(lazyPosterProfileFixture)).toEqual([
+      { slug: 'heat', title: 'Heat', year: 1995, rating: 4.5, liked: true },
+      { slug: 'past-lives', title: 'Past Lives', year: 2023, rating: null, liked: false },
+    ]);
+  });
+
+  it('still reads a classic li.griditem tile', () => {
+    const html = `
+      <ul>
+        <li class="griditem">
+          <div data-item-slug="heat" data-item-name="Heat (1995)"></div>
+          <span class="rating rated-9"></span>
+        </li>
+      </ul>
+    `;
+    expect(parseFilmsFromBookmarklet(html)).toEqual([
+      { slug: 'heat', title: 'Heat', year: 1995, rating: 4.5, liked: false },
+    ]);
   });
 
   it('trusts Letterboxd and the import page origin', () => {
