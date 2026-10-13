@@ -92,10 +92,11 @@ body[data-mw-scroll-locked] {
 /* App-feel layer: dark overscroll/rubber-band area, no accidental
    pull-to-refresh, no gray tap flash on touch devices. */
 html {
-  background: #1e252d;
+  background: #14181c;
 }
 
 body {
+  --font-landing-display: var(--font-fraunces), "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   color: var(--foreground);
   font-family: var(--font-body);
   overscroll-behavior-y: none;
@@ -246,3 +247,4 @@ h1, h2, h3 {
 [data-export-root="true"] {
   contain: strict;
 }
+

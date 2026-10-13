@@ -3,9 +3,55 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { FolderOpen, Upload } from 'lucide-react';
 import { useI18n } from '@/i18n/I18nProvider';
 import { fileLooksLikeZip, isLetterboxdExportFilename } from '@/lib/api';
+import type { UploadZoneTone } from '@/components/landing/landingTypes';
 
 type Props = {
   onFiles: (files: FileList | File[] | null) => void;
+  tone?: UploadZoneTone;
+};
+
+const TONE_STYLES: Record<UploadZoneTone, {
+  shell: string;
+  idle: string;
+  dragging: string;
+  showIcon: boolean;
+  showCopy: boolean;
+  icon: string;
+  iconGlyph: string;
+  title: string;
+  hint: string;
+  primary: string;
+  secondary: string;
+  help: string;
+}> = {
+  default: {
+    showIcon: true,
+    showCopy: true,
+    shell: 'min-h-[220px] sm:min-h-[240px] p-6 sm:p-8 md:p-10',
+    idle: 'rounded-2xl border-slate-700/50 bg-slate-800/50 hover:border-orange-400/40 hover:shadow-[0_0_40px_-12px_rgba(251,146,60,0.15)]',
+    dragging: 'rounded-2xl border-orange-300 bg-orange-400/10 shadow-[0_0_60px_-16px_rgba(251,146,60,0.45)]',
+    icon: 'rounded-2xl bg-orange-500/10 border border-orange-400/25 group-hover:bg-orange-500/20',
+    iconGlyph: 'text-orange-300',
+    title: 'text-xl sm:text-2xl font-bold tracking-tight',
+    hint: 'text-sm text-slate-400',
+    primary: 'rounded-full bg-orange-400 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-orange-300 focus-visible:ring-orange-200',
+    secondary: 'rounded-full border border-slate-600 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-100 hover:border-orange-300/70 hover:text-orange-100 focus-visible:ring-orange-200',
+    help: 'text-xs text-slate-500',
+  },
+  wrapped: {
+    showIcon: false,
+    showCopy: false,
+    shell: 'p-0',
+    idle: 'rounded-none border-transparent bg-transparent',
+    dragging: 'rounded-sm border-[#00e054] bg-[#00e054]/8 p-4',
+    icon: 'rounded-sm bg-[#00e054]/10 border border-[#303840]',
+    iconGlyph: 'text-[#00e054]',
+    title: 'text-lg font-bold tracking-tight sm:text-xl',
+    hint: 'text-sm text-[#9ab]',
+    primary: 'rounded-sm bg-[#00e054] px-5 py-3 text-sm font-bold text-[#14181c] hover:bg-[#2ee36a] focus-visible:ring-[#00e054]',
+    secondary: 'rounded-sm border border-[#456] bg-transparent px-5 py-3 text-sm font-semibold text-[#def] hover:border-[#9ab] focus-visible:ring-[#456]',
+    help: 'text-xs text-[#678]',
+  },
 };
 
 type FileWithRelativePath = File & { webkitRelativePath?: string };
@@ -118,8 +164,9 @@ async function collectDroppedEntryFiles(entry: FileSystemEntryLike, path = ''): 
   return files.flat();
 }
 
-export default function UploadZone({ onFiles }: Props) {
+export default function UploadZone({ onFiles, tone = 'default' }: Props) {
   const { t } = useI18n();
+  const styles = TONE_STYLES[tone];
   const folderInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -207,10 +254,8 @@ export default function UploadZone({ onFiles }: Props) {
     <section aria-label={t('landing.upload.zoneLabel')}>
       <div
         data-testid="upload-drop-zone"
-        className={`group flex min-h-[220px] items-center justify-center rounded-2xl border p-8 text-center transition-all duration-300 sm:min-h-[260px] md:p-10 max-w-3xl mx-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50 ${
-          isDragging
-            ? 'border-orange-300 bg-orange-400/10 shadow-[0_0_60px_-16px_rgba(251,146,60,0.45)]'
-            : 'border-slate-700/50 bg-slate-800/50 hover:border-orange-400/40 hover:shadow-[0_0_40px_-12px_rgba(251,146,60,0.15)]'
+        className={`group mx-auto flex max-w-3xl items-center justify-center border text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00e054]/40 ${styles.shell} ${
+          isDragging ? styles.dragging : styles.idle
         }`}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
@@ -235,33 +280,51 @@ export default function UploadZone({ onFiles }: Props) {
           onChange={(e) => onFiles(e.target.files)}
           className="hidden"
         />
-        <div className="flex flex-col items-center">
-          <div className="mb-5 h-14 w-14 rounded-2xl bg-orange-500/10 border border-orange-400/25 flex items-center justify-center transition-colors group-hover:bg-orange-500/20">
-            <Upload className="w-7 h-7 text-orange-300" />
-          </div>
-          <p className="text-xl sm:text-2xl font-bold tracking-tight">{t('landing.upload.zoneTitle')}</p>
-          <p className="mt-2 text-sm text-slate-400">
-            {isDragging ? t('landing.upload.drop') : t('landing.upload.drag')}
-          </p>
-          <div className="mt-6 flex flex-col sm:flex-row gap-3">
+        <div className="flex w-full flex-col items-center">
+          {styles.showIcon ? (
+            <div className={`mb-5 flex h-14 w-14 items-center justify-center transition-colors ${styles.icon}`}>
+              <Upload className={`h-7 w-7 ${styles.iconGlyph}`} />
+            </div>
+          ) : null}
+          {styles.showCopy ? (
+            <>
+              <p className={styles.title}>{t('landing.upload.zoneTitle')}</p>
+              <p className={`mt-2 ${styles.hint}`}>
+                {isDragging ? t('landing.upload.drop') : t('landing.upload.drag')}
+              </p>
+            </>
+          ) : (
+            <p className="sr-only">{isDragging ? t('landing.upload.drop') : t('landing.upload.zoneTitle')}</p>
+          )}
+          <div className={`flex w-full flex-col gap-3 ${styles.showCopy ? 'mt-6 sm:flex-row sm:justify-center' : ''}`}>
             <button
               type="button"
               onClick={openFilePicker}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-400 px-5 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-200"
+              className={`inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 ${styles.primary} ${styles.showCopy ? '' : 'w-full'}`}
             >
               <Upload className="h-4 w-4" />
               {t('landing.upload.chooseFiles')}
             </button>
-            <button
-              type="button"
-              onClick={openFolderPicker}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-600 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-100 transition-colors hover:border-orange-300/70 hover:text-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-200"
-            >
-              <FolderOpen className="h-4 w-4" />
-              {t('landing.upload.chooseFolder')}
-            </button>
+            {styles.showCopy ? (
+              <button
+                type="button"
+                onClick={openFolderPicker}
+                className={`inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 ${styles.secondary}`}
+              >
+                <FolderOpen className="h-4 w-4" />
+                {t('landing.upload.chooseFolder')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={openFolderPicker}
+                className="text-sm text-[#9ab] underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00e054]/40"
+              >
+                {t('landing.upload.chooseFolder')}
+              </button>
+            )}
           </div>
-          <p className="mt-3 text-xs text-slate-500">{t('landing.upload.folderHelp')}</p>
+          {styles.showCopy ? <p className={`mt-3 ${styles.help}`}>{t('landing.upload.folderHelp')}</p> : null}
         </div>
       </div>
     </section>

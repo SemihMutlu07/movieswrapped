@@ -1,5 +1,5 @@
 import { Suspense, type ReactNode } from 'react';
-import { Manrope, Syne } from 'next/font/google';
+import { Fraunces, Manrope, Syne } from 'next/font/google';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -20,6 +20,13 @@ const manrope = Manrope({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   variable: '--font-manrope',
+});
+
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  weight: ['700', '900'],
+  style: ['normal', 'italic'],
+  variable: '--font-fraunces',
 });
 
 export default function RootDocument({
@@ -87,7 +94,7 @@ export default function RootDocument({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className={`${manrope.variable} ${syne.variable} bg-[#1e252d] text-white antialiased`}>
+      <body className={`${manrope.variable} ${syne.variable} ${fraunces.variable} bg-[#14181c] text-white antialiased`}>
         <I18nProvider locale={locale}>
           <ErrorBoundary>
             {showLanguageSwitcher ? (
